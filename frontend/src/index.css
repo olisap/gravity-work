@@ -1,0 +1,137 @@
+/* Google Fonts — must be first */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================
+   Custom Design System — Gravity Commerce CRM
+   Glassmorphism, vibrant accents, premium feel
+   ========================================================= */
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #090d16;
+    color: #f1f5f9;
+    background-image:
+      radial-gradient(ellipse at 0% 0%, rgba(99, 102, 241, 0.13) 0px, transparent 55%),
+      radial-gradient(ellipse at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 55%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+}
+
+@layer components {
+  /* Glass panels */
+  .glass {
+    @apply bg-slate-900/70 backdrop-blur-xl border border-white/10 rounded-2xl;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  }
+
+  .glass-hover {
+    @apply glass transition-all duration-200;
+  }
+  .glass-hover:hover {
+    @apply border-white/20;
+    box-shadow: 0 12px 40px rgba(99,102,241,0.15);
+    transform: translateY(-2px);
+  }
+
+  /* Status badges */
+  .badge { @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide; }
+  .badge-draft      { @apply bg-slate-700/50 text-slate-300 border border-slate-600/50; }
+  .badge-pending    { @apply bg-amber-500/20 text-amber-300 border border-amber-500/30; }
+  .badge-awaiting   { @apply bg-cyan-500/20 text-cyan-300 border border-cyan-500/30; }
+  .badge-scheduled  { @apply bg-indigo-500/20 text-indigo-300 border border-indigo-500/30; }
+  .badge-delivered  { @apply bg-emerald-500/20 text-emerald-300 border border-emerald-500/30; }
+  .badge-cancelled  { @apply bg-rose-500/20 text-rose-300 border border-rose-500/30; }
+
+  /* KPI metric card */
+  .kpi-card {
+    @apply glass p-5 rounded-2xl flex flex-col gap-1;
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all duration-150 active:scale-95;
+    box-shadow: 0 4px 14px rgba(99,102,241,0.3);
+  }
+  .btn-success {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-all duration-150 active:scale-95;
+    box-shadow: 0 4px 14px rgba(16,185,129,0.25);
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-sm font-semibold transition-all duration-150;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800/70 hover:bg-slate-700/80 text-slate-200 border border-slate-700/50 text-sm font-semibold transition-all duration-150;
+  }
+
+  /* Input field */
+  .input {
+    @apply w-full bg-slate-950/80 border border-slate-700/60 text-slate-200 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-500;
+  }
+
+  /* Select field */
+  .select {
+    @apply bg-slate-950/80 border border-slate-700/60 text-slate-200 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 cursor-pointer;
+  }
+
+  /* Table */
+  .data-table { @apply w-full text-left text-xs border-collapse; }
+  .data-table thead { @apply bg-slate-950/80 text-slate-400; }
+  .data-table thead th { @apply px-4 py-3 font-semibold uppercase tracking-wide text-[11px]; }
+  .data-table tbody tr { @apply border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors; }
+  .data-table tbody td { @apply px-4 py-3; }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 text-slate-400 hover:text-slate-100 hover:bg-slate-800/60;
+  }
+  .nav-item.active {
+    @apply bg-indigo-600 text-white border border-indigo-500/50;
+    box-shadow: 0 4px 14px rgba(99,102,241,0.3);
+  }
+
+  /* Section heading */
+  .section-title {
+    @apply text-lg font-bold text-slate-100 flex items-center gap-2 mb-1;
+  }
+  .section-subtitle {
+    @apply text-xs text-slate-400;
+  }
+
+  /* Live dot */
+  .live-dot {
+    @apply inline-block w-2 h-2 rounded-full bg-emerald-400;
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+@layer utilities {
+  .text-glow-indigo { text-shadow: 0 0 20px rgba(99,102,241,0.5); }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

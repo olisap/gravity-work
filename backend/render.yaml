@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: nigeria-ecommerce-crm-api
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: TERMII_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
