@@ -207,7 +207,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           <ShoppingBag className="w-5 h-5 text-indigo-500" />
           <div>
             <h4 className={theme.headerTitle}>Fast Checkout (COD)</h4>
-            <span className={theme.headerSub}>Fill details below • Cash on Delivery</span>
+            <span className={theme.headerSub}>Fill details below • Free Delivery to All States (COD)</span>
           </div>
         </div>
         <span className={theme.badge}>
@@ -402,7 +402,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
               <span className={theme.summaryItemValue}>{currentCountryObj.currency}{subtotal.toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
-              <span className={theme.summaryItemLabel}>Delivery Fee ({selectedState}):</span>
+              <span className={theme.summaryItemLabel}>Delivery Fee (All States):</span>
               <span className="text-emerald-600 font-extrabold uppercase">FREE</span>
             </div>
             <div className="flex justify-between font-bold text-emerald-600 text-sm border-t border-slate-200 dark:border-slate-800 pt-2.5 mt-2">
