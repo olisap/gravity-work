@@ -195,7 +195,18 @@ export default function FormBuilder({
   };
 
   const scriptCode = `<script src="https://olinwa.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
-  const iframeCode = `<iframe src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="800" frameborder="0"></iframe>`;
+  const iframeId = `olinwa-iframe-${selectedFormForEmbed.embed_key}`;
+  const iframeCode = `<div class="olinwa-iframe-wrapper">
+  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;"></iframe>
+  <script>
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'resize-iframe') {
+        var iframe = document.getElementById('${iframeId}');
+        if (iframe) iframe.style.height = e.data.height + 'px';
+      }
+    });
+  </script>
+</div>`;
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-100">

@@ -50,6 +50,31 @@ export default function CheckoutPage() {
     fetchFormAndProduct();
   }, []);
 
+  // Post height messages to parent window for dynamic iframe auto-resizing
+  useEffect(() => {
+    if (loading) return;
+
+    const sendHeight = () => {
+      const height = document.body.scrollHeight || document.documentElement.scrollHeight;
+      window.parent.postMessage({ type: 'resize-iframe', height }, '*');
+    };
+
+    // Send height initially after rendering
+    const timer = setTimeout(sendHeight, 150);
+
+    window.addEventListener('resize', sendHeight);
+
+    // Watch for DOM changes (error validation messages, order bump toggle, etc.)
+    const observer = new MutationObserver(sendHeight);
+    observer.observe(document.body, { attributes: true, childList: true, subtree: true });
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', sendHeight);
+      observer.disconnect();
+    };
+  }, [loading, product, form]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#090d16] text-slate-100 p-4">
