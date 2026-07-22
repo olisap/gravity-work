@@ -216,59 +216,10 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); saveDraft(true); }} className="space-y-5">
-        {/* SECTION 1: Product Package / Quantity Selection */}
+        {/* SECTION 1: Customer Contact */}
         <div className="space-y-3">
           <div className={theme.divider}>
             <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">1</span>
-            <h3 className={theme.sectionTitle}>Select Product Package</h3>
-          </div>
-
-          {products.length > 1 && (
-            <div>
-              <label className={theme.label}>Product</label>
-              <select
-                value={selectedProduct?.id || ''}
-                onChange={(e) => {
-                  const prod = products.find(p => p.id === e.target.value);
-                  setSelectedProduct(prod);
-                  setSelectedBundleIndex(0);
-                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
-                }}
-                className={theme.select}
-              >
-                {products.map(p => (
-                  <option key={p.id} value={p.id} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div>
-            <label className={theme.label}>Select Package / Quantity</label>
-            <select
-              value={selectedBundleIndex}
-              onChange={(e) => {
-                const idx = Number(e.target.value);
-                setSelectedBundleIndex(idx);
-                if (customerPhone) setTimeout(() => saveDraft(false), 100);
-              }}
-              className={theme.select + " font-bold text-xs py-3.5"}
-            >
-              {bundleOptions.map((b, idx) => (
-                <option key={idx} value={idx} className={lightMode ? "bg-white text-slate-800 font-semibold" : "bg-slate-900 font-semibold"}>
-                  {b.label} — {currentCountryObj.currency}{b.price?.toLocaleString()}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* SECTION 2: Customer Contact */}
-        <div className="space-y-3">
-          <div className={theme.divider}>
-            <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">2</span>
             <h3 className={theme.sectionTitle}>Contact Details</h3>
           </div>
 
@@ -311,10 +262,10 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           </div>
         </div>
 
-        {/* SECTION 3: Shipping / Delivery */}
+        {/* SECTION 2: Shipping / Delivery */}
         <div className="space-y-3">
           <div className={theme.divider}>
-            <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">3</span>
+            <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">2</span>
             <h3 className={theme.sectionTitle}>Delivery Destination</h3>
           </div>
 
@@ -365,6 +316,55 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
               onBlur={handleFieldBlur}
               className={theme.input}
             ></textarea>
+          </div>
+        </div>
+
+        {/* SECTION 3: Product Package / Quantity Selection */}
+        <div className="space-y-3">
+          <div className={theme.divider}>
+            <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">3</span>
+            <h3 className={theme.sectionTitle}>Select Product Package</h3>
+          </div>
+
+          {products.length > 1 && (
+            <div>
+              <label className={theme.label}>Product</label>
+              <select
+                value={selectedProduct?.id || ''}
+                onChange={(e) => {
+                  const prod = products.find(p => p.id === e.target.value);
+                  setSelectedProduct(prod);
+                  setSelectedBundleIndex(0);
+                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                }}
+                className={theme.select}
+              >
+                {products.map(p => (
+                  <option key={p.id} value={p.id} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className={theme.label}>Select Package / Quantity</label>
+            <select
+              value={selectedBundleIndex}
+              onChange={(e) => {
+                const idx = Number(e.target.value);
+                setSelectedBundleIndex(idx);
+                if (customerPhone) setTimeout(() => saveDraft(false), 100);
+              }}
+              className={theme.select + " font-bold text-xs py-3.5"}
+            >
+              {bundleOptions.map((b, idx) => (
+                <option key={idx} value={idx} className={lightMode ? "bg-white text-slate-800 font-semibold" : "bg-slate-900 font-semibold"}>
+                  {b.label} — {currentCountryObj.currency}{b.price?.toLocaleString()}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
