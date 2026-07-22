@@ -16,9 +16,17 @@ import GenericModuleView from './pages/GenericModuleView';
 import ConfirmationCallModal from './components/ConfirmationCallModal';
 import LoginPage from './pages/LoginPage';
 import OnboardingPage from './pages/OnboardingPage';
+import CheckoutPage from './pages/CheckoutPage';
 
 function CrmAppContent() {
   const { user, isAuthenticated } = useAuth();
+  
+  // Standalone checkout route for embedded forms
+  const isCheckoutRoute = window.location.pathname === '/checkout' || window.location.pathname === '/p/checkout';
+  if (isCheckoutRoute) {
+    return <CheckoutPage />;
+  }
+
   const [viewMode, setViewMode] = useState('crm'); // 'crm', 'login', 'onboarding'
   const [activeTab, setActiveTab] = useState('dashboard');
 
