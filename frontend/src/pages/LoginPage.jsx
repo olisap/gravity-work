@@ -22,9 +22,9 @@ export default function LoginPage({ onNavigateToOnboarding }) {
   };
 
   const demoProfiles = [
-    { name: 'Amina Bello', email: 'owner@merchant.ng', role: 'owner', label: 'Owner / Admin', badge: 'Full Access' },
-    { name: 'Chidi Okafor', email: 'chidi@merchant.ng', role: 'confirmation_staff', label: 'Confirmation Caller', badge: 'Orders & Calls' },
-    { name: 'Babajide Adeleke', email: 'logistics@merchant.ng', role: 'logistics', label: 'Logistics Rider', badge: 'Deliveries' },
+    { name: 'Amina Bello', email: 'owner@merchant.ng', role: 'owner', label: 'Owner / Admin', badge: 'Full Access', id: '8d39ba92-0b9b-440e-ae12-7fc9fc05a605', store_id: '00000000-0000-0000-0000-784637855674' },
+    { name: 'Chidi Okafor', email: 'chidi@merchant.ng', role: 'confirmation_staff', label: 'Confirmation Caller', badge: 'Orders & Calls', id: '9b4b165b-3de7-46c4-8fac-400f5571cf7f', store_id: '00000000-0000-0000-0000-784637855674' },
+    { name: 'Babajide Adeleke', email: 'logistics@merchant.ng', role: 'logistics', label: 'Logistics Rider', badge: 'Deliveries', id: '5215da9d-b7da-4a3c-ae4a-d5b72929b8fa', store_id: '00000000-0000-0000-0000-784637855674' },
   ];
 
   return (
@@ -103,7 +103,7 @@ export default function LoginPage({ onNavigateToOnboarding }) {
                   onClick={() => {
                     setEmail(p.email);
                     setPassword('password123');
-                    switchDemoRole(p.role, p.email, p.name);
+                    switchDemoRole(p.role, p.email, p.name, p.id, p.store_id);
                   }}
                   className="w-full bg-slate-950/80 hover:bg-slate-800 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between text-xs transition-colors"
                 >

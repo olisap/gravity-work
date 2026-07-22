@@ -36,7 +36,16 @@ export function AuthProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      const data = await res.json();
+      
+      let data = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text || `Server returned status ${res.status}`);
+      }
+
       if (!res.ok) throw new Error(data.error || 'Login failed');
 
       setUser(data.user);
@@ -57,7 +66,16 @@ export function AuthProvider({ children }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(onboardingData)
       });
-      const data = await res.json();
+      
+      let data = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text || `Server returned status ${res.status}`);
+      }
+
       if (!res.ok) throw new Error(data.error || 'Signup failed');
 
       setUser(data.user);
@@ -77,9 +95,10 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('gravity_crm_token');
   };
 
-  const switchDemoRole = (role, email, name) => {
+  const switchDemoRole = (role, email, name, id, store_id) => {
     const updated = {
-      ...user,
+      id: id || user?.id || 'demo-user-id',
+      store_id: store_id || user?.store_id || '00000000-0000-0000-0000-784637855674',
       role,
       email: email || user?.email || 'user@merchant.ng',
       full_name: name || user?.full_name || 'CRM Staff'

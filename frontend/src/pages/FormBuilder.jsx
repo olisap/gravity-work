@@ -194,8 +194,8 @@ export default function FormBuilder({
     }
   };
 
-  const scriptCode = `<script src="https://gravity-crm.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
-  const iframeCode = `<iframe src="https://gravity-crm.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="540" frameborder="0"></iframe>`;
+  const scriptCode = `<script src="https://olinwa.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
+  const iframeCode = `<iframe src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="540" frameborder="0"></iframe>`;
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-100">
