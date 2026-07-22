@@ -72,20 +72,23 @@ export default function CheckoutPage() {
     );
   }
 
-  // Determine button styles or backgrounds based on the form config, or default to standard styles
-  const formBgColor = form?.form_bg_color || '#090d16';
+  // Determine background color and light/dark mode status
+  const rawBgColor = form?.form_bg_color || '#0f172a';
+  const formBgColor = (rawBgColor === '#0f172a' || rawBgColor === '#090d16') ? '#ffffff' : rawBgColor;
+  
+  const isLight = formBgColor === '#ffffff' || formBgColor.toLowerCase() === '#f8fafc' || formBgColor.toLowerCase() === '#fff' || formBgColor.toLowerCase() === '#f3f4f6' || formBgColor.toLowerCase() === '#f5f5f5';
 
   return (
-    <div className="min-h-screen text-slate-100 py-4 px-2 flex flex-col justify-center" style={{ backgroundColor: formBgColor }}>
+    <div className={`min-h-screen py-4 px-2 flex flex-col justify-center ${isLight ? 'text-slate-800' : 'text-slate-100'}`} style={{ backgroundColor: formBgColor }}>
       {form && (
         <div className="max-w-md mx-auto mb-2 text-center px-4">
-          <h2 className="text-base font-bold text-slate-200">{form.header_text}</h2>
+          <h2 className={`text-base font-bold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{form.header_text}</h2>
           {form.subheader_text && (
-            <p className="text-xs text-slate-400 mt-1">{form.subheader_text}</p>
+            <p className={`text-xs mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{form.subheader_text}</p>
           )}
         </div>
       )}
-      <EmbedFormWidget products={[product]} />
+      <EmbedFormWidget products={[product]} lightMode={isLight} />
     </div>
   );
 }
