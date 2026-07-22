@@ -51,31 +51,75 @@ let mockForms = [
   }
 ];
 
+function formatForm(form) {
+  if (!form) return null;
+  const cfg = (typeof form.fields_config === 'object' && form.fields_config && !Array.isArray(form.fields_config))
+    ? form.fields_config
+    : {};
+  return {
+    ...form,
+    thank_you_url: form.thank_you_url || cfg.thank_you_url || '',
+    upsell_enabled: form.upsell_enabled !== undefined ? form.upsell_enabled : (cfg.upsell_enabled !== undefined ? cfg.upsell_enabled : true),
+    upsell_product_id: form.upsell_product_id || cfg.upsell_product_id || '',
+    upsell_title: form.upsell_title || cfg.upsell_title || 'Special 1-Click Offer!',
+    upsell_description: form.upsell_description || cfg.upsell_description || 'Add an extra product to your order for a special price!',
+    upsell_price: form.upsell_price || cfg.upsell_price || 7000
+  };
+}
+
+function prepareSupabasePayload(body, existingFieldsConfig = {}) {
+  const knownColumns = [
+    'id', 'store_id', 'name', 'linked_product_id', 'embed_key',
+    'header_text', 'subheader_text', 'button_text', 'button_bg_color',
+    'button_text_color', 'form_bg_color', 'show_country_code',
+    'payment_cod_enabled', 'payment_paystack_enabled',
+    'payment_flutterwave_enabled', 'payment_bank_enabled',
+    'notification_email', 'is_active', 'created_at', 'updated_at'
+  ];
+
+  const payload = {};
+  const currentCfg = (typeof existingFieldsConfig === 'object' && existingFieldsConfig && !Array.isArray(existingFieldsConfig))
+    ? existingFieldsConfig
+    : {};
+  const newFieldsConfig = { ...currentCfg };
+
+  for (const [key, val] of Object.entries(body)) {
+    if (knownColumns.includes(key)) {
+      payload[key] = val;
+    } else {
+      newFieldsConfig[key] = val;
+    }
+  }
+
+  payload.fields_config = newFieldsConfig;
+  return payload;
+}
+
 export async function getForms(req, res) {
   const { store_id } = req.query;
   if (supabase) {
     let query = supabase.from('forms').select('*');
     if (store_id) query = query.eq('store_id', store_id);
     const { data, error } = await query;
-    if (!error && data && data.length > 0) return res.json(data);
+    if (!error && data && data.length > 0) return res.json(data.map(formatForm));
   }
 
   let list = [...mockForms];
   if (store_id && store_id !== '00000000-0000-0000-0000-000000000001' && !store_id.startsWith('a100') && !store_id.startsWith('u100')) {
     list = list.filter(f => f.store_id === store_id);
   }
-  res.json(list);
+  res.json(list.map(formatForm));
 }
 
 export async function getFormByEmbedKey(req, res) {
   const { embedKey } = req.params;
   if (supabase) {
     const { data, error } = await supabase.from('forms').select('*').eq('embed_key', embedKey).single();
-    if (!error && data) return res.json(data);
+    if (!error && data) return res.json(formatForm(data));
   }
   const form = mockForms.find(f => f.embed_key === embedKey);
   if (!form) return res.status(404).json({ error: 'Embeddable form not found' });
-  res.json(form);
+  res.json(formatForm(form));
 }
 
 export async function createForm(req, res) {
@@ -111,15 +155,18 @@ export async function createForm(req, res) {
   };
 
   if (supabase) {
-    const { data, error } = await supabase.from('forms').insert([newForm]).select();
+    const supabasePayload = prepareSupabasePayload(newForm);
+    const { data, error } = await supabase.from('forms').insert([supabasePayload]).select();
     if (!error && data && data.length > 0) {
-      mockForms.unshift(data[0]);
-      return res.status(201).json(data[0]);
+      const formatted = formatForm(data[0]);
+      mockForms.unshift(formatted);
+      return res.status(201).json(formatted);
     }
   }
 
-  mockForms.unshift(newForm);
-  res.status(201).json(newForm);
+  const formattedNew = formatForm(newForm);
+  mockForms.unshift(formattedNew);
+  res.status(201).json(formattedNew);
 }
 
 export async function updateForm(req, res) {
@@ -127,17 +174,22 @@ export async function updateForm(req, res) {
   const updates = req.body;
 
   if (supabase) {
-    const { data, error } = await supabase.from('forms').update(updates).eq('id', id).select();
+    const { data: existing } = await supabase.from('forms').select('*').eq('id', id).single();
+    const existingCfg = existing ? existing.fields_config : {};
+    const supabasePayload = prepareSupabasePayload(updates, existingCfg);
+
+    const { data, error } = await supabase.from('forms').update(supabasePayload).eq('id', id).select();
     if (!error && data && data.length > 0) {
+      const formatted = formatForm(data[0]);
       const idx = mockForms.findIndex(f => f.id === id);
-      if (idx !== -1) mockForms[idx] = { ...mockForms[idx], ...data[0] };
-      return res.json(data[0]);
+      if (idx !== -1) mockForms[idx] = { ...mockForms[idx], ...formatted };
+      return res.json(formatted);
     }
   }
 
   const idx = mockForms.findIndex(f => f.id === id);
   if (idx !== -1) {
-    mockForms[idx] = { ...mockForms[idx], ...updates };
+    mockForms[idx] = formatForm({ ...mockForms[idx], ...updates });
     return res.json(mockForms[idx]);
   }
   res.status(404).json({ error: 'Form not found' });
