@@ -127,6 +127,26 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
       if (isFinal) {
         setSubmittedOrder(data);
         if (onOrderSubmitted) onOrderSubmitted(data);
+
+        // Redirect to Thank You Page on the same tab if configured
+        const redirectUrl = formConfig?.thank_you_url || data?.thank_you_url;
+        if (redirectUrl && redirectUrl.trim() !== '' && redirectUrl !== 'http://yourthankyoupage.com') {
+          let targetUrl = redirectUrl.trim();
+          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+            targetUrl = 'https://' + targetUrl;
+          }
+          setTimeout(() => {
+            try {
+              if (window.top) {
+                window.top.location.href = targetUrl;
+              } else {
+                window.location.href = targetUrl;
+              }
+            } catch (e) {
+              window.location.href = targetUrl;
+            }
+          }, 300);
+        }
       }
     } catch (err) {
       console.error('Failed to save form draft:', err);

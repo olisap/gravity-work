@@ -119,6 +119,7 @@ export default function FormBuilder({
     setFormBgColor(f.form_bg_color || '#0f172a');
     setPayCod(f.payment_cod_enabled !== undefined ? f.payment_cod_enabled : true);
     setNotificationEmail(f.notification_email || 'merchant@gmail.com');
+    setThankYouUrl(f.thank_you_url || '');
     setUpsellEnabled(f.upsell_enabled !== false);
     setUpsellProductId(f.upsell_product_id || products[0]?.id || '');
     setUpsellTitle(f.upsell_title || 'Special 1-Click Offer!');
@@ -135,6 +136,7 @@ export default function FormBuilder({
     setSubHeaderText('Only Serious Buyers Should Fill The Form Below');
     setSubmitBtnText('ORDER NOW');
     setSubmitBgColor('#4f46e5');
+    setThankYouUrl('');
     setUpsellEnabled(true);
     setUpsellProductId(products[0]?.id || '');
     setUpsellTitle('Special 1-Click Offer!');
@@ -163,6 +165,7 @@ export default function FormBuilder({
       payment_flutterwave_enabled: payFlutterwave,
       payment_bank_enabled: payBank,
       notification_email: notificationEmail,
+      thank_you_url: thankYouUrl,
       upsell_enabled: upsellEnabled,
       upsell_product_id: upsellProductId,
       upsell_title: upsellTitle,

@@ -105,6 +105,7 @@ export async function createForm(req, res) {
     upsell_title: body.upsell_title || 'Special 1-Click Offer!',
     upsell_description: body.upsell_description || 'Add an extra product to your order for a special price!',
     upsell_price: body.upsell_price ? Number(body.upsell_price) : 7000,
+    thank_you_url: body.thank_you_url || null,
     is_active: true,
     created_at: new Date().toISOString()
   };
