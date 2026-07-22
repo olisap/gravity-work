@@ -77,8 +77,11 @@ export default function FormBuilder({
   const [textBeforeSubmit, setTextBeforeSubmit] = useState('DO NOT CLICK THE ORDER BUTTON IF YOU ARE NOT READY TO RECEIVE THE PRODUCT IN 2-4 DAYS');
 
   // Upsell & Payments
-  const [addOrderBump, setAddOrderBump] = useState('None');
-  const [addUpsellProd, setAddUpsellProd] = useState('None');
+  const [upsellEnabled, setUpsellEnabled] = useState(true);
+  const [upsellProductId, setUpsellProductId] = useState('');
+  const [upsellTitle, setUpsellTitle] = useState('Special 1-Click Offer!');
+  const [upsellDescription, setUpsellDescription] = useState('Add an extra item to your order for a special price!');
+  const [upsellPrice, setUpsellPrice] = useState(7000);
   const [thankYouUrl, setThankYouUrl] = useState('http://yourthankyoupage.com');
 
   // Payment Toggles
@@ -116,6 +119,11 @@ export default function FormBuilder({
     setFormBgColor(f.form_bg_color || '#0f172a');
     setPayCod(f.payment_cod_enabled !== undefined ? f.payment_cod_enabled : true);
     setNotificationEmail(f.notification_email || 'merchant@gmail.com');
+    setUpsellEnabled(f.upsell_enabled !== false);
+    setUpsellProductId(f.upsell_product_id || products[0]?.id || '');
+    setUpsellTitle(f.upsell_title || 'Special 1-Click Offer!');
+    setUpsellDescription(f.upsell_description || 'Add an extra item to your order for a special price!');
+    setUpsellPrice(f.upsell_price || 7000);
     setActiveTab('builder');
   };
 
@@ -127,6 +135,11 @@ export default function FormBuilder({
     setSubHeaderText('Only Serious Buyers Should Fill The Form Below');
     setSubmitBtnText('ORDER NOW');
     setSubmitBgColor('#4f46e5');
+    setUpsellEnabled(true);
+    setUpsellProductId(products[0]?.id || '');
+    setUpsellTitle('Special 1-Click Offer!');
+    setUpsellDescription('Add an extra item to your order for a special price!');
+    setUpsellPrice(7000);
     setActiveTab('builder');
   };
 
@@ -149,7 +162,12 @@ export default function FormBuilder({
       payment_paystack_enabled: payPaystack,
       payment_flutterwave_enabled: payFlutterwave,
       payment_bank_enabled: payBank,
-      notification_email: notificationEmail
+      notification_email: notificationEmail,
+      upsell_enabled: upsellEnabled,
+      upsell_product_id: upsellProductId,
+      upsell_title: upsellTitle,
+      upsell_description: upsellDescription,
+      upsell_price: Number(upsellPrice)
     };
 
     if (editingFormId) {
@@ -650,6 +668,90 @@ export default function FormBuilder({
                 />
               )}
             </div>
+          </div>
+
+          {/* SECTION: Order Bumps & Upsell Products */}
+          <div className="glass p-5 rounded-2xl border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" /> Order Bump & Upsell Product Settings
+              </h3>
+              <button
+                type="button"
+                onClick={() => setUpsellEnabled(!upsellEnabled)}
+                className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+              >
+                <span>{upsellEnabled ? 'Upsell Active' : 'Upsell Disabled'}</span>
+                {upsellEnabled ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-slate-500" />}
+              </button>
+            </div>
+
+            {upsellEnabled ? (
+              <div className="space-y-4 pt-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">SELECT UPSELL / ORDER BUMP PRODUCT</label>
+                    <select
+                      value={upsellProductId}
+                      onChange={(e) => {
+                        const pid = e.target.value;
+                        setUpsellProductId(pid);
+                        const p = products.find(prod => prod.id === pid);
+                        if (p) {
+                          setUpsellPrice(p.base_price || 7000);
+                          setUpsellDescription(`Add ${p.name} for only ₦${(p.base_price || 7000).toLocaleString()} extra!`);
+                        }
+                      }}
+                      className="input text-xs"
+                    >
+                      <option value="">-- Custom Upsell Product --</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} (₦{p.base_price?.toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">UPSELL SPECIAL OFFER PRICE (₦)</label>
+                    <input
+                      type="number"
+                      value={upsellPrice}
+                      onChange={e => setUpsellPrice(e.target.value)}
+                      className="input text-xs font-mono"
+                      placeholder="7000"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">OFFER TITLE / HEADLINE</label>
+                    <input
+                      type="text"
+                      value={upsellTitle}
+                      onChange={e => setUpsellTitle(e.target.value)}
+                      className="input text-xs"
+                      placeholder="Special 1-Click Offer!"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">OFFER DESCRIPTION & BANNER TEXT</label>
+                    <input
+                      type="text"
+                      value={upsellDescription}
+                      onChange={e => setUpsellDescription(e.target.value)}
+                      className="input text-xs"
+                      placeholder="Add an extra item to your order for a special price!"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">Upsell is currently disabled for this checkout form. Toggle the switch above to enable order bump offers.</p>
+            )}
           </div>
 
           {/* SECTION E: Notifications & Terms (Screenshot 3) */}

@@ -18,6 +18,11 @@ let mockForms = [
     payment_flutterwave_enabled: false,
     payment_bank_enabled: false,
     notification_email: 'merchant@gmail.com',
+    upsell_enabled: true,
+    upsell_product_id: '22000000-0000-0000-0000-000000000004',
+    upsell_title: 'Special 1-Click Offer!',
+    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra (Normal Price: ₦9,500)!',
+    upsell_price: 7000,
     is_active: true
   },
   {
@@ -37,6 +42,11 @@ let mockForms = [
     payment_flutterwave_enabled: false,
     payment_bank_enabled: false,
     notification_email: 'merchant@gmail.com',
+    upsell_enabled: true,
+    upsell_product_id: '22000000-0000-0000-0000-000000000004',
+    upsell_title: 'Special 1-Click Offer!',
+    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra!',
+    upsell_price: 7000,
     is_active: true
   }
 ];
@@ -90,6 +100,11 @@ export async function createForm(req, res) {
     payment_flutterwave_enabled: body.payment_flutterwave_enabled || false,
     payment_bank_enabled: body.payment_bank_enabled || false,
     notification_email: body.notification_email || 'merchant@gmail.com',
+    upsell_enabled: body.upsell_enabled !== undefined ? body.upsell_enabled : true,
+    upsell_product_id: body.upsell_product_id || null,
+    upsell_title: body.upsell_title || 'Special 1-Click Offer!',
+    upsell_description: body.upsell_description || 'Add an extra product to your order for a special price!',
+    upsell_price: body.upsell_price ? Number(body.upsell_price) : 7000,
     is_active: true,
     created_at: new Date().toISOString()
   };

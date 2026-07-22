@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShoppingBag, CheckCircle, ArrowRight, ArrowLeft, ShieldCheck, Zap } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 
-export default function EmbedFormWidget({ products = [], onOrderSubmitted, lightMode = true }) {
+export default function EmbedFormWidget({ products = [], allProducts = [], formConfig = null, onOrderSubmitted, lightMode = true }) {
   const [selectedProduct, setSelectedProduct] = useState(products[0] || null);
   const [quantity, setQuantity] = useState(1);
   const [customerName, setCustomerName] = useState('');
@@ -28,9 +28,15 @@ export default function EmbedFormWidget({ products = [], onOrderSubmitted, light
   const currentCountryObj = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
   const unitPrice = selectedProduct?.base_price || 18500;
   const deliveryFee = 2000;
-  const bumpPrice = 7000;
+
+  // Dynamic Upsell Config
+  const isUpsellEnabled = formConfig?.upsell_enabled !== false;
+  const upsellProduct = (allProducts || []).find(p => p.id === formConfig?.upsell_product_id) || null;
+  const bumpPrice = formConfig?.upsell_price ? Number(formConfig.upsell_price) : (upsellProduct?.base_price || 7000);
+  const bumpTitle = formConfig?.upsell_title || 'Special 1-Click Offer!';
+  const bumpDesc = formConfig?.upsell_description || (upsellProduct ? `Add ${upsellProduct.name} for only ${currentCountryObj.currency}${bumpPrice.toLocaleString()} extra!` : `Add a Portable USB Juicer Cup for only ${currentCountryObj.currency}7,000 extra!`);
   
-  const subtotal = (unitPrice * quantity) + (addUpsellBump ? bumpPrice : 0);
+  const subtotal = (unitPrice * quantity) + (addUpsellBump && isUpsellEnabled ? bumpPrice : 0);
   const totalAmount = subtotal + deliveryFee;
 
   const theme = {
@@ -322,27 +328,29 @@ export default function EmbedFormWidget({ products = [], onOrderSubmitted, light
         </div>
 
         {/* SECTION 4: Order Bump */}
-        <div className={theme.orderBump}>
-          <label className="flex items-start gap-2.5 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={addUpsellBump}
-              onChange={(e) => {
-                setAddUpsellBump(e.target.checked);
-                if (customerPhone) setTimeout(() => saveDraft(false), 100);
-              }}
-              className="mt-0.5 accent-indigo-600 w-4.5 h-4.5 rounded cursor-pointer"
-            />
-            <div>
-              <span className={theme.orderBumpTitle}>
-                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" /> Special 1-Click Offer!
-              </span>
-              <p className={theme.orderBumpText}>
-                Add a <strong>Portable USB Juicer Cup</strong> for only {currentCountryObj.currency}7,000 extra (Normal Price: {currentCountryObj.currency}9,500)!
-              </p>
-            </div>
-          </label>
-        </div>
+        {isUpsellEnabled && (
+          <div className={theme.orderBump}>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={addUpsellBump}
+                onChange={(e) => {
+                  setAddUpsellBump(e.target.checked);
+                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                }}
+                className="mt-0.5 accent-indigo-600 w-4.5 h-4.5 rounded cursor-pointer"
+              />
+              <div>
+                <span className={theme.orderBumpTitle}>
+                  <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" /> {bumpTitle}
+                </span>
+                <p className={theme.orderBumpText}>
+                  {bumpDesc}
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
 
         {/* SECTION 5: Summary & Submit */}
         <div className="space-y-4 pt-2">

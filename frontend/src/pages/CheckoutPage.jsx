@@ -5,6 +5,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [product, setProduct] = useState(null);
+  const [allProducts, setAllProducts] = useState([]);
   const [form, setForm] = useState(null);
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function CheckoutPage() {
           throw new Error('Failed to retrieve products');
         }
         const productsData = await productsRes.json();
+        setAllProducts(productsData);
         
         const linkedProduct = productsData.find(p => p.id === formData.linked_product_id);
         if (!linkedProduct) {
@@ -113,7 +115,7 @@ export default function CheckoutPage() {
           )}
         </div>
       )}
-      <EmbedFormWidget products={[product]} lightMode={isLight} />
+      <EmbedFormWidget products={[product]} allProducts={allProducts} formConfig={form} lightMode={isLight} />
     </div>
   );
 }
