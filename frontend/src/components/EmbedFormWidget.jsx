@@ -30,7 +30,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   }, [selectedProduct]);
 
   const currentCountryObj = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
-  const deliveryFee = 2000;
+  const deliveryFee = 0;
 
   // Build price bundles dropdown options from product catalog definitions
   const rawBundles = selectedProduct?.price_bundles;
@@ -403,7 +403,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             </div>
             <div className="flex justify-between">
               <span className={theme.summaryItemLabel}>Delivery Fee ({selectedState}):</span>
-              <span className={theme.summaryItemValue}>{currentCountryObj.currency}{deliveryFee.toLocaleString()}</span>
+              <span className="text-emerald-600 font-extrabold uppercase">FREE</span>
             </div>
             <div className="flex justify-between font-bold text-emerald-600 text-sm border-t border-slate-200 dark:border-slate-800 pt-2.5 mt-2">
               <span>Total Payable on Delivery:</span>
