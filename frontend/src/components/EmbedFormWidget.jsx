@@ -393,20 +393,20 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           <button
             type="submit"
             disabled={!customerPhone || !customerName || !deliveryAddress || isSubmitting}
-            className="w-full py-3.5 rounded-xl bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 active:scale-[0.98] transition-all"
+            className="w-full py-4 rounded-xl bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-500 text-white font-black text-base md:text-lg tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 active:scale-[0.98] transition-all uppercase"
           >
             {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+              <span className="flex items-center gap-2 font-black">
+                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Processing Order...
+                PROCESSING ORDER...
               </span>
             ) : (
-              <>
-                <ShoppingBag className="w-4 h-4" /> PLACE ORDER (PAY ON DELIVERY)
-              </>
+              <span className="flex items-center justify-center gap-2 font-black text-base md:text-lg tracking-wide drop-shadow">
+                <ShoppingBag className="w-5 h-5 stroke-[2.5]" /> PLACE ORDER - PAY ON DELIVERY
+              </span>
             )}
           </button>
         </div>
