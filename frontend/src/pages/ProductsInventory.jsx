@@ -5,6 +5,7 @@ import {
   Settings, Check, X, FileText, AlertTriangle
 } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
+import { useAuth } from '../context/AuthContext';
 
 export default function ProductsInventory({
   products = [],
@@ -14,6 +15,9 @@ export default function ProductsInventory({
   onProductUpdated,
   onNavigateToFormBuilder
 }) {
+  const { user } = useAuth();
+  const storeId = user?.store_id || user?.id || '';
+
   const [selectedProductFilter, setSelectedProductFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
@@ -115,6 +119,7 @@ export default function ProductsInventory({
     if (!formProdName || !formBasePrice) return;
 
     const payload = {
+      store_id: storeId,
       name: formProdName,
       category_name: formCategory,
       country: formCountry,

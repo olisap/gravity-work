@@ -60,6 +60,7 @@ export async function login(req, res) {
             token: `jwt_token_${data.id}`,
             user: {
               id: data.id,
+              store_id: data.store_id,
               full_name: data.full_name,
               email: data.email,
               role: data.role || 'owner',

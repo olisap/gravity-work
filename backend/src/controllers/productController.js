@@ -117,11 +117,13 @@ export async function getCategories(req, res) {
 export async function createProduct(req, res) {
   const {
     name, category_id, category_name, country, description,
-    cost_price, base_price, sku, initial_stock, price_bundles
+    cost_price, base_price, sku, initial_stock, price_bundles,
+    store_id
   } = req.body;
 
   const newProduct = {
     id: `22000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
+    store_id: store_id || req.query.store_id || null,
     category_id: category_id || mockCategories[0].id,
     category_name: category_name || 'general',
     country: country || 'Nigeria',

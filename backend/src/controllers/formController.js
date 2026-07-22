@@ -74,6 +74,7 @@ export async function createForm(req, res) {
 
   const newForm = {
     id: `33000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
+    store_id: body.store_id || req.query.store_id || null,
     name: body.name || 'Product Order Form',
     linked_product_id: body.linked_product_id,
     embed_key,

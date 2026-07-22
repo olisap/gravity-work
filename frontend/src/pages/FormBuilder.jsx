@@ -4,6 +4,7 @@ import {
   Settings, CreditCard, ShieldCheck, HelpCircle, Palette, ToggleLeft, ToggleRight, ExternalLink
 } from 'lucide-react';
 import EmbedFormWidget from '../components/EmbedFormWidget';
+import { useAuth } from '../context/AuthContext';
 
 export default function FormBuilder({
   products = [],
@@ -12,6 +13,9 @@ export default function FormBuilder({
   onFormUpdated,
   onFormDeleted
 }) {
+  const { user } = useAuth();
+  const storeId = user?.store_id || user?.id || '';
+
   const [activeTab, setActiveTab] = useState('list'); // 'list', 'builder', 'embed', 'preview'
   const [copiedKey, setCopiedKey] = useState(null);
 
@@ -131,6 +135,7 @@ export default function FormBuilder({
     e.preventDefault();
 
     const payload = {
+      store_id: storeId,
       name: formName,
       linked_product_id: selectedProductId,
       header_text: headerText,
