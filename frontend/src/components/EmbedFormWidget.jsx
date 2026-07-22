@@ -4,7 +4,7 @@ import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 
 export default function EmbedFormWidget({ products = [], allProducts = [], formConfig = null, onOrderSubmitted, lightMode = true }) {
   const [selectedProduct, setSelectedProduct] = useState(products[0] || null);
-  const [quantity, setQuantity] = useState(1);
+  const [selectedBundleIndex, setSelectedBundleIndex] = useState(0);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -25,9 +25,31 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     }
   }, [products]);
 
+  useEffect(() => {
+    setSelectedBundleIndex(0);
+  }, [selectedProduct]);
+
   const currentCountryObj = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
-  const unitPrice = selectedProduct?.base_price || 18500;
   const deliveryFee = 2000;
+
+  // Build price bundles dropdown options from product catalog definitions
+  const rawBundles = selectedProduct?.price_bundles;
+  const hasBundles = Array.isArray(rawBundles) && rawBundles.length > 0;
+  const bundleOptions = hasBundles
+    ? rawBundles.map(b => ({
+        qty: Number(b.qty) || 1,
+        label: b.label || `${b.qty} x ${selectedProduct.name}`,
+        price: Number(b.price || (selectedProduct.base_price * (b.qty || 1)))
+      }))
+    : [1, 2, 3, 4, 5].map(q => ({
+        qty: q,
+        label: `${q} x ${selectedProduct?.name || 'Item'}`,
+        price: (selectedProduct?.base_price || 18500) * q
+      }));
+
+  const currentBundle = bundleOptions[selectedBundleIndex] || bundleOptions[0] || { qty: 1, price: selectedProduct?.base_price || 18500, label: '' };
+  const bundlePrice = currentBundle?.price || (selectedProduct?.base_price || 18500);
+  const quantity = currentBundle?.qty || 1;
 
   // Dynamic Upsell Config
   const isUpsellEnabled = formConfig?.upsell_enabled !== false;
@@ -36,7 +58,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const bumpTitle = formConfig?.upsell_title || 'Special 1-Click Offer!';
   const bumpDesc = formConfig?.upsell_description || (upsellProduct ? `Add ${upsellProduct.name} for only ${currentCountryObj.currency}${bumpPrice.toLocaleString()} extra!` : `Add a Portable USB Juicer Cup for only ${currentCountryObj.currency}7,000 extra!`);
   
-  const subtotal = (unitPrice * quantity) + (addUpsellBump && isUpsellEnabled ? bumpPrice : 0);
+  const subtotal = bundlePrice + (addUpsellBump && isUpsellEnabled ? bumpPrice : 0);
   const totalAmount = subtotal + deliveryFee;
 
   const theme = {
@@ -100,13 +122,13 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         items: [
           {
             product_id: selectedProduct?.id || 'p1',
-            name: selectedProduct?.name || 'Item',
+            name: currentBundle?.label ? `${selectedProduct?.name || 'Item'} — ${currentBundle.label}` : (selectedProduct?.name || 'Item'),
             quantity: quantity,
-            unit_price_at_time_of_order: unitPrice
+            unit_price_at_time_of_order: Math.round(bundlePrice / (quantity || 1))
           },
-          ...(addUpsellBump ? [{
-            product_id: 'p4000000-0000-0000-0000-000000000004',
-            name: 'Portable Electric USB Juicer Cup (Order Bump Addon)',
+          ...(addUpsellBump && isUpsellEnabled ? [{
+            product_id: upsellProduct?.id || 'p4000000-0000-0000-0000-000000000004',
+            name: upsellProduct?.name || 'Order Bump Addon',
             quantity: 1,
             unit_price_at_time_of_order: bumpPrice,
             is_upsell: true
@@ -194,53 +216,52 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); saveDraft(true); }} className="space-y-5">
-        {/* SECTION 1: Product Selection */}
+        {/* SECTION 1: Product Package / Quantity Selection */}
         <div className="space-y-3">
           <div className={theme.divider}>
             <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">1</span>
-            <h3 className={theme.sectionTitle}>Select Product & Quantity</h3>
+            <h3 className={theme.sectionTitle}>Select Product Package</h3>
           </div>
-          
+
+          {products.length > 1 && (
+            <div>
+              <label className={theme.label}>Product</label>
+              <select
+                value={selectedProduct?.id || ''}
+                onChange={(e) => {
+                  const prod = products.find(p => p.id === e.target.value);
+                  setSelectedProduct(prod);
+                  setSelectedBundleIndex(0);
+                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                }}
+                className={theme.select}
+              >
+                {products.map(p => (
+                  <option key={p.id} value={p.id} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
-            <label className={theme.label}>Product</label>
+            <label className={theme.label}>Select Package / Quantity</label>
             <select
-              value={selectedProduct?.id || ''}
+              value={selectedBundleIndex}
               onChange={(e) => {
-                const prod = products.find(p => p.id === e.target.value);
-                setSelectedProduct(prod);
+                const idx = Number(e.target.value);
+                setSelectedBundleIndex(idx);
                 if (customerPhone) setTimeout(() => saveDraft(false), 100);
               }}
-              className={theme.select}
+              className={theme.select + " font-bold text-xs py-3.5"}
             >
-              {products.map(p => (
-                <option key={p.id} value={p.id} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>
-                  {p.name} - {currentCountryObj.currency}{p.base_price?.toLocaleString()}
+              {bundleOptions.map((b, idx) => (
+                <option key={idx} value={idx} className={lightMode ? "bg-white text-slate-800 font-semibold" : "bg-slate-900 font-semibold"}>
+                  {b.label} — {currentCountryObj.currency}{b.price?.toLocaleString()}
                 </option>
               ))}
             </select>
-          </div>
-
-          <div className={theme.quantityContainer}>
-            <span className={theme.label}>Order Quantity</span>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setQuantity(Math.max(1, quantity - 1));
-                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
-                }}
-                className={theme.quantityBtn}
-              >-</button>
-              <span className="text-sm font-bold text-indigo-600 w-5 text-center">{quantity}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setQuantity(quantity + 1);
-                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
-                }}
-                className={theme.quantityBtn}
-              >+</button>
-            </div>
           </div>
         </div>
 
