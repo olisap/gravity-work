@@ -1,4 +1,16 @@
+import jwt from 'jsonwebtoken';
 import { supabase } from '../config/supabase.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'gravity_crm_jwt_secret_key_2026';
+
+function generateJwtToken(userPayload) {
+  return jwt.sign({
+    id: userPayload.id,
+    email: userPayload.email,
+    role: userPayload.role || 'owner',
+    store_id: userPayload.store_id || null
+  }, JWT_SECRET, { expiresIn: '7d' });
+}
 
 let mockUsers = [
   {
@@ -56,19 +68,18 @@ export async function login(req, res) {
       if (!error && data) {
         // Validate password
         if (data.password_hash === password || password === 'password123') {
-          return res.json({
-            token: `jwt_token_${data.id}`,
-            user: {
-              id: data.id,
-              store_id: data.store_id,
-              full_name: data.full_name,
-              email: data.email,
-              role: data.role || 'owner',
-              store_name: data.store_name || 'My E-Commerce Store',
-              country: data.country || 'Nigeria',
-              currency: data.currency || 'NGN'
-            }
-          });
+          const userObj = {
+            id: data.id,
+            store_id: data.store_id,
+            full_name: data.full_name,
+            email: data.email,
+            role: data.role || 'owner',
+            store_name: data.store_name || 'My E-Commerce Store',
+            country: data.country || 'Nigeria',
+            currency: data.currency || 'NGN'
+          };
+          const token = generateJwtToken(userObj);
+          return res.json({ token, user: userObj });
         }
       }
     } catch (err) {
@@ -80,18 +91,18 @@ export async function login(req, res) {
   const found = mockUsers.find(u => u.email.toLowerCase() === cleanEmail);
   if (found) {
     if (found.password_hash === password || found.password === password || password === 'password123') {
-      return res.json({
-        token: `jwt_token_${found.id}`,
-        user: {
-          id: found.id,
-          full_name: found.full_name,
-          email: found.email,
-          role: found.role,
-          store_name: found.store_name,
-          country: found.country,
-          currency: found.currency
-        }
-      });
+      const userObj = {
+        id: found.id,
+        store_id: found.store_id || null,
+        full_name: found.full_name,
+        email: found.email,
+        role: found.role,
+        store_name: found.store_name,
+        country: found.country,
+        currency: found.currency
+      };
+      const token = generateJwtToken(userObj);
+      return res.json({ token, user: userObj });
     }
   }
 
@@ -185,9 +196,21 @@ export async function getMe(req, res) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
 
-  const userId = authHeader.replace('Bearer jwt_token_', '');
+  const token = authHeader.replace('Bearer ', '');
+  let userId = null;
 
-  if (supabase) {
+  try {
+    if (token.startsWith('jwt_token_')) {
+      userId = token.replace('jwt_token_', '');
+    } else {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userId = decoded.id;
+    }
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid or expired JWT token' });
+  }
+
+  if (supabase && userId) {
     try {
       const { data } = await supabase.from('users').select('*').eq('id', userId).single();
       if (data) return res.json({ user: data });
