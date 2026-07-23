@@ -20,7 +20,12 @@ export default function TeamManagementModal({ user, onClose }) {
     setIsLoading(true);
     try {
       const storeId = user?.store_id || user?.id || '';
-      const res = await fetch(`/api/team?store_id=${encodeURIComponent(storeId)}`);
+      const token = localStorage.getItem('gravity_crm_token');
+      const res = await fetch(`/api/team?store_id=${encodeURIComponent(storeId)}`, {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await res.json();
       if (Array.isArray(data)) setTeamMembers(data);
     } catch (err) {
@@ -43,9 +48,13 @@ export default function TeamManagementModal({ user, onClose }) {
     try {
       const storeId = user?.store_id || user?.id || '';
       const storeName = user?.store_name || 'My E-Commerce Store';
+      const token = localStorage.getItem('gravity_crm_token');
       const res = await fetch('/api/team', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           full_name: fullName,
           email,

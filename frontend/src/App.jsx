@@ -55,10 +55,13 @@ function CrmAppContent() {
     try {
       const storeId = user?.store_id || user?.id || '';
       const queryStr = storeId ? `?store_id=${encodeURIComponent(storeId)}` : '';
+      const token = localStorage.getItem('gravity_crm_token');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const [ordersRes, productsRes, formsRes] = await Promise.all([
-        fetch(`/api/orders${queryStr}`).then(r => r.json()).catch(() => null),
-        fetch(`/api/products${queryStr}`).then(r => r.json()).catch(() => null),
-        fetch(`/api/forms${queryStr}`).then(r => r.json()).catch(() => null)
+        fetch(`/api/orders${queryStr}`, { headers }).then(r => r.json()).catch(() => null),
+        fetch(`/api/products${queryStr}`, { headers }).then(r => r.json()).catch(() => null),
+        fetch(`/api/forms${queryStr}`, { headers }).then(r => r.json()).catch(() => null)
       ]);
 
       if (ordersRes && Array.isArray(ordersRes)) setOrders(ordersRes);
@@ -73,12 +76,20 @@ function CrmAppContent() {
     fetchData();
   }, [user]);
 
-  const handleUpdateStatus = async (orderId, newStatus, notes) => {
+  const handleUpdateStatus = async (orderId, newStatus, notes, scheduleData) => {
     try {
+      const token = localStorage.getItem('gravity_crm_token');
       const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, confirmation_notes: notes })
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          confirmation_notes: notes,
+          ...(scheduleData || {})
+        })
       });
       const updated = await res.json();
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updated } : o));
