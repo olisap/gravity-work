@@ -126,18 +126,28 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
                         {/* Actions */}
                         <div className="space-y-1.5">
                           {status === 'Pending' && (
-                            <button onClick={() => onOpenConfirmationModal(order)} className="btn-primary w-full py-1.5 text-[11px]">
-                              <Phone className="w-3 h-3" /> Confirm Call
-                            </button>
+                            <>
+                              <button onClick={() => onOpenConfirmationModal(order)} className="btn-primary w-full py-1.5 text-[11px]">
+                                <Phone className="w-3 h-3" /> Confirm Call
+                              </button>
+                              <button onClick={() => onUpdateStatus(order.id, 'Awaiting')} className="w-full py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-[10px] flex items-center justify-center gap-1 border border-emerald-500/30">
+                                Move to Awaiting <ArrowRight className="w-3 h-3" />
+                              </button>
+                            </>
                           )}
                           {status === 'Awaiting' && (
                             <button onClick={() => onUpdateStatus(order.id, 'Scheduled')} className="btn-primary w-full py-1.5 text-[11px]">
-                              Dispatch <ArrowRight className="w-3 h-3" />
+                              Dispatch to Scheduled <ArrowRight className="w-3 h-3" />
                             </button>
                           )}
                           {status === 'Scheduled' && (
                             <button onClick={() => onUpdateStatus(order.id, 'Delivered')} className="btn-success w-full py-1.5 text-[11px]">
                               <CheckCircle className="w-3 h-3" /> Mark Delivered
+                            </button>
+                          )}
+                          {status === 'Draft' && (
+                            <button onClick={() => onUpdateStatus(order.id, 'Pending')} className="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-[11px] flex items-center justify-center gap-1">
+                              Convert to Pending <ArrowRight className="w-3 h-3" />
                             </button>
                           )}
                           <button
@@ -204,14 +214,24 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
                         >
                           <Copy className="w-3 h-3 text-indigo-400" /> Copy
                         </button>
-                        {o.status === 'Pending' && (
-                          <button onClick={() => onOpenConfirmationModal(o)} className="btn-primary py-1.5 px-3 text-[11px]">
-                            <Phone className="w-3 h-3" /> Confirm
+                        {o.status === 'Draft' && (
+                          <button onClick={() => onUpdateStatus(o.id, 'Pending')} className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-[11px] inline-flex items-center gap-1">
+                            Move to Pending <ArrowRight className="w-3 h-3" />
                           </button>
+                        )}
+                        {o.status === 'Pending' && (
+                          <>
+                            <button onClick={() => onOpenConfirmationModal(o)} className="btn-primary py-1.5 px-3 text-[11px]">
+                              <Phone className="w-3 h-3" /> Confirm Call
+                            </button>
+                            <button onClick={() => onUpdateStatus(o.id, 'Awaiting')} className="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-[11px] inline-flex items-center gap-1 border border-emerald-500/30">
+                              Awaiting <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </>
                         )}
                         {o.status === 'Awaiting' && (
                           <button onClick={() => onUpdateStatus(o.id, 'Scheduled')} className="btn-primary py-1.5 px-3 text-[11px]">
-                            Dispatch
+                            Dispatch <ArrowRight className="w-3 h-3" />
                           </button>
                         )}
                         {o.status === 'Scheduled' && (

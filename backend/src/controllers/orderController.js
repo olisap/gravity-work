@@ -344,6 +344,35 @@ export async function updateOrderStatus(req, res) {
     return res.status(400).json({ error: 'Invalid order status' });
   }
 
+  // If Supabase is connected, update Supabase first
+  if (supabase) {
+    try {
+      const updates = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+      if (confirmation_notes !== undefined) updates.confirmation_call_notes = confirmation_notes;
+      if (assigned_staff_id) updates.assigned_staff_id = assigned_staff_id;
+      if (status === 'Delivered') {
+        updates.delivered_at = new Date().toISOString();
+        updates.payment_status = 'Paid';
+      }
+
+      const { data: dbData, error: dbErr } = await supabase.from('orders').update(updates).eq('id', id).select();
+      if (!dbErr && dbData && dbData[0]) {
+        const formatted = formatOrderFromSupabase(dbData[0]);
+        const idx = mockOrders.findIndex(o => o.id === id);
+        if (idx >= 0) mockOrders[idx] = { ...mockOrders[idx], ...formatted };
+        else mockOrders.unshift(formatted);
+        
+        console.log(`✅ Order #${formatted.order_number} status updated to "${status}" in Supabase`);
+        return res.json(formatted);
+      }
+    } catch (dbErr) {
+      console.error('Failed to update order status in Supabase:', dbErr);
+    }
+  }
+
   let order = mockOrders.find(o => o.id === id);
   if (!order) {
     return res.status(404).json({ error: 'Order not found' });
