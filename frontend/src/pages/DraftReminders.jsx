@@ -1,6 +1,7 @@
 import React from 'react';
-import { Clock, Send, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
+import { Clock, Send, ExternalLink, AlertCircle, RefreshCw, Copy } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
+import { copyOrderToClipboard } from '../utils/copyOrder';
 
 export default function DraftReminders({ orders = [], selectedCountry }) {
   const currentCountryObj = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
@@ -55,7 +56,17 @@ export default function DraftReminders({ orders = [], selectedCountry }) {
               <tbody className="divide-y divide-slate-800/60">
                 {drafts.map(d => (
                   <tr key={d.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="p-3 font-bold text-indigo-400">{d.customer_phone}</td>
+                    <td className="p-3 font-bold text-indigo-400 flex items-center gap-1.5">
+                      <span>{d.customer_phone}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyOrderToClipboard(d, curr)}
+                        title="Copy draft details"
+                        className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-amber-600 transition-colors"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                    </td>
                     <td className="p-3 text-slate-200">{d.customer_name || 'Guest'}</td>
                     <td className="p-3">
                       <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[10px]">
@@ -65,12 +76,18 @@ export default function DraftReminders({ orders = [], selectedCountry }) {
                     <td className="p-3 text-slate-300">{d.items?.[0]?.name || 'Item'}</td>
                     <td className="p-3 font-bold text-slate-100">{curr}{d.total_amount?.toLocaleString()}</td>
                     <td className="p-3 font-mono text-[10px] text-amber-300 truncate max-w-[120px]">{d.resume_token || d.id}</td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right space-x-2">
+                      <button
+                        onClick={() => copyOrderToClipboard(d, curr)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs inline-flex items-center gap-1 border border-slate-700"
+                      >
+                        <Copy className="w-3 h-3 text-amber-400" /> Copy Draft
+                      </button>
                       <button
                         onClick={() => handleSendManualReminder(d)}
-                        className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1 shadow float-right"
+                        className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs inline-flex items-center gap-1 shadow"
                       >
-                        <Send className="w-3 h-3" /> Resend SMS Reminder
+                        <Send className="w-3 h-3" /> Resend SMS
                       </button>
                     </td>
                   </tr>

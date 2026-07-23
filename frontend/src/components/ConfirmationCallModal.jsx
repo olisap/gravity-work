@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Phone, CheckCircle, XCircle, AlertTriangle, Zap, MessageSquare } from 'lucide-react';
+import { Phone, CheckCircle, XCircle, AlertTriangle, Zap, MessageSquare, Copy } from 'lucide-react';
+import { copyOrderToClipboard } from '../utils/copyOrder';
 
 export default function ConfirmationCallModal({ order, onClose, onUpdateStatus, onAddUpsell }) {
   const [notes, setNotes] = useState(order?.confirmation_call_notes || '');
@@ -41,7 +42,15 @@ export default function ConfirmationCallModal({ order, onClose, onUpdateStatus, 
               <Phone className="w-4 h-4 text-indigo-400" /> Confirm Order #{order.order_number}
             </h3>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-lg">&times;</button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => copyOrderToClipboard(order)}
+              className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white font-bold text-xs flex items-center gap-1 transition-colors border border-indigo-500/30"
+            >
+              <Copy className="w-3.5 h-3.5" /> Copy Order
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-lg">&times;</button>
+          </div>
         </div>
 
         {/* Duplicate Warning Alert */}

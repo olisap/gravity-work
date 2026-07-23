@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { LayoutGrid, List, Phone, CheckCircle, ArrowRight, AlertTriangle, Truck, Filter } from 'lucide-react';
+import { LayoutGrid, List, Phone, CheckCircle, ArrowRight, AlertTriangle, Truck, Filter, Copy } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
+import { copyOrderToClipboard } from '../utils/copyOrder';
 
 const PIPELINE_ORDER = ['Pending', 'Awaiting', 'Scheduled', 'Delivered', 'Cancelled', 'Draft'];
 const BADGE_CLASS = {
@@ -96,8 +97,18 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
                           </div>
                         )}
 
-                        <div className="flex justify-between items-start gap-1">
-                          <span className="font-mono text-[11px] font-bold text-indigo-400">#{order.order_number}</span>
+                        <div className="flex justify-between items-center gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[11px] font-bold text-indigo-400">#{order.order_number}</span>
+                            <button
+                              type="button"
+                              onClick={() => copyOrderToClipboard(order, curr)}
+                              title="Copy order details"
+                              className="p-1 rounded bg-slate-700/60 text-slate-300 hover:text-white hover:bg-indigo-600 transition-colors"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </div>
                           <span className="text-xs font-extrabold text-slate-100">{curr}{order.total_amount?.toLocaleString()}</span>
                         </div>
 
@@ -113,7 +124,7 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
                         </p>
 
                         {/* Actions */}
-                        <div>
+                        <div className="space-y-1.5">
                           {status === 'Pending' && (
                             <button onClick={() => onOpenConfirmationModal(order)} className="btn-primary w-full py-1.5 text-[11px]">
                               <Phone className="w-3 h-3" /> Confirm Call
@@ -129,6 +140,12 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
                               <CheckCircle className="w-3 h-3" /> Mark Delivered
                             </button>
                           )}
+                          <button
+                            onClick={() => copyOrderToClipboard(order, curr)}
+                            className="w-full py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors border border-slate-700/60"
+                          >
+                            <Copy className="w-3 h-3 text-indigo-400" /> Copy Details
+                          </button>
                         </div>
                       </div>
                     ))
@@ -161,7 +178,17 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
                   ? <tr><td colSpan={7} className="text-center py-10 text-slate-500 italic text-xs">No orders match the current filters.</td></tr>
                   : filtered.map(o => (
                     <tr key={o.id}>
-                      <td className="font-mono font-bold text-indigo-400">#{o.order_number}</td>
+                      <td className="font-mono font-bold text-indigo-400 flex items-center gap-1.5">
+                        <span>#{o.order_number}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyOrderToClipboard(o, curr)}
+                          title="Copy order details"
+                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-indigo-600 transition-colors"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </td>
                       <td>
                         <p className="font-semibold text-slate-200">{o.customer_name}</p>
                         <p className="text-[10px] text-slate-500">{o.customer_phone}</p>
@@ -170,7 +197,13 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
                       <td className="text-slate-400 max-w-[160px] truncate">{o.items?.[0]?.name || '—'}</td>
                       <td className="font-bold text-slate-100">{curr}{o.total_amount?.toLocaleString()}</td>
                       <td><span className={`badge ${BADGE_CLASS[o.status]}`}>{o.status}</span></td>
-                      <td className="text-right">
+                      <td className="text-right space-x-1.5">
+                        <button
+                          onClick={() => copyOrderToClipboard(o, curr)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors border border-slate-700"
+                        >
+                          <Copy className="w-3 h-3 text-indigo-400" /> Copy
+                        </button>
                         {o.status === 'Pending' && (
                           <button onClick={() => onOpenConfirmationModal(o)} className="btn-primary py-1.5 px-3 text-[11px]">
                             <Phone className="w-3 h-3" /> Confirm
