@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import nodemailer from 'nodemailer';
 
 export class NotificationService {
   /**
@@ -54,13 +55,14 @@ export class NotificationService {
    */
   static async sendSMS(phone, text) {
     const apiKey = process.env.TERMII_API_KEY;
-    if (apiKey) {
+    const cleanPhone = phone ? phone.replace(/\s+/g, '').replace('+', '') : '';
+    if (apiKey && apiKey !== 'your-termii-api-key') {
       try {
         const response = await fetch('https://api.ng.termii.com/api/sms/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: phone,
+            to: cleanPhone,
             from: process.env.TERMII_SENDER_ID || 'N-ALERT',
             sms: text,
             type: 'plain',
@@ -69,10 +71,10 @@ export class NotificationService {
           })
         });
         const resData = await response.json();
-        console.log('📱 Termii SMS API Response:', resData);
+        console.log(`📱 Termii SMS API Response (${cleanPhone}):`, resData);
         return { success: true, provider: 'Termii', response: resData };
       } catch (err) {
-        console.error('Failed to send SMS via Termii:', err);
+        console.error(`Failed to send SMS to ${phone} via Termii:`, err);
       }
     }
 
@@ -86,14 +88,39 @@ export class NotificationService {
   static async sendEmail(email, subject, text, htmlBody = null) {
     const brevoKey = process.env.BREVO_API_KEY;
     const resendKey = process.env.RESEND_API_KEY;
-    const senderEmail = process.env.SENDER_EMAIL || 'orders@merchant.ng';
+    const senderEmail = process.env.SENDER_EMAIL || 'olisapaul1@gmail.com';
     const senderName = 'E-Commerce Order System';
 
     const defaultHtml = `<div style="font-family:Arial,sans-serif;padding:20px;color:#1e293b;"><h2 style="color:#4f46e5;">Order Update</h2><p>${text}</p></div>`;
     const finalHtml = htmlBody || defaultHtml;
 
-    // 1. Try Brevo
-    if (brevoKey && brevoKey !== 'your-brevo-api-key') {
+    // 1. Brevo SMTP Transporter (for xsmtpsib keys)
+    if (brevoKey && brevoKey.startsWith('xsmtpsib')) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: 'smtp-relay.brevo.com',
+          port: 587,
+          secure: false,
+          auth: {
+            user: process.env.BREVO_SMTP_USER || senderEmail,
+            pass: brevoKey
+          }
+        });
+        const info = await transporter.sendMail({
+          from: `"${senderName}" <${senderEmail}>`,
+          to: email,
+          subject,
+          html: finalHtml
+        });
+        console.log(`📧 [Brevo SMTP Email Sent] To: ${email} | MessageId:`, info.messageId);
+        return { success: true, provider: 'Brevo SMTP', messageId: info.messageId };
+      } catch (err) {
+        console.error(`Failed to send Email via Brevo SMTP to ${email}:`, err.message);
+      }
+    }
+
+    // 2. Brevo REST API (for xkeysib keys)
+    if (brevoKey && brevoKey !== 'your-brevo-api-key' && !brevoKey.startsWith('xsmtpsib')) {
       try {
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
@@ -109,14 +136,14 @@ export class NotificationService {
           })
         });
         const resData = await response.json();
-        console.log(`📧 [Brevo Email API Response] To: ${email} | Result:`, resData);
-        if (response.ok) return { success: true, provider: 'Brevo', response: resData };
+        console.log(`📧 [Brevo API Response] To: ${email} | Result:`, resData);
+        if (response.ok) return { success: true, provider: 'Brevo API', response: resData };
       } catch (err) {
-        console.error(`Failed to send Email via Brevo to ${email}:`, err);
+        console.error(`Failed to send Email via Brevo API to ${email}:`, err.message);
       }
     }
 
-    // 2. Try Resend
+    // 3. Try Resend
     if (resendKey && resendKey !== 'your-resend-api-key') {
       try {
         const response = await fetch('https://api.resend.com/emails', {
@@ -136,11 +163,11 @@ export class NotificationService {
         console.log(`📧 [Resend Email API Response] To: ${email} | Result:`, resData);
         if (response.ok) return { success: true, provider: 'Resend', response: resData };
       } catch (err) {
-        console.error(`Failed to send Email via Resend to ${email}:`, err);
+        console.error(`Failed to send Email via Resend to ${email}:`, err.message);
       }
     }
 
-    console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Content length: ${finalHtml.length} chars (Provide BREVO_API_KEY or RESEND_API_KEY in environment variables to deliver physical inbox emails)`);
+    console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Content length: ${finalHtml.length} chars`);
     return { success: true, provider: 'Sandbox', mockSent: true };
   }
 
