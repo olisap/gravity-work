@@ -193,7 +193,9 @@ export async function createOrUpdateDraftOrder(req, res) {
     form_step_reached,
     is_final_submit,
     upsell_source,
-    delivery_fee
+    delivery_fee,
+    notification_email,
+    store_id
   } = req.body;
 
   const normalizedPhone = normalizePhone(customer_phone);
@@ -216,13 +218,16 @@ export async function createOrUpdateDraftOrder(req, res) {
 
   let orderIndex = mockOrders.findIndex(o => o.id === id || (resume_token && o.resume_token === resume_token));
   const subtotal = items ? items.reduce((acc, i) => acc + (i.unit_price_at_time_of_order * i.quantity), 0) : 0;
-  const fee = delivery_fee !== undefined ? Number(delivery_fee) : 2000;
+  const fee = delivery_fee !== undefined ? Number(delivery_fee) : 0;
+
+  let finalOrder = null;
 
   if (orderIndex >= 0) {
     // Update existing draft
     const existing = mockOrders[orderIndex];
-    const updated = {
+    finalOrder = {
       ...existing,
+      store_id: store_id || existing.store_id || null,
       customer_name: customer_name || existing.customer_name,
       customer_phone: normalizedPhone || existing.customer_phone,
       customer_email: customer_email || existing.customer_email,
@@ -241,42 +246,60 @@ export async function createOrUpdateDraftOrder(req, res) {
     };
 
     if (is_final_submit) {
-      updated.resume_token = null; // Clear resume token on final submit
+      finalOrder.resume_token = null; // Clear resume token on final submit
     }
 
-    mockOrders[orderIndex] = updated;
-    return res.json(updated);
+    mockOrders[orderIndex] = finalOrder;
+  } else {
+    // Create new Order / Draft
+    const newOrderNumber = `OLI-${10000 + mockOrders.length + 1}`;
+    finalOrder = {
+      id: id || `o${Date.now()}`,
+      store_id: store_id || null,
+      order_number: newOrderNumber,
+      customer_name: customer_name || 'Guest Customer',
+      customer_phone: normalizedPhone,
+      customer_email: customer_email || '',
+      delivery_address: delivery_address || '',
+      country: country || 'Nigeria',
+      state: state || 'Lagos',
+      items: items || [],
+      subtotal,
+      delivery_fee: fee,
+      total_amount: subtotal + fee,
+      status: is_final_submit ? 'Pending' : 'Draft',
+      payment_method: 'COD',
+      payment_status: 'Unpaid',
+      source: 'form:embedded',
+      resume_token: is_final_submit ? null : `RESUME-${Date.now()}`,
+      form_step_reached: form_step_reached || 1,
+      is_duplicate_flagged: isDuplicate,
+      duplicate_reason: duplicateReason,
+      created_at: new Date().toISOString(),
+      last_activity_at: new Date().toISOString()
+    };
+
+    mockOrders.unshift(finalOrder);
   }
 
-  // Create new Order / Draft
-  const newOrderNumber = `OLI-${10000 + mockOrders.length + 1}`;
-  const newOrder = {
-    id: id || `o${Date.now()}`,
-    order_number: newOrderNumber,
-    customer_name: customer_name || 'Guest Customer',
-    customer_phone: normalizedPhone,
-    customer_email: customer_email || '',
-    delivery_address: delivery_address || '',
-    country: country || 'Nigeria',
-    state: state || 'Lagos',
-    items: items || [],
-    subtotal,
-    delivery_fee: fee,
-    total_amount: subtotal + fee,
-    status: is_final_submit ? 'Pending' : 'Draft',
-    payment_method: 'COD',
-    payment_status: 'Unpaid',
-    source: 'form:embedded',
-    resume_token: is_final_submit ? null : `RESUME-${Date.now()}`,
-    form_step_reached: form_step_reached || 1,
-    is_duplicate_flagged: isDuplicate,
-    duplicate_reason: duplicateReason,
-    created_at: new Date().toISOString(),
-    last_activity_at: new Date().toISOString()
-  };
+  // Persist to Supabase if connected
+  if (supabase) {
+    try {
+      await supabase.from('orders').upsert([finalOrder]);
+    } catch (dbErr) {
+      console.error('Failed to upsert order to Supabase:', dbErr);
+    }
+  }
 
-  mockOrders.unshift(newOrder);
-  res.status(201).json(newOrder);
+  // Trigger Notifications on Final Order Submit
+  if (is_final_submit) {
+    const targetNotificationEmail = notification_email || 'olisapaul1@gmail.com';
+    NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail).catch(err => {
+      console.error('Failed to send order finalized notifications:', err);
+    });
+  }
+
+  res.status(orderIndex >= 0 ? 200 : 201).json(finalOrder);
 }
 
 export async function updateOrderStatus(req, res) {

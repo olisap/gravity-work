@@ -83,9 +83,15 @@ export class NotificationService {
   /**
    * Brevo / Email Adapter with sandbox fallback
    */
-  static async sendEmail(email, subject, text) {
+  static async sendEmail(email, subject, text, htmlBody = null) {
     const apiKey = process.env.BREVO_API_KEY;
-    if (apiKey) {
+    const senderEmail = process.env.SENDER_EMAIL || 'orders@merchant.ng';
+    const senderName = 'E-Commerce Order System';
+
+    const defaultHtml = `<div style="font-family:Arial,sans-serif;padding:20px;color:#1e293b;"><h2 style="color:#4f46e5;">Order Update</h2><p>${text}</p></div>`;
+    const finalHtml = htmlBody || defaultHtml;
+
+    if (apiKey && apiKey !== 'your-brevo-api-key') {
       try {
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
@@ -94,21 +100,152 @@ export class NotificationService {
             'api-key': apiKey
           },
           body: JSON.stringify({
-            sender: { name: 'E-Commerce CRM', email: process.env.SENDER_EMAIL || 'orders@merchant.ng' },
+            sender: { name: senderName, email: senderEmail },
             to: [{ email }],
             subject,
-            htmlContent: `<div style="font-family:sans-serif;padding:20px;"><h2>Order Update</h2><p>${text}</p></div>`
+            htmlContent: finalHtml
           })
         });
         const resData = await response.json();
-        console.log('📧 Brevo Email API Response:', resData);
+        console.log(`📧 [Brevo Email API Response] To: ${email} | Result:`, resData);
         return { success: true, provider: 'Brevo', response: resData };
       } catch (err) {
-        console.error('Failed to send Email via Brevo:', err);
+        console.error(`Failed to send Email via Brevo to ${email}:`, err);
       }
     }
 
-    console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Text: "${text}"`);
+    console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Content length: ${finalHtml.length} chars`);
     return { success: true, provider: 'Sandbox', mockSent: true };
+  }
+
+  /**
+   * Send all three notifications when an order is completed/finalized:
+   * 1. Merchant Notification Email (form notification_email / store owner)
+   * 2. Customer Receipt Email (if customer_email provided)
+   * 3. Customer Order Confirmation SMS (to customer_phone)
+   */
+  static async sendOrderFinalizedNotifications(order, merchantEmail = 'olisapaul1@gmail.com') {
+    if (!order) return;
+
+    const mainProductName = (order.items && order.items[0]) ? order.items[0].name : 'Product Order';
+    const totalFormatted = (order.total_amount || 0).toLocaleString();
+    const itemsList = order.items || [];
+
+    // ── 1. Merchant Order Alert Email ──
+    const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || 'olisapaul1@gmail.com';
+    const merchantSubject = `🛒 NEW ORDER ALERT: #${order.order_number} - ${order.customer_name}`;
+    const merchantHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
+        <div style="background-color: #4f46e5; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #ffffff; margin: 0; font-size: 20px;">🛒 New Order Received!</h2>
+          <p style="color: #e0e7ff; margin: 6px 0 0 0; font-size: 13px;">Order Ref: <strong>#${order.order_number}</strong></p>
+        </div>
+
+        <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Customer Information</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
+          <tr><td style="padding: 6px 0; color: #64748b; width: 140px;">Full Name:</td><td style="font-weight: bold; color: #0f172a;">${order.customer_name}</td></tr>
+          <tr><td style="padding: 6px 0; color: #64748b;">Phone Number:</td><td style="font-weight: bold; color: #4f46e5;"><a href="tel:${order.customer_phone}" style="color: #4f46e5; text-decoration: none;">${order.customer_phone}</a></td></tr>
+          <tr><td style="padding: 6px 0; color: #64748b;">Email Address:</td><td style="color: #0f172a;">${order.customer_email || 'Not provided'}</td></tr>
+          <tr><td style="padding: 6px 0; color: #64748b;">Delivery Address:</td><td style="color: #0f172a;">${order.delivery_address}, ${order.state}, ${order.country}</td></tr>
+        </table>
+
+        <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Order Summary</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
+          <thead>
+            <tr style="background-color: #f8fafc; text-align: left; font-size: 12px; color: #64748b;">
+              <th style="padding: 8px;">Product Description</th>
+              <th style="padding: 8px; text-align: center;">Qty</th>
+              <th style="padding: 8px; text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsList.map(i => `
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; font-weight: 600; color: #1e293b;">${i.name}</td>
+                <td style="padding: 10px 8px; text-align: center; color: #475569;">${i.quantity}</td>
+                <td style="padding: 10px 8px; text-align: right; color: #1e293b;">₦${(i.unit_price_at_time_of_order * i.quantity).toLocaleString()}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; padding: 16px; border-radius: 8px; margin-top: 16px;">
+          <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; color: #065f46;">
+            <span>Total Payable on Delivery (COD):</span>
+            <span>₦${totalFormatted}</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail(
+      targetMerchantEmail,
+      merchantSubject,
+      `New order #${order.order_number} from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
+      merchantHtml
+    );
+
+    // ── 2. Customer Receipt Email ──
+    if (order.customer_email && order.customer_email.trim().includes('@')) {
+      const customerSubject = `🧾 Order Confirmation & Receipt - #${order.order_number}`;
+      const customerHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
+          <div style="background-color: #10b981; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+            <h2 style="color: #ffffff; margin: 0; font-size: 20px;">Thank You For Your Order!</h2>
+            <p style="color: #ecfdf5; margin: 6px 0 0 0; font-size: 13px;">Order Reference: <strong>#${order.order_number}</strong></p>
+          </div>
+
+          <p style="font-size: 14px; color: #334155; line-height: 1.6;">Dear <strong>${order.customer_name}</strong>,</p>
+          <p style="font-size: 14px; color: #334155; line-height: 1.6;">We have successfully received your order. Below is a summary receipt of your order details:</p>
+
+          <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Order Details</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
+            <thead>
+              <tr style="background-color: #f8fafc; text-align: left; font-size: 12px; color: #64748b;">
+                <th style="padding: 8px;">Item</th>
+                <th style="padding: 8px; text-align: center;">Qty</th>
+                <th style="padding: 8px; text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsList.map(i => `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 10px 8px; font-weight: 600; color: #1e293b;">${i.name}</td>
+                  <td style="padding: 10px 8px; text-align: center; color: #475569;">${i.quantity}</td>
+                  <td style="padding: 10px 8px; text-align: right; color: #1e293b;">₦${(i.unit_price_at_time_of_order * i.quantity).toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 14px; border-radius: 8px; margin-bottom: 20px;">
+            <div style="font-size: 13px; font-weight: bold; color: #0f172a; margin-bottom: 4px;">Delivery Address:</div>
+            <div style="font-size: 13px; color: #475569;">${order.delivery_address}, ${order.state}, ${order.country}</div>
+          </div>
+
+          <div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; padding: 16px; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; color: #065f46;">
+              <span>Total Payable on Delivery (COD):</span>
+              <span>₦${totalFormatted}</span>
+            </div>
+          </div>
+
+          <p style="font-size: 13px; color: #64748b; margin-top: 24px; text-align: center; line-height: 1.5;">Our representative will call your phone number (<strong>${order.customer_phone}</strong>) shortly to confirm delivery dispatch.</p>
+        </div>
+      `;
+
+      await this.sendEmail(
+        order.customer_email.trim(),
+        customerSubject,
+        `Thank you ${order.customer_name}! Your order #${order.order_number} for ₦${totalFormatted} (Pay on Delivery) has been confirmed.`,
+        customerHtml
+      );
+    }
+
+    // ── 3. Customer Order Confirmation SMS ──
+    if (order.customer_phone) {
+      const smsMessage = `Hi ${order.customer_name}, your order #${order.order_number} for ${mainProductName} is confirmed! Total: ₦${totalFormatted} (Pay on Delivery). Our rep will call you shortly to confirm delivery.`;
+      await this.sendSMS(order.customer_phone, smsMessage);
+    }
   }
 }

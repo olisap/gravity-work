@@ -119,6 +119,8 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         form_step_reached: stepReached,
         is_final_submit: isFinal,
         delivery_fee: deliveryFee,
+        notification_email: formConfig?.notification_email || 'olisapaul1@gmail.com',
+        store_id: formConfig?.store_id || null,
         items: [
           {
             product_id: selectedProduct?.id || 'p1',
