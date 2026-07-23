@@ -18,9 +18,11 @@ class ErrorBoundary extends React.Component {
   }
 
   handleReset = () => {
-    localStorage.removeItem('gravity_crm_user');
-    localStorage.removeItem('gravity_crm_token');
-    window.location.reload();
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {}
+    window.location.href = window.location.origin + window.location.pathname;
   };
 
   render() {
