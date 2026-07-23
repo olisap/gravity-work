@@ -62,24 +62,28 @@ export async function login(req, res) {
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('email', cleanEmail)
-        .single();
+        .eq('email', cleanEmail);
 
-      if (!error && data) {
-        // Validate password
-        if (data.password_hash === password || password === 'password123') {
+      if (!error && data && data.length > 0) {
+        // Find user with matching password or default fallback
+        const matchingUser = data.find(u => u.password_hash === password || u.password === password || password === 'password123') || data[0];
+        const isValidPassword = matchingUser.password_hash === password || matchingUser.password === password || password === 'password123';
+
+        if (isValidPassword) {
           const userObj = {
-            id: data.id,
-            store_id: data.store_id,
-            full_name: data.full_name,
-            email: data.email,
-            role: data.role || 'owner',
-            store_name: data.store_name || 'My E-Commerce Store',
-            country: data.country || 'Nigeria',
-            currency: data.currency || 'NGN'
+            id: matchingUser.id,
+            store_id: matchingUser.store_id,
+            full_name: matchingUser.full_name,
+            email: matchingUser.email,
+            role: matchingUser.role || 'owner',
+            store_name: matchingUser.store_name || 'My E-Commerce Store',
+            country: matchingUser.country || 'Nigeria',
+            currency: matchingUser.currency || 'NGN'
           };
           const token = generateJwtToken(userObj);
           return res.json({ token, user: userObj });
+        } else {
+          return res.status(401).json({ error: 'Invalid password. Please check your credentials.' });
         }
       }
     } catch (err) {
