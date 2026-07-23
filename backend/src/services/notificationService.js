@@ -88,7 +88,7 @@ export class NotificationService {
   static async sendEmail(email, subject, text, htmlBody = null) {
     const brevoKey = process.env.BREVO_API_KEY;
     const resendKey = process.env.RESEND_API_KEY;
-    const senderEmail = process.env.SENDER_EMAIL || 'olisapaul1@gmail.com';
+    const senderEmail = process.env.SENDER_EMAIL || 'olisapaul12@gmail.com';
     const senderName = 'E-Commerce Order System';
 
     const defaultHtml = `<div style="font-family:Arial,sans-serif;padding:20px;color:#1e293b;"><h2 style="color:#4f46e5;">Order Update</h2><p>${text}</p></div>`;
