@@ -38,8 +38,15 @@ export function requireRole(allowedRoles = []) {
       return res.status(401).json({ error: 'Unauthorized. User session missing.' });
     }
 
-    const userRole = req.user.role || 'owner';
-    if (!allowedRoles.includes(userRole) && userRole !== 'owner') {
+    const rawRole = req.user.role || 'owner';
+    const userRole = rawRole === 'sales_agent' ? 'confirmation_staff' : rawRole;
+
+    // Owners and Admins have full access across all endpoints
+    if (userRole === 'owner' || userRole === 'admin') {
+      return next();
+    }
+
+    if (!allowedRoles.includes(userRole) && !allowedRoles.includes(rawRole)) {
       return res.status(403).json({ error: `Access denied. Requires role: ${allowedRoles.join(' or ')}` });
     }
 

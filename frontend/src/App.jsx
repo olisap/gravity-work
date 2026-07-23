@@ -175,7 +175,7 @@ function CrmAppContent() {
   return (
     <div className="flex h-screen overflow-hidden bg-[#090d16] text-slate-100">
       {/* Sidebar */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} activeRole={activeRole} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

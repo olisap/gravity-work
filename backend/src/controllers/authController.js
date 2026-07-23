@@ -239,6 +239,16 @@ export async function getTeamMembers(req, res) {
   res.json(sanitized);
 }
 
+function normalizeRole(role) {
+  if (!role) return 'confirmation_staff';
+  const lower = role.toLowerCase().trim();
+  if (lower === 'sales_agent' || lower === 'sales' || lower === 'confirmation') return 'confirmation_staff';
+  if (lower === 'admin' || lower === 'administrator') return 'admin';
+  if (lower === 'logistics' || lower === 'rider' || lower === 'dispatch') return 'logistics';
+  if (lower === 'owner') return 'owner';
+  return 'confirmation_staff';
+}
+
 export async function createTeamMember(req, res) {
   const { full_name, email, password, role, phone, store_id, store_name } = req.body;
 
@@ -247,6 +257,7 @@ export async function createTeamMember(req, res) {
   }
 
   const cleanEmail = email.trim().toLowerCase();
+  const validRole = normalizeRole(role);
   const userId = `a0000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`;
 
   const userPayload = {
@@ -256,7 +267,7 @@ export async function createTeamMember(req, res) {
     email: cleanEmail,
     password_hash: password,
     phone: phone || '+2348000000000',
-    role: role || 'sales_agent',
+    role: validRole,
     store_name: store_name || 'My E-Commerce Store',
     created_at: new Date().toISOString()
   };
@@ -266,8 +277,10 @@ export async function createTeamMember(req, res) {
       const { data, error } = await supabase.from('users').insert([userPayload]).select();
       if (!error && data && data[0]) {
         mockUsers.unshift(userPayload);
-        console.log(`✅ Staff Member "${full_name}" (${role}) created in Supabase!`);
+        console.log(`✅ Staff Member "${full_name}" (${validRole}) created in Supabase!`);
         return res.status(201).json(data[0]);
+      } else if (error) {
+        console.error('⚠️ Supabase staff creation error:', error);
       }
     } catch (err) {
       console.error('Supabase staff creation error:', err);

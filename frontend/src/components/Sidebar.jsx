@@ -7,14 +7,15 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function Sidebar({ activeTab, setActiveTab }) {
+export default function Sidebar({ activeTab, setActiveTab, activeRole }) {
   const { user, logoutUser } = useAuth();
-  const userRole = user?.role || 'owner';
+  const rawRole = activeRole || user?.role || 'owner';
+  const effectiveRole = rawRole === 'sales_agent' ? 'confirmation_staff' : rawRole;
 
   const navGroups = [
     {
       group: 'Core Overview',
-      roles: ['owner'],
+      roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics'],
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'users', label: 'Users & Staff', icon: Users },
@@ -22,7 +23,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     },
     {
       group: 'Products & Forms',
-      roles: ['owner', 'confirmation_staff'],
+      roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'],
       items: [
         { id: 'categories', label: 'Product Categories', icon: Tags },
         { id: 'products', label: 'Products Catalog', icon: Package, badge: 'Catalog' },
@@ -32,7 +33,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     },
     {
       group: 'Fulfillment & Fleet',
-      roles: ['owner', 'logistics'],
+      roles: ['owner', 'admin', 'logistics'],
       items: [
         { id: 'suppliers', label: 'Suppliers', icon: Layers },
         { id: 'agents', label: 'Agents & Fleet', icon: Truck },
@@ -41,7 +42,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     },
     {
       group: 'Orders & Dispatch',
-      roles: ['owner', 'confirmation_staff', 'logistics'],
+      roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics'],
       items: [
         { id: 'todays-deliveries', label: "Today's Deliveries", icon: Truck, badge: 'Today' },
         { id: 'todays-followups', label: "Today's Followups", icon: PhoneCall },
@@ -51,7 +52,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     },
     {
       group: 'Finance & Accounts',
-      roles: ['owner'],
+      roles: ['owner', 'admin'],
       items: [
         { id: 'accounting', label: 'Expenses & Margins', icon: Wallet },
         { id: 'payment-gateways', label: 'Payment Gateways', icon: ShieldCheck },
@@ -59,7 +60,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     },
     {
       group: 'Marketing Automation',
-      roles: ['owner', 'confirmation_staff'],
+      roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'],
       items: [
         { id: 'whatsapp-marketing', label: 'WhatsApp Marketing', icon: Send },
         { id: 'notifications', label: 'SMS Marketing', icon: BellRing },
@@ -69,8 +70,8 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     }
   ];
 
-  // Filter groups by role
-  const visibleGroups = navGroups.filter(g => g.roles.includes(userRole));
+  // Filter groups by effectiveRole
+  const visibleGroups = navGroups.filter(g => g.roles.includes(effectiveRole) || effectiveRole === 'owner');
 
   return (
     <aside className="w-64 shrink-0 bg-slate-900/95 backdrop-blur-xl border-r border-slate-800/80 h-screen sticky top-0 flex flex-col z-30 overflow-hidden">
