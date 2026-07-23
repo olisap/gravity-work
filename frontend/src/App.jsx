@@ -18,6 +18,8 @@ import LoginPage from './pages/LoginPage';
 import OnboardingPage from './pages/OnboardingPage';
 import CheckoutPage from './pages/CheckoutPage';
 
+import TeamManagementModal from './components/TeamManagementModal';
+
 function CrmAppContent() {
   const { user, isAuthenticated } = useAuth();
   
@@ -38,6 +40,7 @@ function CrmAppContent() {
   const [products, setProducts] = useState([]);
   const [forms, setForms] = useState([]);
   const [activeModalOrder, setActiveModalOrder] = useState(null);
+  const [showTeamModal, setShowTeamModal] = useState(false);
 
   // Sync role when user updates
   useEffect(() => {
@@ -173,6 +176,7 @@ function CrmAppContent() {
           activeRole={activeRole}
           setActiveRole={setActiveRole}
           onRefresh={fetchData}
+          onOpenTeamModal={() => setShowTeamModal(true)}
         />
 
         <main className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-none">
@@ -290,6 +294,14 @@ function CrmAppContent() {
           onClose={() => setActiveModalOrder(null)}
           onUpdateStatus={handleUpdateStatus}
           onAddUpsell={handleAddUpsell}
+        />
+      )}
+
+      {/* Team & Staff Management Modal */}
+      {showTeamModal && (
+        <TeamManagementModal
+          user={user}
+          onClose={() => setShowTeamModal(false)}
         />
       )}
     </div>

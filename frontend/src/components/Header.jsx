@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Globe, ShieldCheck, RefreshCw, LogOut, UserCheck } from 'lucide-react';
+import { Search, Globe, ShieldCheck, RefreshCw, LogOut, UserCheck, Users } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,7 +10,8 @@ export default function Header({
   setSelectedState,
   activeRole,
   setActiveRole,
-  onRefresh
+  onRefresh,
+  onOpenTeamModal
 }) {
   const { user, logoutUser, switchDemoRole } = useAuth();
   const currentCountry = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
@@ -68,6 +69,15 @@ export default function Header({
             ))}
           </select>
         </div>
+
+        {/* Team Accounts Button */}
+        <button
+          onClick={onOpenTeamModal}
+          title="Manage Staff Accounts"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass text-indigo-300 hover:text-white hover:bg-indigo-600/30 text-xs font-bold transition-all border border-indigo-500/20"
+        >
+          <Users className="w-3.5 h-3.5 text-indigo-400" /> Team Accounts
+        </button>
 
         {/* Role Switcher */}
         <div className="flex items-center gap-1.5 glass px-3 py-1.5 rounded-xl text-xs">

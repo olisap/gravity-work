@@ -337,7 +337,7 @@ export async function createOrUpdateDraftOrder(req, res) {
 
 export async function updateOrderStatus(req, res) {
   const { id } = req.params;
-  const { status, confirmation_notes, assigned_staff_id } = req.body;
+  const { status, confirmation_notes, assigned_staff_id, scheduled_delivery_date, scheduled_delivery_time, reminder_notes } = req.body;
 
   const validStatuses = ['Draft', 'Pending', 'Awaiting', 'Scheduled', 'Delivered', 'Cancelled'];
   if (!validStatuses.includes(status)) {
@@ -353,6 +353,9 @@ export async function updateOrderStatus(req, res) {
       };
       if (confirmation_notes !== undefined) updates.confirmation_call_notes = confirmation_notes;
       if (assigned_staff_id) updates.assigned_staff_id = assigned_staff_id;
+      if (scheduled_delivery_date) updates.scheduled_delivery_date = scheduled_delivery_date;
+      if (scheduled_delivery_time) updates.scheduled_delivery_time = scheduled_delivery_time;
+      if (reminder_notes) updates.reminder_notes = reminder_notes;
       if (status === 'Delivered') {
         updates.delivered_at = new Date().toISOString();
         updates.payment_status = 'Paid';
@@ -365,7 +368,7 @@ export async function updateOrderStatus(req, res) {
         if (idx >= 0) mockOrders[idx] = { ...mockOrders[idx], ...formatted };
         else mockOrders.unshift(formatted);
         
-        console.log(`✅ Order #${formatted.order_number} status updated to "${status}" in Supabase`);
+        console.log(`✅ Order #${formatted.order_number} status updated to "${status}" in Supabase (Scheduled Date: ${scheduled_delivery_date || 'N/A'})`);
         return res.json(formatted);
       }
     } catch (dbErr) {
@@ -388,6 +391,9 @@ export async function updateOrderStatus(req, res) {
   order.status = status;
   if (confirmation_notes !== undefined) order.confirmation_call_notes = confirmation_notes;
   if (assigned_staff_id) order.assigned_staff_id = assigned_staff_id;
+  if (scheduled_delivery_date) order.scheduled_delivery_date = scheduled_delivery_date;
+  if (scheduled_delivery_time) order.scheduled_delivery_time = scheduled_delivery_time;
+  if (reminder_notes) order.reminder_notes = reminder_notes;
 
   if (status === 'Delivered') {
     order.delivered_at = new Date().toISOString();

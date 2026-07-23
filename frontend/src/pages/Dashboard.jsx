@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Clock, ShoppingBag, Award, TrendingUp, BarChart2, Calendar } from 'lucide-react';
+import { CheckCircle2, Clock, ShoppingBag, Award, TrendingUp, BarChart2, Calendar, Phone, Zap, ArrowUpRight } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 
 const STATUS_META = {
@@ -25,13 +25,17 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
 
   const active      = filtered.filter(o => o.status !== 'Draft' && o.status !== 'Cancelled');
   const delivered   = filtered.filter(o => o.status === 'Delivered');
+  const scheduled   = filtered.filter(o => o.status === 'Scheduled');
   const pipeline    = filtered.filter(o => ['Awaiting','Scheduled'].includes(o.status));
 
   const totalAmt    = active.reduce((s, o)   => s + (o.total_amount || 0), 0);
   const revenue     = delivered.reduce((s, o) => s + (o.total_amount || 0), 0);
   const expected    = pipeline.reduce((s, o)  => s + (o.total_amount || 0), 0);
-  const fulfillRate = (active.length + filtered.filter(o => o.status === 'Draft').length) > 0
-    ? ((delivered.length / (filtered.length || 1)) * 100).toFixed(1)
+  
+  // Close Rate Calculation
+  const totalSubmissions = filtered.filter(o => o.status !== 'Draft').length;
+  const closeRate = totalSubmissions > 0
+    ? ((delivered.length / totalSubmissions) * 100).toFixed(1)
     : '0.0';
 
   const statuses = ['Delivered','Scheduled','Awaiting','Pending','Cancelled','Draft'];
@@ -45,7 +49,7 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
   const kpis = [
     {
       label: 'Recognized Revenue',
-      sub: 'Delivered & COD collected',
+      sub: 'Delivered & Cash Collected',
       value: `${curr}${revenue.toLocaleString()}`,
       icon: CheckCircle2,
       accent: 'text-emerald-400',
@@ -53,8 +57,8 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
       border: 'border-emerald-500/25',
     },
     {
-      label: 'Expected Revenue',
-      sub: 'Awaiting + Scheduled dispatches',
+      label: 'Pipeline Expected',
+      sub: 'Awaiting + Scheduled Dispatches',
       value: `${curr}${expected.toLocaleString()}`,
       icon: Clock,
       accent: 'text-indigo-400',
@@ -62,22 +66,22 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
       border: 'border-indigo-500/25',
     },
     {
-      label: 'Total Order Amount',
-      sub: `${active.length} active orders in pipeline`,
-      value: `${curr}${totalAmt.toLocaleString()}`,
-      icon: ShoppingBag,
-      accent: 'text-slate-400',
-      bg: 'bg-slate-700/20',
-      border: 'border-slate-700/40',
-    },
-    {
-      label: 'Fulfilment Rate',
-      sub: 'Delivered vs total submissions',
-      value: `${fulfillRate}%`,
+      label: 'Close / Conversion Rate',
+      sub: `${delivered.length} of ${totalSubmissions} orders closed`,
+      value: `${closeRate}%`,
       icon: Award,
       accent: 'text-amber-400',
       bg: 'bg-amber-500/10',
       border: 'border-amber-500/25',
+    },
+    {
+      label: 'Total Active Volume',
+      sub: `${active.length} total non-cancelled orders`,
+      value: `${curr}${totalAmt.toLocaleString()}`,
+      icon: ShoppingBag,
+      accent: 'text-purple-400',
+      bg: 'bg-purple-500/10',
+      border: 'border-purple-500/25',
     },
   ];
 
@@ -89,10 +93,10 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
         <div>
           <h2 className="section-title">
             <TrendingUp className="w-5 h-5 text-indigo-400" />
-            Executive Revenue Dashboard
+            Executive Revenue & Conversion Dashboard
           </h2>
           <p className="section-subtitle">
-            Live sales performance for&nbsp;
+            Real-time conversion metrics for&nbsp;
             <span className="text-emerald-400 font-semibold">{selectedCountry}</span>
             &nbsp;·&nbsp;{selectedState}
           </p>
@@ -121,7 +125,7 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
               <div className="min-w-0">
                 <p className={`text-[11px] font-bold uppercase tracking-wider ${accent}`}>{label}</p>
                 <p className="text-2xl font-extrabold text-slate-100 mt-1 tracking-tight">{value}</p>
-                <p className="text-[11px] text-slate-500 mt-1 truncate">{sub}</p>
+                <p className="text-[11px] text-slate-400 mt-1 truncate">{sub}</p>
               </div>
               <div className={`shrink-0 p-2.5 rounded-xl ${bg} border ${border}`}>
                 <Icon className={`w-5 h-5 ${accent}`} />
@@ -131,11 +135,42 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
         ))}
       </div>
 
+      {/* ── Upcoming Scheduled Deliveries Reminder Widget ── */}
+      {scheduled.length > 0 && (
+        <div className="glass-panel p-5 rounded-2xl border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-amber-400" /> Scheduled Deliveries Reminder Tracker ({scheduled.length})
+            </h3>
+            <span className="text-[11px] text-slate-400">Assigned for dispatch</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {scheduled.map(s => (
+              <div key={s.id} className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-mono font-bold text-indigo-400">#{s.order_number}</span>
+                  <span className="font-bold text-emerald-400">{curr}{s.total_amount?.toLocaleString()}</span>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-200">{s.customer_name}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">{s.customer_phone}</p>
+                </div>
+                <div className="pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-amber-300 font-semibold">
+                  <span>🗓️ {s.scheduled_delivery_date || 'Date not set'}</span>
+                  <span>{s.scheduled_delivery_time || ''}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Pipeline Breakdown ── */}
       <div className="glass rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-800/60">
           <BarChart2 className="w-4 h-4 text-indigo-400" />
-          <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wide">Pipeline Breakdown</h3>
+          <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wide">Pipeline Revenue Breakdown</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="data-table">

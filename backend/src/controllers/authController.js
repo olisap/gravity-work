@@ -197,3 +197,60 @@ export async function getMe(req, res) {
   const found = mockUsers.find(u => u.id === userId) || mockUsers[0];
   res.json({ user: found });
 }
+
+export async function getTeamMembers(req, res) {
+  const { store_id } = req.query;
+
+  if (supabase) {
+    try {
+      let query = supabase.from('users').select('id, full_name, email, role, phone, store_name, created_at');
+      if (store_id) query = query.eq('store_id', store_id);
+      const { data, error } = await query;
+      if (!error && data) return res.json(data);
+    } catch (e) {}
+  }
+
+  let filtered = [...mockUsers];
+  if (store_id) filtered = filtered.filter(u => u.store_id === store_id);
+  const sanitized = filtered.map(({ password_hash, password, ...u }) => u);
+  res.json(sanitized);
+}
+
+export async function createTeamMember(req, res) {
+  const { full_name, email, password, role, phone, store_id, store_name } = req.body;
+
+  if (!email || !password || !full_name) {
+    return res.status(400).json({ error: 'Full name, email, and password are required' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const userId = `a0000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`;
+
+  const userPayload = {
+    id: userId,
+    store_id: store_id || null,
+    full_name,
+    email: cleanEmail,
+    password_hash: password,
+    phone: phone || '+2348000000000',
+    role: role || 'sales_agent',
+    store_name: store_name || 'My E-Commerce Store',
+    created_at: new Date().toISOString()
+  };
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('users').insert([userPayload]).select();
+      if (!error && data && data[0]) {
+        mockUsers.unshift(userPayload);
+        console.log(`✅ Staff Member "${full_name}" (${role}) created in Supabase!`);
+        return res.status(201).json(data[0]);
+      }
+    } catch (err) {
+      console.error('Supabase staff creation error:', err);
+    }
+  }
+
+  mockUsers.unshift(userPayload);
+  res.status(201).json(userPayload);
+}

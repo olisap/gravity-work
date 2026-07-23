@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-import { login, signup, getMe } from './controllers/authController.js';
+import { login, signup, getMe, getTeamMembers, createTeamMember } from './controllers/authController.js';
 import { getOrders, createOrUpdateDraftOrder, updateOrderStatus, addUpsellToOrder } from './controllers/orderController.js';
 import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory } from './controllers/productController.js';
 import { getForms, getFormByEmbedKey, createForm, updateForm, deleteForm } from './controllers/formController.js';
@@ -23,10 +23,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'online', service: 'Nigeria E-Commerce CRM API', timestamp: new Date().toISOString() });
 });
 
-// Authentication Routes
+// Authentication & Team Routes
 app.post('/api/auth/login', login);
 app.post('/api/auth/signup', signup);
 app.get('/api/auth/me', getMe);
+app.get('/api/team', getTeamMembers);
+app.post('/api/team', createTeamMember);
 
 // Orders & Pipeline Routes
 app.get('/api/orders', getOrders);
