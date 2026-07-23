@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { LayoutGrid, List, Phone, CheckCircle, ArrowRight, AlertTriangle, Truck, Filter, Copy, MessageCircle, Calendar, Clock, ChevronDown } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { LayoutGrid, List, Phone, CheckCircle, ArrowRight, AlertTriangle, Truck, Filter, Copy, MessageCircle, Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { copyOrderToClipboard } from '../utils/copyOrder';
 import ScheduleModal from '../components/ScheduleModal';
@@ -18,9 +18,22 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
   const [viewMode, setViewMode] = useState('kanban');
   const [filterStatus, setFilterStatus] = useState('All');
   const [schedulingOrder, setSchedulingOrder] = useState(null);
+  const scrollContainerRef = useRef(null);
 
   const loc  = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
   const curr = loc.currency;
+
+  const scrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+    }
+  };
 
   const filtered = orders.filter(o => {
     if (o.country && o.country !== selectedCountry) return false;
@@ -69,7 +82,27 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
           <p className="section-subtitle">Form Draft → Pending Confirmation → Awaiting Dispatch → Scheduled → Delivered (Revenue)</p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {/* Scroll Nav Buttons */}
+          {viewMode === 'kanban' && (
+            <div className="flex items-center gap-1 glass p-1 rounded-xl">
+              <button
+                onClick={scrollLeft}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Scroll left"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={scrollRight}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Scroll right to Drafts"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Status Filter */}
           <div className="flex items-center gap-1.5 glass px-3 py-1.5 rounded-xl text-xs">
             <Filter className="w-3.5 h-3.5 text-slate-500" />
@@ -101,11 +134,11 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
 
       {/* ── KANBAN ── */}
       {viewMode === 'kanban' && (
-        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-none -mx-1 px-1 snap-x">
+        <div ref={scrollContainerRef} className="flex gap-3 overflow-x-auto pb-4 pt-1 px-1 pr-12 snap-x scroll-smooth">
           {PIPELINE_ORDER.map(status => {
             const cols = filtered.filter(o => o.status === status);
             return (
-              <div key={status} className="glass rounded-2xl flex flex-col shrink-0 w-72 md:w-64 snap-start">
+              <div key={status} className="glass rounded-2xl flex flex-col shrink-0 w-72 md:w-60 lg:w-64 xl:flex-1 xl:min-w-[210px] xl:w-auto snap-start">
                 {/* Column header */}
                 <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-800/60">
                   <span className={`badge ${BADGE_CLASS[status]}`}>{status}</span>
