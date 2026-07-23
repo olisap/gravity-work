@@ -81,23 +81,25 @@ export class NotificationService {
   }
 
   /**
-   * Brevo / Email Adapter with sandbox fallback
+   * Brevo / Resend Email Adapter with sandbox fallback
    */
   static async sendEmail(email, subject, text, htmlBody = null) {
-    const apiKey = process.env.BREVO_API_KEY;
+    const brevoKey = process.env.BREVO_API_KEY;
+    const resendKey = process.env.RESEND_API_KEY;
     const senderEmail = process.env.SENDER_EMAIL || 'orders@merchant.ng';
     const senderName = 'E-Commerce Order System';
 
     const defaultHtml = `<div style="font-family:Arial,sans-serif;padding:20px;color:#1e293b;"><h2 style="color:#4f46e5;">Order Update</h2><p>${text}</p></div>`;
     const finalHtml = htmlBody || defaultHtml;
 
-    if (apiKey && apiKey !== 'your-brevo-api-key') {
+    // 1. Try Brevo
+    if (brevoKey && brevoKey !== 'your-brevo-api-key') {
       try {
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'api-key': apiKey
+            'api-key': brevoKey
           },
           body: JSON.stringify({
             sender: { name: senderName, email: senderEmail },
@@ -108,13 +110,37 @@ export class NotificationService {
         });
         const resData = await response.json();
         console.log(`📧 [Brevo Email API Response] To: ${email} | Result:`, resData);
-        return { success: true, provider: 'Brevo', response: resData };
+        if (response.ok) return { success: true, provider: 'Brevo', response: resData };
       } catch (err) {
         console.error(`Failed to send Email via Brevo to ${email}:`, err);
       }
     }
 
-    console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Content length: ${finalHtml.length} chars`);
+    // 2. Try Resend
+    if (resendKey && resendKey !== 'your-resend-api-key') {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${resendKey}`
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+            to: [email],
+            subject,
+            html: finalHtml
+          })
+        });
+        const resData = await response.json();
+        console.log(`📧 [Resend Email API Response] To: ${email} | Result:`, resData);
+        if (response.ok) return { success: true, provider: 'Resend', response: resData };
+      } catch (err) {
+        console.error(`Failed to send Email via Resend to ${email}:`, err);
+      }
+    }
+
+    console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Content length: ${finalHtml.length} chars (Provide BREVO_API_KEY or RESEND_API_KEY in environment variables to deliver physical inbox emails)`);
     return { success: true, provider: 'Sandbox', mockSent: true };
   }
 
