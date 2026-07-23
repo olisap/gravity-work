@@ -143,7 +143,7 @@ export default function Sidebar({ activeTab, setActiveTab, activeRole }) {
             <div className="min-w-0">
               <p className="text-xs font-semibold text-slate-100 truncate">{user?.full_name || 'CRM User'}</p>
               <p className="text-[10px] text-slate-500 uppercase tracking-wide truncate">
-                {userRole === 'owner' ? 'Owner / Admin' : userRole === 'confirmation_staff' ? 'Confirmation Staff' : 'Logistics Rider'}
+                {effectiveRole === 'owner' ? 'Owner / Admin' : effectiveRole === 'confirmation_staff' ? 'Confirmation Staff' : 'Logistics Rider'}
               </p>
             </div>
           </div>
