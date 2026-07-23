@@ -370,10 +370,22 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           </div>
         </div>
 
-        {/* SECTION 4: Order Bump */}
+        {/* SECTION 4: Order Bump / Upsell Product Offer */}
         {isUpsellEnabled && (
-          <div className={theme.orderBump}>
-            <label className="flex items-start gap-2.5 cursor-pointer">
+          <div className={lightMode 
+            ? "p-4 bg-amber-50/80 border-2 border-amber-300 rounded-2xl text-slate-800 shadow-sm relative overflow-hidden transition-all" 
+            : "p-4 bg-amber-950/40 border-2 border-amber-500/40 rounded-2xl text-slate-100 relative overflow-hidden transition-all"}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-amber-200 dark:border-amber-800/60">
+              <span className="text-[11px] font-black uppercase text-amber-700 dark:text-amber-300 tracking-wider flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> {bumpTitle}
+              </span>
+              <span className="bg-emerald-600 text-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-sm">
+                + {currentCountryObj.currency}{bumpPrice.toLocaleString()}
+              </span>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={addUpsellBump}
@@ -381,13 +393,13 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
                   setAddUpsellBump(e.target.checked);
                   if (customerPhone) setTimeout(() => saveDraft(false), 100);
                 }}
-                className="mt-0.5 accent-indigo-600 w-4.5 h-4.5 rounded cursor-pointer"
+                className="mt-1 accent-emerald-600 w-5 h-5 rounded cursor-pointer"
               />
               <div>
-                <span className={theme.orderBumpTitle}>
-                  <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" /> {bumpTitle}
+                <span className="font-bold text-xs text-slate-900 dark:text-slate-100 block">
+                  {upsellProduct ? `Add ${upsellProduct.name} to your order` : 'Add Special Order Bump Product'}
                 </span>
-                <p className={theme.orderBumpText}>
+                <p className={lightMode ? "text-xs text-slate-600 font-medium mt-0.5 leading-relaxed" : "text-xs text-slate-300 font-medium mt-0.5 leading-relaxed"}>
                   {bumpDesc}
                 </p>
               </div>
@@ -400,9 +412,15 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           {/* Price Breakdown */}
           <div className={theme.summaryContainer}>
             <div className="flex justify-between">
-              <span className={theme.summaryItemLabel}>Items Subtotal:</span>
-              <span className={theme.summaryItemValue}>{currentCountryObj.currency}{subtotal.toLocaleString()}</span>
+              <span className={theme.summaryItemLabel}>Package Subtotal:</span>
+              <span className={theme.summaryItemValue}>{currentCountryObj.currency}{bundlePrice.toLocaleString()}</span>
             </div>
+            {addUpsellBump && isUpsellEnabled && (
+              <div className="flex justify-between font-bold text-amber-600 dark:text-amber-400 text-xs py-0.5">
+                <span>Addon ({upsellProduct?.name || 'Order Bump'}):</span>
+                <span>+ {currentCountryObj.currency}{bumpPrice.toLocaleString()}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className={theme.summaryItemLabel}>Delivery Fee (All States):</span>
               <span className="text-emerald-600 font-extrabold uppercase">FREE</span>
