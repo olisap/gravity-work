@@ -55,18 +55,18 @@ function CrmAppContent() {
     try {
       const storeId = user?.store_id || user?.id || '';
       const queryStr = storeId ? `?store_id=${encodeURIComponent(storeId)}` : '';
-      const token = localStorage.getItem('gravity_crm_token');
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const storedToken = localStorage.getItem('gravity_crm_token');
+      const headers = storedToken ? { 'Authorization': `Bearer ${storedToken}` } : {};
 
       const [ordersRes, productsRes, formsRes] = await Promise.all([
-        fetch(`/api/orders${queryStr}`, { headers }).then(r => r.json()).catch(() => null),
-        fetch(`/api/products${queryStr}`, { headers }).then(r => r.json()).catch(() => null),
-        fetch(`/api/forms${queryStr}`, { headers }).then(r => r.json()).catch(() => null)
+        fetch(`/api/orders${queryStr}`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/products${queryStr}`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/forms${queryStr}`, { headers }).then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
 
-      if (ordersRes && Array.isArray(ordersRes)) setOrders(ordersRes);
-      if (productsRes && Array.isArray(productsRes)) setProducts(productsRes);
-      if (formsRes && Array.isArray(formsRes)) setForms(formsRes);
+      if (Array.isArray(ordersRes)) setOrders(ordersRes);
+      if (Array.isArray(productsRes)) setProducts(productsRes);
+      if (Array.isArray(formsRes)) setForms(formsRes);
     } catch (err) {
       console.error('Error fetching API data:', err);
     }

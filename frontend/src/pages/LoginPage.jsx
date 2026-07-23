@@ -100,10 +100,18 @@ export default function LoginPage({ onNavigateToOnboarding }) {
               {demoProfiles.map((p) => (
                 <button
                   key={p.email}
-                  onClick={() => {
+                  type="button"
+                  onClick={async () => {
                     setEmail(p.email);
                     setPassword('password123');
-                    switchDemoRole(p.role, p.email, p.name, p.id, p.store_id);
+                    setErrorMsg('');
+                    setSubmitting(true);
+                    try {
+                      await loginUser(p.email, 'password123');
+                    } catch (err) {
+                      switchDemoRole(p.role, p.email, p.name, p.id, p.store_id);
+                    }
+                    setSubmitting(false);
                   }}
                   className="w-full bg-slate-950/80 hover:bg-slate-800 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between text-xs transition-colors"
                 >

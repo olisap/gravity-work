@@ -58,8 +58,15 @@ export function AuthProvider({ children }) {
 
       if (!res.ok) throw new Error(data.error || 'Login failed');
 
-      setUser(data.user);
-      setToken(data.token);
+      if (data.token) {
+        localStorage.setItem('gravity_crm_token', data.token);
+        setToken(data.token);
+      }
+      if (data.user) {
+        localStorage.setItem('gravity_crm_user', JSON.stringify(data.user));
+        setUser(data.user);
+      }
+
       setLoading(false);
       return data.user;
     } catch (err) {
