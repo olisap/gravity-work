@@ -1,6 +1,29 @@
+import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
 import { InventoryService } from '../services/inventoryService.js';
 import { NotificationService } from '../services/notificationService.js';
+
+function isValidUUID(str) {
+  if (!str) return false;
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str);
+}
+
+function prepareOrderPayloadForSupabase(order) {
+  const { items, ...rest } = order;
+  return {
+    ...rest,
+    id: isValidUUID(rest.id) ? rest.id : crypto.randomUUID(),
+    upsell_items: items || []
+  };
+}
+
+function formatOrderFromSupabase(order) {
+  if (!order) return order;
+  return {
+    ...order,
+    items: order.items || order.upsell_items || []
+  };
+}
 
 // In-memory fallback mock orders database if Supabase isn't connected
 let mockOrders = [
@@ -154,7 +177,10 @@ export async function getOrders(req, res) {
     if (country) query = query.eq('country', country);
     
     const { data, error } = await query;
-    if (!error && data) return res.json(data);
+    if (!error && data) {
+      const formatted = data.map(formatOrderFromSupabase);
+      return res.json(formatted);
+    }
   }
 
   let filtered = [...mockOrders];
@@ -254,7 +280,7 @@ export async function createOrUpdateDraftOrder(req, res) {
     // Create new Order / Draft
     const newOrderNumber = `OLI-${10000 + mockOrders.length + 1}`;
     finalOrder = {
-      id: id || `o${Date.now()}`,
+      id: isValidUUID(id) ? id : crypto.randomUUID(),
       store_id: store_id || null,
       order_number: newOrderNumber,
       customer_name: customer_name || 'Guest Customer',
@@ -285,7 +311,14 @@ export async function createOrUpdateDraftOrder(req, res) {
   // Persist to Supabase if connected
   if (supabase) {
     try {
-      await supabase.from('orders').upsert([finalOrder]);
+      const dbPayload = prepareOrderPayloadForSupabase(finalOrder);
+      const { data: dbData, error: dbErr } = await supabase.from('orders').upsert([dbPayload]).select();
+      if (dbErr) {
+        console.error('Failed to upsert order to Supabase:', dbErr);
+      } else if (dbData && dbData[0]) {
+        console.log('✅ Order successfully persisted to Supabase:', dbData[0].order_number);
+        finalOrder.id = dbData[0].id;
+      }
     } catch (dbErr) {
       console.error('Failed to upsert order to Supabase:', dbErr);
     }
