@@ -20,10 +20,18 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const [submittedOrder, setSubmittedOrder] = useState(null);
 
   useEffect(() => {
+    if (formConfig?.linked_product_id) {
+      const pool = (allProducts && allProducts.length > 0) ? allProducts : products;
+      const found = pool.find(p => p.id === formConfig.linked_product_id);
+      if (found) {
+        setSelectedProduct(found);
+        return;
+      }
+    }
     if (products.length > 0 && !selectedProduct) {
       setSelectedProduct(products[0]);
     }
-  }, [products]);
+  }, [formConfig, products, allProducts]);
 
   useEffect(() => {
     setSelectedBundleIndex(0);

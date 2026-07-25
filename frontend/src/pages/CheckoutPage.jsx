@@ -12,7 +12,7 @@ export default function CheckoutPage() {
     const fetchFormAndProduct = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const embedKey = params.get('form') || 'EMBED-LUNCHBOX-2026';
+        const embedKey = params.get('form') || 'EMBED-POTKNOBORD-5463';
 
         // Fetch form configuration
         let formData = null;
@@ -29,8 +29,8 @@ export default function CheckoutPage() {
         if (!formData || formData.error) {
           formData = {
             id: '33000000-0000-0000-0000-000000000001',
-            name: 'Product Order Form',
-            linked_product_id: '22000000-0000-0000-0000-000000000001',
+            name: 'POT KNOB Order Form',
+            linked_product_id: '22000000-0000-0000-0000-784714673902',
             embed_key: embedKey,
             header_text: 'Please Fill The Form Below To Place Your Order',
             subheader_text: 'Only Serious Buyers Should Fill The Form Below',
@@ -68,15 +68,17 @@ export default function CheckoutPage() {
         setAllProducts(productsData);
         
         let linkedProduct = productsData.find(p => p.id === formData.linked_product_id);
+        if (!linkedProduct && productsData.length > 0) {
+          linkedProduct = productsData[0];
+        }
         if (!linkedProduct) {
           linkedProduct = {
             id: formData.linked_product_id || '22000000-0000-0000-0000-000000000001',
-            name: formData.name || 'Product Package',
+            name: 'Product Item',
             base_price: 18500,
             price_bundles: [
-              { qty: 1, label: `1 Product Package + Free Delivery`, price: 18500 },
-              { qty: 2, label: `2 Product Packages + Free Delivery`, price: 35500 },
-              { qty: 3, label: `3 Product Packages + Free Delivery`, price: 52500 }
+              { qty: 1, label: `1 x Product + Free Delivery`, price: 18500 },
+              { qty: 2, label: `2 x Product + Free Delivery`, price: 35500 }
             ]
           };
         }
@@ -90,10 +92,14 @@ export default function CheckoutPage() {
           button_text: 'ORDER NOW'
         });
         setProduct(prev => prev || {
-          id: '22000000-0000-0000-0000-000000000001',
-          name: 'Product Package',
+          id: '22000000-0000-0000-0000-784714673902',
+          name: 'POT KNOB',
           base_price: 18500,
-          price_bundles: [{ qty: 1, label: '1 Product Package + Free Delivery', price: 18500 }]
+          price_bundles: [
+            { qty: 2, label: `2 pieces + Free Delivery`, price: 18500 },
+            { qty: 4, label: `4 pieces + Free Delivery`, price: 35500 },
+            { qty: 5, label: `5 pieces + Free Delivery`, price: 45500 }
+          ]
         });
       } finally {
         setLoading(false);

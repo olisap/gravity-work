@@ -3,8 +3,32 @@ import { supabase } from '../config/supabase.js';
 let mockForms = [
   {
     id: '33000000-0000-0000-0000-000000000001',
+    name: 'POT KNOB Order Form',
+    linked_product_id: '22000000-0000-0000-0000-784714673902',
+    embed_key: 'EMBED-POTKNOBORD-5463',
+    header_text: 'Please Fill The Form Below To Place Your Order',
+    subheader_text: 'Only Serious Buyers Should Fill The Form Below',
+    button_text: 'ORDER NOW',
+    button_bg_color: '#4f46e5',
+    button_text_color: '#ffffff',
+    form_bg_color: '#0f172a',
+    show_country_code: 'Yes',
+    payment_cod_enabled: true,
+    payment_paystack_enabled: false,
+    payment_flutterwave_enabled: false,
+    payment_bank_enabled: false,
+    notification_email: 'merchant@gmail.com',
+    upsell_enabled: true,
+    upsell_product_id: '22000000-0000-0000-0000-000000000004',
+    upsell_title: 'Special 1-Click Offer!',
+    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra (Normal Price: ₦9,500)!',
+    upsell_price: 7000,
+    is_active: true
+  },
+  {
+    id: '33000000-0000-0000-0000-000000000003',
     name: 'Lunchbox Landing Page Form',
-    linked_product_id: '22000000-0000-0000-0000-000000000001',
+    linked_product_id: '22000000-0000-0000-0000-784714673902',
     embed_key: 'EMBED-LUNCHBOX-2026',
     header_text: 'Please Fill The Form Below To Place Your Order',
     subheader_text: 'Only Serious Buyers Should Fill The Form Below',
@@ -51,6 +75,11 @@ let mockForms = [
   }
 ];
 
+function sanitizeUuid(val) {
+  if (!val || typeof val !== 'string' || val.trim() === '') return null;
+  return val.trim();
+}
+
 function formatForm(form) {
   if (!form) return null;
   const cfg = (typeof form.fields_config === 'object' && form.fields_config && !Array.isArray(form.fields_config))
@@ -85,9 +114,17 @@ function prepareSupabasePayload(body, existingFieldsConfig = {}) {
 
   for (const [key, val] of Object.entries(body)) {
     if (knownColumns.includes(key)) {
-      payload[key] = val;
+      if (['linked_product_id', 'store_id'].includes(key)) {
+        payload[key] = sanitizeUuid(val);
+      } else {
+        payload[key] = val;
+      }
     } else {
-      newFieldsConfig[key] = val;
+      if (key === 'upsell_product_id') {
+        newFieldsConfig[key] = sanitizeUuid(val);
+      } else {
+        newFieldsConfig[key] = val;
+      }
     }
   }
 
@@ -101,7 +138,10 @@ export async function getForms(req, res) {
     let query = supabase.from('forms').select('*');
     if (store_id) query = query.eq('store_id', store_id);
     const { data, error } = await query;
-    if (!error && data && data.length > 0) return res.json(data.map(formatForm));
+    if (!error && data) {
+      if (data.length > 0) return res.json(data.map(formatForm));
+      if (store_id) return res.json([]);
+    }
   }
 
   let list = [...mockForms];
@@ -128,9 +168,9 @@ export async function createForm(req, res) {
 
   const newForm = {
     id: `33000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
-    store_id: body.store_id || req.query.store_id || null,
+    store_id: sanitizeUuid(body.store_id || req.query.store_id),
     name: body.name || 'Product Order Form',
-    linked_product_id: body.linked_product_id,
+    linked_product_id: sanitizeUuid(body.linked_product_id),
     embed_key,
     header_text: body.header_text || 'Please Fill The Form Below To Place Your Order',
     subheader_text: body.subheader_text || 'Only Serious Buyers Should Fill The Form Below',
@@ -145,7 +185,7 @@ export async function createForm(req, res) {
     payment_bank_enabled: body.payment_bank_enabled || false,
     notification_email: body.notification_email || 'merchant@gmail.com',
     upsell_enabled: body.upsell_enabled !== undefined ? body.upsell_enabled : true,
-    upsell_product_id: body.upsell_product_id || null,
+    upsell_product_id: sanitizeUuid(body.upsell_product_id),
     upsell_title: body.upsell_title || 'Special 1-Click Offer!',
     upsell_description: body.upsell_description || 'Add an extra product to your order for a special price!',
     upsell_price: body.upsell_price ? Number(body.upsell_price) : 7000,
@@ -160,7 +200,10 @@ export async function createForm(req, res) {
     if (!error && data && data.length > 0) {
       const formatted = formatForm(data[0]);
       mockForms.unshift(formatted);
+      console.log('✅ Form successfully saved to Supabase:', formatted.name, `(${formatted.embed_key})`);
       return res.status(201).json(formatted);
+    } else if (error) {
+      console.error('❌ Supabase form insert error:', error.message, error.details || '');
     }
   }
 
@@ -184,6 +227,8 @@ export async function updateForm(req, res) {
       const idx = mockForms.findIndex(f => f.id === id);
       if (idx !== -1) mockForms[idx] = { ...mockForms[idx], ...formatted };
       return res.json(formatted);
+    } else if (error) {
+      console.error('❌ Supabase form update error:', error.message);
     }
   }
 
@@ -209,3 +254,4 @@ export async function deleteForm(req, res) {
   mockForms = mockForms.filter(f => f.id !== id);
   res.json({ success: true, id });
 }
+

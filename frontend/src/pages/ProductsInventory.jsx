@@ -135,13 +135,17 @@ export default function ProductsInventory({
     };
 
     try {
+      const token = localStorage.getItem('gravity_crm_token');
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
       const res = await fetch('/api/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(payload)
       });
-      const created = await res.json();
-      if (onProductCreated) onProductCreated(created);
+      if (res.ok) {
+        const created = await res.json();
+        if (onProductCreated) onProductCreated(created);
+      }
     } catch (err) {
       console.error('Error creating product:', err);
     }
@@ -166,13 +170,17 @@ export default function ProductsInventory({
     };
 
     try {
+      const token = localStorage.getItem('gravity_crm_token');
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
       const res = await fetch(`/api/products/${showEditProductModal.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(payload)
       });
-      const updated = await res.json();
-      if (onProductUpdated) onProductUpdated(updated);
+      if (res.ok) {
+        const updated = await res.json();
+        if (onProductUpdated) onProductUpdated(updated);
+      }
     } catch (err) {
       console.error('Error updating product:', err);
     }
@@ -183,8 +191,15 @@ export default function ProductsInventory({
   // Execute Delete Product
   const handleDeleteProduct = async (productId) => {
     try {
-      await fetch(`/api/products/${productId}`, { method: 'DELETE' });
-      if (onProductDeleted) onProductDeleted(productId);
+      const token = localStorage.getItem('gravity_crm_token');
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(`/api/products/${productId}`, {
+        method: 'DELETE',
+        headers: authHeaders
+      });
+      if (res.ok && onProductDeleted) {
+        onProductDeleted(productId);
+      }
     } catch (err) {
       console.error('Error deleting product:', err);
     }

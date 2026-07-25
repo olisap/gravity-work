@@ -132,6 +132,7 @@ export default function FormBuilder({
   const resetFormEditor = () => {
     setEditingFormId(null);
     setFormName('New Product Landing Page Form');
+    setSelectedProductId(products[0]?.id || '');
     setHeaderText('Please Fill The Form Below To Place Your Order');
     setSubHeaderText('Only Serious Buyers Should Fill The Form Below');
     setSubmitBtnText('ORDER NOW');
@@ -150,9 +151,9 @@ export default function FormBuilder({
     e.preventDefault();
 
     const payload = {
-      store_id: storeId,
+      store_id: storeId || null,
       name: formName,
-      linked_product_id: selectedProductId,
+      linked_product_id: selectedProductId ? selectedProductId : null,
       header_text: headerText,
       subheader_text: subHeaderText,
       button_text: submitBtnText,
@@ -167,37 +168,52 @@ export default function FormBuilder({
       notification_email: notificationEmail,
       thank_you_url: thankYouUrl,
       upsell_enabled: upsellEnabled,
-      upsell_product_id: upsellProductId,
+      upsell_product_id: upsellProductId ? upsellProductId : null,
       upsell_title: upsellTitle,
       upsell_description: upsellDescription,
       upsell_price: Number(upsellPrice)
     };
 
+    const token = localStorage.getItem('gravity_crm_token');
+    const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
     if (editingFormId) {
       try {
         const res = await fetch(`/api/forms/${editingFormId}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify(payload)
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Server error ${res.status}`);
+        }
         const updated = await res.json();
         if (onFormUpdated) onFormUpdated(updated);
         alert('✅ Form updated successfully!');
       } catch (err) {
-        alert('Form updated locally!');
+        console.error('Error updating form:', err);
+        alert(`❌ Failed to update form: ${err.message}`);
+        return;
       }
     } else {
       try {
         const res = await fetch('/api/forms', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify(payload)
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Server error ${res.status}`);
+        }
         const created = await res.json();
         if (onFormCreated) onFormCreated(created);
-        alert(`✅ Form "${created.name}" created!\nEmbed Key: ${created.embed_key}`);
+        alert(`✅ Form "${created.name || 'Order Form'}" created!\nEmbed Key: ${created.embed_key}`);
       } catch (err) {
-        alert('Form created!');
+        console.error('Error creating form:', err);
+        alert(`❌ Failed to create form: ${err.message}`);
+        return;
       }
     }
 
@@ -208,10 +224,20 @@ export default function FormBuilder({
   const handleDeleteForm = async (id) => {
     if (!window.confirm('Are you sure you want to delete this checkout form?')) return;
     try {
-      await fetch(`/api/forms/${id}`, { method: 'DELETE' });
+      const token = localStorage.getItem('gravity_crm_token');
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(`/api/forms/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error ${res.status}`);
+      }
       if (onFormDeleted) onFormDeleted(id);
     } catch (err) {
-      console.error(err);
+      console.error('Error deleting form:', err);
+      alert(`❌ Failed to delete form: ${err.message}`);
     }
   };
 
@@ -882,7 +908,11 @@ export default function FormBuilder({
           </div>
 
           <div>
-            <EmbedFormWidget products={products} />
+            <EmbedFormWidget
+              products={products}
+              allProducts={products}
+              formConfig={selectedFormForEmbed}
+            />
           </div>
         </div>
       )}

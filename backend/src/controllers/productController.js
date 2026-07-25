@@ -8,23 +8,43 @@ let mockCategories = [
 
 let mockProducts = [
   {
+    id: '22000000-0000-0000-0000-784714673902',
+    category_id: '11000000-0000-0000-0000-000000000001',
+    category_name: 'kitchen wares',
+    country: 'Nigeria',
+    name: 'POT KNOB',
+    description: 'Heat resistant replacement pot lid knob handle',
+    cost_price: 2000,
+    base_price: 18500,
+    sku: 'POTKNOB-4752',
+    variation_1: '',
+    variation_2: '',
+    price_bundles: [
+      { qty: 2, label: '2 pieces + Free Delivery', price: 18500 },
+      { qty: 4, label: '4 pieces + Free Delivery', price: 35500 },
+      { qty: 5, label: '5 pieces + Free Delivery', price: 45500 }
+    ],
+    available_stock: 50,
+    is_active: true
+  },
+  {
     id: '22000000-0000-0000-0000-000000000001',
     category_id: '11000000-0000-0000-0000-000000000001',
     category_name: 'kitchen wares',
     country: 'Nigeria',
-    name: 'POT LID HOLDER',
-    description: 'Adjustable kitchen pot lid rack & organizer',
-    cost_price: 3000,
+    name: 'POT KNOB',
+    description: 'Heat resistant replacement pot lid knob handle',
+    cost_price: 2000,
     base_price: 18500,
-    sku: 'POT-LID-HOLDER',
+    sku: 'POTKNOB-4752',
     variation_1: '',
     variation_2: '',
     price_bundles: [
-      { qty: 1, label: '1 POT LID HOLDER + Free Delivery', price: 18500 },
-      { qty: 2, label: '2 POT LID HOLDER + Free Delivery', price: 35500 },
-      { qty: 3, label: '3 POT LID HOLDER + Free Delivery', price: 52500 }
+      { qty: 2, label: '2 pieces + Free Delivery', price: 18500 },
+      { qty: 4, label: '4 pieces + Free Delivery', price: 35500 },
+      { qty: 5, label: '5 pieces + Free Delivery', price: 45500 }
     ],
-    available_stock: 0,
+    available_stock: 50,
     is_active: true
   },
   {
@@ -90,13 +110,21 @@ let mockProducts = [
   }
 ];
 
+function sanitizeUuid(val) {
+  if (!val || typeof val !== 'string' || val.trim() === '') return null;
+  return val.trim();
+}
+
 export async function getProducts(req, res) {
   const { store_id } = req.query;
   if (supabase) {
     let query = supabase.from('products').select('*');
     if (store_id) query = query.eq('store_id', store_id);
     const { data, error } = await query;
-    if (!error && data && data.length > 0) return res.json(data);
+    if (!error && data) {
+      if (data.length > 0) return res.json(data);
+      if (store_id) return res.json([]);
+    }
   }
 
   let list = [...mockProducts];
@@ -122,10 +150,13 @@ export async function createProduct(req, res) {
     store_id
   } = req.body;
 
+  const sanitizedCategoryId = sanitizeUuid(category_id) || mockCategories[0].id;
+  const sanitizedStoreId = sanitizeUuid(store_id || req.query.store_id);
+
   const newProduct = {
     id: `22000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
-    store_id: store_id || req.query.store_id || null,
-    category_id: category_id || mockCategories[0].id,
+    store_id: sanitizedStoreId,
+    category_id: sanitizedCategoryId,
     category_name: category_name || 'general',
     country: country || 'Nigeria',
     name,
@@ -149,7 +180,10 @@ export async function createProduct(req, res) {
     const { data, error } = await supabase.from('products').insert([newProduct]).select();
     if (!error && data && data.length > 0) {
       mockProducts.unshift(data[0]);
+      console.log('✅ Product successfully saved to Supabase:', data[0].name);
       return res.status(201).json(data[0]);
+    } else if (error) {
+      console.error('❌ Supabase product insert error:', error.message);
     }
   }
 
