@@ -243,12 +243,14 @@ export default function ProductsInventory({
             <Search className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
           </div>
 
-          <button
-            onClick={openAddModal}
-            className="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30"
-          >
-            + Add Product
-          </button>
+          {['owner', 'admin'].includes(user?.role) && (
+            <button
+              onClick={openAddModal}
+              className="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30"
+            >
+              + Add Product
+            </button>
+          )}
 
           <button
             onClick={() => setShowDeliveryFeeModal(true)}
@@ -425,42 +427,46 @@ export default function ProductsInventory({
                               <History className="w-3.5 h-3.5 text-amber-400" /> STOCK HISTORY
                             </button>
 
-                            <button
-                              onClick={() => openEditModal(p)}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <Edit className="w-3.5 h-3.5 text-blue-400" /> EDIT
-                            </button>
+                            {['owner', 'admin'].includes(user?.role) && (
+                              <>
+                                <button
+                                  onClick={() => openEditModal(p)}
+                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                                >
+                                  <Edit className="w-3.5 h-3.5 text-blue-400" /> EDIT
+                                </button>
 
-                            <button
-                              onClick={() => {
-                                handleCreateProduct({
-                                  preventDefault: () => {},
-                                });
-                                alert(`Product "${p.name}" duplicated!`);
-                                setActiveMenuProductId(null);
-                              }}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <Copy className="w-3.5 h-3.5 text-emerald-400" /> DUPLICATE
-                            </button>
+                                <button
+                                  onClick={() => {
+                                    handleCreateProduct({
+                                      preventDefault: () => {},
+                                    });
+                                    alert(`Product "${p.name}" duplicated!`);
+                                    setActiveMenuProductId(null);
+                                  }}
+                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                                >
+                                  <Copy className="w-3.5 h-3.5 text-emerald-400" /> DUPLICATE
+                                </button>
 
-                            <button
-                              onClick={() => { alert(`Archived ${p.name}`); setActiveMenuProductId(null); }}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <EyeOff className="w-3.5 h-3.5 text-slate-400" /> ARCHIVE
-                            </button>
+                                <button
+                                  onClick={() => { alert(`Archived ${p.name}`); setActiveMenuProductId(null); }}
+                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                                >
+                                  <EyeOff className="w-3.5 h-3.5 text-slate-400" /> ARCHIVE
+                                </button>
 
-                            <div className="border-t border-slate-800 my-1"></div>
+                                <div className="border-t border-slate-800 my-1"></div>
 
-                            {/* DELETE BUTTON */}
-                            <button
-                              onClick={() => { setShowDeleteConfirmModal(p); setActiveMenuProductId(null); }}
-                              className="w-full px-3 py-2 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20 flex items-center gap-2"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-rose-400" /> DELETE
-                            </button>
+                                {/* DELETE BUTTON */}
+                                <button
+                                  onClick={() => { setShowDeleteConfirmModal(p); setActiveMenuProductId(null); }}
+                                  className="w-full px-3 py-2 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20 flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-400" /> DELETE
+                                </button>
+                              </>
+                            )}
                           </div>
                         )}
                       </td>

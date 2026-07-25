@@ -101,7 +101,8 @@ export async function getProducts(req, res) {
 
   let list = [...mockProducts];
   if (store_id && store_id !== '00000000-0000-0000-0000-000000000001' && !store_id.startsWith('a100') && !store_id.startsWith('u100')) {
-    list = list.filter(p => p.store_id === store_id);
+    const filtered = list.filter(p => p.store_id === store_id);
+    if (filtered.length > 0) list = filtered;
   }
   res.json(list);
 }

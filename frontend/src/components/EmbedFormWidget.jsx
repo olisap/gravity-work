@@ -271,40 +271,20 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             <h3 className={theme.sectionTitle}>Delivery Destination</h3>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={theme.label}>Country</label>
-              <select
-                value={selectedCountry}
-                onChange={(e) => {
-                  setSelectedCountry(e.target.value);
-                  const firstState = AFRICAN_LOCATIONS.find(c => c.country === e.target.value)?.states[0] || '';
-                  setSelectedState(firstState);
-                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
-                }}
-                className={theme.select}
-              >
-                {AFRICAN_LOCATIONS.map(c => (
-                  <option key={c.code} value={c.country} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>{c.country}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className={theme.label}>State / Region</label>
-              <select
-                value={selectedState}
-                onChange={(e) => {
-                  setSelectedState(e.target.value);
-                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
-                }}
-                className={theme.select}
-              >
-                {currentCountryObj.states.map(s => (
-                  <option key={s} value={s} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>{s}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className={theme.label}>State / Region <span className="text-rose-500">*</span></label>
+            <select
+              value={selectedState}
+              onChange={(e) => {
+                setSelectedState(e.target.value);
+                if (customerPhone) setTimeout(() => saveDraft(false), 100);
+              }}
+              className={theme.select}
+            >
+              {currentCountryObj.states.map(s => (
+                <option key={s} value={s} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>{s}</option>
+              ))}
+            </select>
           </div>
 
           <div>

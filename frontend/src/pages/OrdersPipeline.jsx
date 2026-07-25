@@ -112,7 +112,9 @@ export default function OrdersPipeline({ orders = [], selectedCountry, selectedS
               className="bg-transparent text-slate-200 focus:outline-none cursor-pointer text-xs font-medium"
             >
               <option value="All" className="bg-slate-900">All Statuses</option>
-              {PIPELINE_ORDER.map(s => <option key={s} value={s} className="bg-slate-900">{s}</option>)}
+              {['Pending', 'Awaiting', 'Confirmed', 'Scheduled', 'Shipped', 'Delivered', 'Returned', 'After-Sale Call', 'Failed', 'Cancelled', 'Draft'].map(s => (
+                <option key={s} value={s} className="bg-slate-900">{s}</option>
+              ))}
             </select>
           </div>
 

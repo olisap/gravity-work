@@ -17,6 +17,7 @@ import ConfirmationCallModal from './components/ConfirmationCallModal';
 import LoginPage from './pages/LoginPage';
 import OnboardingPage from './pages/OnboardingPage';
 import CheckoutPage from './pages/CheckoutPage';
+import SettingsPage from './pages/SettingsPage';
 
 import TeamManagementModal from './components/TeamManagementModal';
 
@@ -42,13 +43,46 @@ function CrmAppContent() {
   const [activeModalOrder, setActiveModalOrder] = useState(null);
   const [showTeamModal, setShowTeamModal] = useState(false);
 
-  // Sync role when user updates
+  // Sync role when user updates and enforce tab permission safeguards
   useEffect(() => {
     if (user) {
-      setActiveRole(user.role || 'owner');
+      const userRole = user.role || 'owner';
+      // Non-owner users cannot switch role
+      if (userRole !== 'owner') {
+        setActiveRole(userRole);
+      } else {
+        setActiveRole(user.role || 'owner');
+      }
       if (user.country) setSelectedCountry(user.country);
     }
   }, [user]);
+
+  // Tab authorization safeguard
+  useEffect(() => {
+    const rawRole = activeRole || user?.role || 'owner';
+    const effectiveRole = rawRole === 'sales_agent' ? 'confirmation_staff' : rawRole;
+
+    const roleTabPermissions = {
+      owner: null, // Full access
+      admin: null, // Full access
+      confirmation_staff: [
+        'dashboard', 'categories', 'products', 'form-builder',
+        'todays-deliveries', 'todays-followups', 'orders', 'draft-reminders',
+        'whatsapp-marketing', 'notifications', 'email-marketing', 'upsells'
+      ],
+      logistics: [
+        'todays-deliveries', 'todays-followups', 'orders',
+        'suppliers', 'agents', 'products-inventory', 'products'
+      ]
+    };
+
+    const allowedTabs = roleTabPermissions[effectiveRole];
+    if (allowedTabs && !allowedTabs.includes(activeTab)) {
+      const fallbackTab = effectiveRole === 'logistics' ? 'todays-deliveries' : 'dashboard';
+      console.warn(`Tab "${activeTab}" is not authorized for role "${effectiveRole}". Falling back to "${fallbackTab}".`);
+      setActiveTab(fallbackTab);
+    }
+  }, [activeRole, activeTab, user]);
 
   // Data Fetch
   const fetchData = async () => {
@@ -196,6 +230,12 @@ function CrmAppContent() {
               selectedCountry={selectedCountry}
               selectedState={selectedState}
               orders={orders}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsPage
+              onSettingsUpdated={fetchData}
             />
           )}
 

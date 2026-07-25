@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ShoppingBag, Package,
   FileText, Clock, BellRing, Zap, Users, Tags,
   Truck, PhoneCall, Wallet, Send, Link, ShieldCheck,
-  HelpCircle, Layers, LogOut
+  HelpCircle, Layers, LogOut, Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,63 +15,69 @@ export default function Sidebar({ activeTab, setActiveTab, activeRole }) {
   const navGroups = [
     {
       group: 'Core Overview',
-      roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics'],
+      roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'],
       items: [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'users', label: 'Users & Staff', icon: Users },
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
+        { id: 'settings', label: 'Store Settings', icon: Settings, roles: ['owner', 'admin'], badge: 'Portal' },
+        { id: 'users', label: 'Users & Staff', icon: Users, roles: ['owner', 'admin'] },
       ]
     },
     {
       group: 'Products & Forms',
       roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'],
       items: [
-        { id: 'categories', label: 'Product Categories', icon: Tags },
-        { id: 'products', label: 'Products Catalog', icon: Package, badge: 'Catalog' },
-        { id: 'form-builder', label: 'Order Forms', icon: FileText, badge: 'Embed' },
-        { id: 'webhooks', label: 'Webhooks (NEW)', icon: Link, badge: 'API' },
+        { id: 'categories', label: 'Product Categories', icon: Tags, roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
+        { id: 'products', label: 'Products Catalog', icon: Package, badge: 'Catalog', roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
+        { id: 'form-builder', label: 'Order Forms', icon: FileText, badge: 'Embed', roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
+        { id: 'webhooks', label: 'Webhooks (NEW)', icon: Link, badge: 'API', roles: ['owner', 'admin'] },
       ]
     },
     {
       group: 'Fulfillment & Fleet',
       roles: ['owner', 'admin', 'logistics'],
       items: [
-        { id: 'suppliers', label: 'Suppliers', icon: Layers },
-        { id: 'agents', label: 'Agents & Fleet', icon: Truck },
-        { id: 'products-inventory', label: 'Stock Inventory', icon: Package },
+        { id: 'suppliers', label: 'Suppliers', icon: Layers, roles: ['owner', 'admin', 'logistics'] },
+        { id: 'agents', label: 'Agents & Fleet', icon: Truck, roles: ['owner', 'admin', 'logistics'] },
+        { id: 'products-inventory', label: 'Stock Inventory', icon: Package, roles: ['owner', 'admin', 'logistics'] },
       ]
     },
     {
       group: 'Orders & Dispatch',
       roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics'],
       items: [
-        { id: 'todays-deliveries', label: "Today's Deliveries", icon: Truck, badge: 'Today' },
-        { id: 'todays-followups', label: "Today's Followups", icon: PhoneCall },
-        { id: 'orders', label: 'Orders Pipeline', icon: ShoppingBag, badge: 'COD' },
-        { id: 'draft-reminders', label: 'Abandoned Drafts', icon: Clock, badge: 'Auto' },
+        { id: 'todays-deliveries', label: "Today's Deliveries", icon: Truck, badge: 'Today', roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics'] },
+        { id: 'todays-followups', label: "Today's Followups", icon: PhoneCall, roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics'] },
+        { id: 'orders', label: 'Orders Pipeline', icon: ShoppingBag, badge: 'COD', roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics'] },
+        { id: 'draft-reminders', label: 'Abandoned Drafts', icon: Clock, badge: 'Auto', roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
       ]
     },
     {
       group: 'Finance & Accounts',
       roles: ['owner', 'admin'],
       items: [
-        { id: 'accounting', label: 'Expenses & Margins', icon: Wallet },
-        { id: 'payment-gateways', label: 'Payment Gateways', icon: ShieldCheck },
+        { id: 'accounting', label: 'Expenses & Margins', icon: Wallet, roles: ['owner', 'admin'] },
+        { id: 'payment-gateways', label: 'Payment Gateways', icon: ShieldCheck, roles: ['owner', 'admin'] },
       ]
     },
     {
       group: 'Marketing Automation',
       roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'],
       items: [
-        { id: 'whatsapp-marketing', label: 'WhatsApp Marketing', icon: Send },
-        { id: 'notifications', label: 'SMS Marketing', icon: BellRing },
-        { id: 'email-marketing', label: 'Email Marketing', icon: Send },
-        { id: 'upsells', label: 'Upsell Engine', icon: Zap },
+        { id: 'whatsapp-marketing', label: 'WhatsApp Marketing', icon: Send, roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
+        { id: 'notifications', label: 'SMS Marketing', icon: BellRing, roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
+        { id: 'email-marketing', label: 'Email Marketing', icon: Send, roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
+        { id: 'upsells', label: 'Upsell Engine', icon: Zap, roles: ['owner', 'admin', 'confirmation_staff', 'sales_agent'] },
       ]
     }
   ];
 
-  // Filter groups by effectiveRole
-  const visibleGroups = navGroups.filter(g => g.roles.includes(effectiveRole) || effectiveRole === 'owner');
+  // Filter groups and items by effectiveRole
+  const visibleGroups = navGroups
+    .map(g => ({
+      ...g,
+      items: g.items.filter(item => !item.roles || item.roles.includes(effectiveRole) || effectiveRole === 'owner')
+    }))
+    .filter(g => g.items.length > 0);
 
   return (
     <aside className="w-64 shrink-0 bg-slate-900/95 backdrop-blur-xl border-r border-slate-800/80 h-screen sticky top-0 flex flex-col z-30 overflow-hidden">

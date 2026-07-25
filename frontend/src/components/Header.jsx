@@ -70,28 +70,32 @@ export default function Header({
           </select>
         </div>
 
-        {/* Team Accounts Button */}
-        <button
-          onClick={onOpenTeamModal}
-          title="Manage Staff Accounts"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass text-indigo-300 hover:text-white hover:bg-indigo-600/30 text-xs font-bold transition-all border border-indigo-500/20"
-        >
-          <Users className="w-3.5 h-3.5 text-indigo-400" /> Team Accounts
-        </button>
-
-        {/* Role Switcher */}
-        <div className="flex items-center gap-1.5 glass px-3 py-1.5 rounded-xl text-xs">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <select
-            value={activeRole}
-            onChange={e => handleRoleSelectChange(e.target.value)}
-            className="bg-transparent text-slate-200 focus:outline-none cursor-pointer font-medium text-xs"
+        {/* Team Accounts Button (Owner & Admin only) */}
+        {['owner', 'admin'].includes(user?.role) && (
+          <button
+            onClick={onOpenTeamModal}
+            title="Manage Staff Accounts"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass text-indigo-300 hover:text-white hover:bg-indigo-600/30 text-xs font-bold transition-all border border-indigo-500/20"
           >
-            <option value="owner" className="bg-slate-900">Owner / Admin</option>
-            <option value="confirmation_staff" className="bg-slate-900">Confirmation Staff</option>
-            <option value="logistics" className="bg-slate-900">Logistics Rider</option>
-          </select>
-        </div>
+            <Users className="w-3.5 h-3.5 text-indigo-400" /> Team Accounts
+          </button>
+        )}
+
+        {/* Role Switcher (Owner only) */}
+        {user?.role === 'owner' && (
+          <div className="flex items-center gap-1.5 glass px-3 py-1.5 rounded-xl text-xs">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <select
+              value={activeRole}
+              onChange={e => handleRoleSelectChange(e.target.value)}
+              className="bg-transparent text-slate-200 focus:outline-none cursor-pointer font-medium text-xs"
+            >
+              <option value="owner" className="bg-slate-900">Owner / Admin</option>
+              <option value="confirmation_staff" className="bg-slate-900">Confirmation Staff</option>
+              <option value="logistics" className="bg-slate-900">Logistics Rider</option>
+            </select>
+          </div>
+        )}
 
         {/* Refresh */}
         <button

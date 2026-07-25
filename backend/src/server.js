@@ -9,6 +9,7 @@ import { getProducts, getCategories, createProduct, updateProduct, deleteProduct
 import { getForms, getFormByEmbedKey, createForm, updateForm, deleteForm } from './controllers/formController.js';
 import { getDashboardStats } from './controllers/dashboardController.js';
 import { getUpsellOffers, getUpsellOfferForProduct } from './controllers/upsellController.js';
+import { getSettings, updateSettings, getAuditTrail } from './controllers/settingsController.js';
 import { AbandonmentWorker } from './services/abandonmentWorker.js';
 
 dotenv.config();
@@ -31,18 +32,23 @@ app.get('/api/auth/me', requireAuth, getMe);
 app.get('/api/team', requireAuth, requireRole(['owner', 'admin']), getTeamMembers);
 app.post('/api/team', requireAuth, requireRole(['owner', 'admin']), createTeamMember);
 
+// Store Settings & Preferences Routes
+app.get('/api/settings', requireAuth, getSettings);
+app.post('/api/settings', requireAuth, requireRole(['owner', 'admin']), updateSettings);
+app.get('/api/audit-trail', requireAuth, requireRole(['owner', 'admin']), getAuditTrail);
+
 // Orders & Pipeline Routes (Draft submission remains public for checkout forms)
 app.get('/api/orders', requireAuth, getOrders);
 app.post('/api/orders/draft', createOrUpdateDraftOrder);
-app.patch('/api/orders/:id/status', requireAuth, updateOrderStatus);
-app.post('/api/orders/:id/upsell', requireAuth, addUpsellToOrder);
+app.patch('/api/orders/:id/status', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics']), updateOrderStatus);
+app.post('/api/orders/:id/upsell', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), addUpsellToOrder);
 
-// Products & Inventory Routes
-app.get('/api/products', requireAuth, getProducts);
+// Products & Inventory Routes (GET is public for checkout forms; mutations require admin auth)
+app.get('/api/products', getProducts);
 app.post('/api/products', requireAuth, requireRole(['owner', 'admin']), createProduct);
 app.patch('/api/products/:id', requireAuth, requireRole(['owner', 'admin']), updateProduct);
 app.delete('/api/products/:id', requireAuth, requireRole(['owner', 'admin']), deleteProduct);
-app.get('/api/categories', requireAuth, getCategories);
+app.get('/api/categories', getCategories);
 app.post('/api/categories', requireAuth, requireRole(['owner', 'admin']), createCategory);
 
 // Forms Routes (Embed route remains public for checkout iframe)
@@ -53,7 +59,7 @@ app.delete('/api/forms/:id', requireAuth, requireRole(['owner', 'admin']), delet
 app.get('/api/forms/embed/:embedKey', getFormByEmbedKey);
 
 // Dashboard Analytics Routes
-app.get('/api/dashboard', requireAuth, getDashboardStats);
+app.get('/api/dashboard', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), getDashboardStats);
 
 // Upsell Routes
 app.get('/api/upsell', requireAuth, getUpsellOffers);

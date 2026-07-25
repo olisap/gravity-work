@@ -254,14 +254,16 @@ export default function FormBuilder({
             <FileText className="w-3.5 h-3.5" /> All Forms ({forms.length})
           </button>
 
-          <button
-            onClick={resetFormEditor}
-            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors ${
-              activeTab === 'builder' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Plus className="w-3.5 h-3.5" /> Add New Form
-          </button>
+          {['owner', 'admin'].includes(user?.role) && (
+            <button
+              onClick={resetFormEditor}
+              className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors ${
+                activeTab === 'builder' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Plus className="w-3.5 h-3.5" /> Add New Form
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('embed')}
@@ -288,9 +290,11 @@ export default function FormBuilder({
         <div className="glass rounded-2xl overflow-hidden border border-slate-800">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
             <h3 className="text-sm font-bold text-slate-100">Active Landing Page Order Forms</h3>
-            <button onClick={resetFormEditor} className="btn-primary py-1.5 px-3 text-xs">
-              + Create New Form
-            </button>
+            {['owner', 'admin'].includes(user?.role) && (
+              <button onClick={resetFormEditor} className="btn-primary py-1.5 px-3 text-xs">
+                + Create New Form
+              </button>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -336,20 +340,24 @@ export default function FormBuilder({
                             >
                               <Code className="w-3 h-3" /> Code
                             </button>
-                            <button
-                              onClick={() => loadFormIntoEditor(f)}
-                              className="btn-ghost py-1 px-2.5 text-[11px]"
-                              title="Edit form"
-                            >
-                              <Edit className="w-3 h-3" /> Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteForm(f.id)}
-                              className="btn-danger py-1 px-2 text-[11px]"
-                              title="Delete form"
-                            >
-                              <Trash2 className="w-3 h-3 text-rose-400" />
-                            </button>
+                            {['owner', 'admin'].includes(user?.role) && (
+                              <>
+                                <button
+                                  onClick={() => loadFormIntoEditor(f)}
+                                  className="btn-ghost py-1 px-2.5 text-[11px]"
+                                  title="Edit form"
+                                >
+                                  <Edit className="w-3 h-3" /> Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteForm(f.id)}
+                                  className="btn-danger py-1 px-2 text-[11px]"
+                                  title="Delete form"
+                                >
+                                  <Trash2 className="w-3 h-3 text-rose-400" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

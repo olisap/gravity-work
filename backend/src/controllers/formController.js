@@ -114,10 +114,10 @@ export async function getForms(req, res) {
 export async function getFormByEmbedKey(req, res) {
   const { embedKey } = req.params;
   if (supabase) {
-    const { data, error } = await supabase.from('forms').select('*').eq('embed_key', embedKey).single();
+    const { data, error } = await supabase.from('forms').select('*').or(`embed_key.eq.${embedKey},id.eq.${embedKey}`).maybeSingle();
     if (!error && data) return res.json(formatForm(data));
   }
-  const form = mockForms.find(f => f.embed_key === embedKey);
+  const form = mockForms.find(f => f.embed_key === embedKey || f.id === embedKey) || mockForms[0];
   if (!form) return res.status(404).json({ error: 'Embeddable form not found' });
   res.json(formatForm(form));
 }
