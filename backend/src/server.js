@@ -5,11 +5,13 @@ import dotenv from 'dotenv';
 import { login, signup, getMe, getTeamMembers, createTeamMember } from './controllers/authController.js';
 import { requireAuth, requireRole } from './middleware/authMiddleware.js';
 import { getOrders, createOrUpdateDraftOrder, updateOrderStatus, addUpsellToOrder } from './controllers/orderController.js';
-import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory } from './controllers/productController.js';
+import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory, getStockMovements, recordStockAdjustment } from './controllers/productController.js';
 import { getForms, getFormByEmbedKey, createForm, updateForm, deleteForm } from './controllers/formController.js';
 import { getDashboardStats } from './controllers/dashboardController.js';
 import { getUpsellOffers, getUpsellOfferForProduct } from './controllers/upsellController.js';
 import { getSettings, updateSettings, getAuditTrail } from './controllers/settingsController.js';
+import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from './controllers/suppliersController.js';
+import { getDeliveryAgents, createDeliveryAgent, updateDeliveryAgent, deleteDeliveryAgent, assignStockToAgent } from './controllers/deliveryAgentsController.js';
 import { AbandonmentWorker } from './services/abandonmentWorker.js';
 
 dotenv.config();
@@ -37,19 +39,34 @@ app.get('/api/settings', requireAuth, getSettings);
 app.post('/api/settings', requireAuth, requireRole(['owner', 'admin']), updateSettings);
 app.get('/api/audit-trail', requireAuth, requireRole(['owner', 'admin']), getAuditTrail);
 
-// Orders & Pipeline Routes (Draft submission remains public for checkout forms)
+// Orders & Pipeline Routes
 app.get('/api/orders', requireAuth, getOrders);
 app.post('/api/orders/draft', createOrUpdateDraftOrder);
 app.patch('/api/orders/:id/status', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics']), updateOrderStatus);
 app.post('/api/orders/:id/upsell', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), addUpsellToOrder);
 
-// Products & Inventory Routes (GET is public for checkout forms; mutations require admin auth)
+// Products & Stock Inventory Routes
 app.get('/api/products', getProducts);
 app.post('/api/products', requireAuth, requireRole(['owner', 'admin']), createProduct);
 app.patch('/api/products/:id', requireAuth, requireRole(['owner', 'admin']), updateProduct);
 app.delete('/api/products/:id', requireAuth, requireRole(['owner', 'admin']), deleteProduct);
 app.get('/api/categories', getCategories);
 app.post('/api/categories', requireAuth, requireRole(['owner', 'admin']), createCategory);
+app.get('/api/stock-movements', requireAuth, getStockMovements);
+app.post('/api/stock-movements', requireAuth, requireRole(['owner', 'admin', 'logistics']), recordStockAdjustment);
+
+// Suppliers & Wholesale Partners Routes
+app.get('/api/suppliers', requireAuth, getSuppliers);
+app.post('/api/suppliers', requireAuth, requireRole(['owner', 'admin', 'logistics']), createSupplier);
+app.patch('/api/suppliers/:id', requireAuth, requireRole(['owner', 'admin', 'logistics']), updateSupplier);
+app.delete('/api/suppliers/:id', requireAuth, requireRole(['owner', 'admin']), deleteSupplier);
+
+// Delivery Fleet & Courier Agents Routes
+app.get('/api/delivery-agents', requireAuth, getDeliveryAgents);
+app.post('/api/delivery-agents', requireAuth, requireRole(['owner', 'admin', 'logistics']), createDeliveryAgent);
+app.patch('/api/delivery-agents/:id', requireAuth, requireRole(['owner', 'admin', 'logistics']), updateDeliveryAgent);
+app.delete('/api/delivery-agents/:id', requireAuth, requireRole(['owner', 'admin']), deleteDeliveryAgent);
+app.post('/api/delivery-agents/:id/stock', requireAuth, requireRole(['owner', 'admin', 'logistics']), assignStockToAgent);
 
 // Forms Routes (Embed route remains public for checkout iframe)
 app.get('/api/forms', requireAuth, getForms);

@@ -110,11 +110,11 @@ export default function Sidebar({ activeTab, setActiveTab, activeRole }) {
               {group.group}
             </p>
             {group.items.map(({ id, label, icon: Icon, badge }) => {
-              const active = activeTab === id || (id === 'products-inventory' && activeTab === 'products');
+              const active = activeTab === id;
               return (
                 <button
                   key={id}
-                  onClick={() => setActiveTab(id === 'products-inventory' ? 'products' : id)}
+                  onClick={() => setActiveTab(id)}
                   className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
                     active
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20 font-bold'

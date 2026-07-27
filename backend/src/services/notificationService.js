@@ -83,18 +83,127 @@ export class NotificationService {
   }
 
   /**
-   * Brevo / Resend Email Adapter with sandbox fallback
+   * Universal Email Adapter supporting Standard SMTP (Gmail, SendGrid, Mailgun),
+   * Resend API, Brevo API / SMTP, and sandbox fallback.
    */
   static async sendEmail(email, subject, text, htmlBody = null) {
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPort = process.env.SMTP_PORT || 587;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort == 465;
+
     const brevoKey = process.env.BREVO_API_KEY;
     const resendKey = process.env.RESEND_API_KEY;
-    const senderEmail = process.env.SENDER_EMAIL || 'olisapaul12@gmail.com';
-    const senderName = 'E-Commerce Order System';
+    const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER || 'olisapaul12@gmail.com';
+    const senderName = process.env.SENDER_NAME || 'E-Commerce Order System';
 
     const defaultHtml = `<div style="font-family:Arial,sans-serif;padding:20px;color:#1e293b;"><h2 style="color:#4f46e5;">Order Update</h2><p>${text}</p></div>`;
     const finalHtml = htmlBody || defaultHtml;
 
-    // 1. Brevo SMTP Transporter (for xsmtpsib keys)
+    const logNotification = async (provider, status, details = {}) => {
+      if (supabase) {
+        try {
+          await supabase.from('notification_logs').insert([{
+            template_name: subject,
+            recipient: email,
+            channel: 'email',
+            status,
+            payload: { provider, subject, text, details },
+            created_at: new Date().toISOString()
+          }]);
+        } catch (e) {
+          // ignore DB log errors
+        }
+      }
+    };
+
+    // 1. Standard Custom SMTP / Gmail SMTP (if configured in .env)
+    if (smtpHost && smtpUser && smtpPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: Number(smtpPort),
+          secure: smtpSecure,
+          auth: { user: smtpUser, pass: smtpPass }
+        });
+        const info = await transporter.sendMail({
+          from: `"${senderName}" <${senderEmail}>`,
+          to: email,
+          subject,
+          html: finalHtml,
+          text
+        });
+        console.log(`📧 [Custom SMTP Email Sent] To: ${email} | Host: ${smtpHost} | MessageId:`, info.messageId);
+        await logNotification(`SMTP (${smtpHost})`, 'sent', { messageId: info.messageId });
+        return { success: true, provider: `SMTP (${smtpHost})`, messageId: info.messageId };
+      } catch (err) {
+        console.error(`❌ Failed to send Email via Custom SMTP (${smtpHost}) to ${email}:`, err.message);
+        await logNotification(`SMTP (${smtpHost})`, 'failed', { error: err.message });
+      }
+    }
+
+    // 2. Try Resend API
+    if (resendKey && resendKey !== 'your-resend-api-key') {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${resendKey}`
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM_EMAIL || `"${senderName}" <onboarding@resend.dev>`,
+            to: [email],
+            subject,
+            html: finalHtml
+          })
+        });
+        const resData = await response.json();
+        if (response.ok) {
+          console.log(`📧 [Resend Email API Response] To: ${email} | Result:`, resData);
+          await logNotification('Resend', 'sent', resData);
+          return { success: true, provider: 'Resend', response: resData };
+        } else {
+          console.error(`❌ Resend Email API Error for ${email}:`, resData);
+          await logNotification('Resend', 'failed', resData);
+        }
+      } catch (err) {
+        console.error(`Failed to send Email via Resend to ${email}:`, err.message);
+      }
+    }
+
+    // 3. Brevo REST API (for xkeysib keys)
+    if (brevoKey && brevoKey !== 'your-brevo-api-key' && !brevoKey.startsWith('xsmtpsib')) {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'api-key': brevoKey
+          },
+          body: JSON.stringify({
+            sender: { name: senderName, email: senderEmail },
+            to: [{ email }],
+            subject,
+            htmlContent: finalHtml
+          })
+        });
+        const resData = await response.json();
+        if (response.ok) {
+          console.log(`📧 [Brevo API Response] To: ${email} | Result:`, resData);
+          await logNotification('Brevo API', 'sent', resData);
+          return { success: true, provider: 'Brevo API', response: resData };
+        } else {
+          console.error(`❌ Brevo API Email Error for ${email}:`, resData.message || resData);
+          await logNotification('Brevo API', 'failed', resData);
+        }
+      } catch (err) {
+        console.error(`Failed to send Email via Brevo API to ${email}:`, err.message);
+      }
+    }
+
+    // 4. Brevo SMTP Transporter (for xsmtpsib keys)
     if (brevoKey && brevoKey.startsWith('xsmtpsib')) {
       try {
         const transporter = nodemailer.createTransport({
@@ -113,61 +222,16 @@ export class NotificationService {
           html: finalHtml
         });
         console.log(`📧 [Brevo SMTP Email Sent] To: ${email} | MessageId:`, info.messageId);
+        await logNotification('Brevo SMTP', 'sent', { messageId: info.messageId });
         return { success: true, provider: 'Brevo SMTP', messageId: info.messageId };
       } catch (err) {
         console.error(`Failed to send Email via Brevo SMTP to ${email}:`, err.message);
-      }
-    }
-
-    // 2. Brevo REST API (for xkeysib keys)
-    if (brevoKey && brevoKey !== 'your-brevo-api-key' && !brevoKey.startsWith('xsmtpsib')) {
-      try {
-        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'api-key': brevoKey
-          },
-          body: JSON.stringify({
-            sender: { name: senderName, email: senderEmail },
-            to: [{ email }],
-            subject,
-            htmlContent: finalHtml
-          })
-        });
-        const resData = await response.json();
-        console.log(`📧 [Brevo API Response] To: ${email} | Result:`, resData);
-        if (response.ok) return { success: true, provider: 'Brevo API', response: resData };
-      } catch (err) {
-        console.error(`Failed to send Email via Brevo API to ${email}:`, err.message);
-      }
-    }
-
-    // 3. Try Resend
-    if (resendKey && resendKey !== 'your-resend-api-key') {
-      try {
-        const response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${resendKey}`
-          },
-          body: JSON.stringify({
-            from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
-            to: [email],
-            subject,
-            html: finalHtml
-          })
-        });
-        const resData = await response.json();
-        console.log(`📧 [Resend Email API Response] To: ${email} | Result:`, resData);
-        if (response.ok) return { success: true, provider: 'Resend', response: resData };
-      } catch (err) {
-        console.error(`Failed to send Email via Resend to ${email}:`, err.message);
+        await logNotification('Brevo SMTP', 'failed', { error: err.message });
       }
     }
 
     console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Content length: ${finalHtml.length} chars`);
+    await logNotification('Sandbox', 'sent_sandbox', { note: 'No live email credentials active or all providers failed' });
     return { success: true, provider: 'Sandbox', mockSent: true };
   }
 

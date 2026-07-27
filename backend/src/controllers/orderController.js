@@ -26,127 +26,7 @@ function formatOrderFromSupabase(order) {
 }
 
 // In-memory fallback mock orders database if Supabase isn't connected
-let mockOrders = [
-  {
-    id: 'o1000000-0000-0000-0000-000000000001',
-    order_number: 'OLI-10001',
-    customer_name: 'Emeka Nwosu',
-    customer_phone: '+2348039988776',
-    customer_email: 'emeka@gmail.com',
-    delivery_address: '14 Admiralty Way, Lekki Phase 1',
-    country: 'Nigeria',
-    state: 'Lagos',
-    subtotal: 18500,
-    delivery_fee: 2000,
-    total_amount: 20500,
-    status: 'Delivered',
-    payment_method: 'COD',
-    payment_status: 'Paid',
-    source: 'form:f1',
-    items: [{ product_id: 'p1', name: 'Insulated Stainless Steel Lunch Box', quantity: 1, unit_price_at_time_of_order: 18500 }],
-    created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
-    delivered_at: new Date(Date.now() - 1 * 86400000).toISOString()
-  },
-  {
-    id: 'o2000000-0000-0000-0000-000000000002',
-    order_number: 'OLI-10002',
-    customer_name: 'Fatima Abubakar',
-    customer_phone: '+2348021122334',
-    customer_email: 'fatima@yahoo.com',
-    delivery_address: 'Plot 402 Maitama District',
-    country: 'Nigeria',
-    state: 'Abuja (FCT)',
-    subtotal: 28000,
-    delivery_fee: 2500,
-    total_amount: 30500,
-    status: 'Delivered',
-    payment_method: 'COD',
-    payment_status: 'Paid',
-    source: 'form:f2',
-    items: [{ product_id: 'p2', name: 'Cordless Rechargeable Spin Mop', quantity: 1, unit_price_at_time_of_order: 28000 }],
-    created_at: new Date(Date.now() - 4 * 86400000).toISOString(),
-    delivered_at: new Date(Date.now() - 2 * 86400000).toISOString()
-  },
-  {
-    id: 'o3000000-0000-0000-0000-000000000003',
-    order_number: 'OLI-10003',
-    customer_name: 'Kwame Mensah',
-    customer_phone: '+233244123456',
-    customer_email: 'kwame@ghana.com',
-    delivery_address: '22 Ring Road Central, Accra',
-    country: 'Ghana',
-    state: 'Greater Accra',
-    subtotal: 22500,
-    delivery_fee: 3000,
-    total_amount: 25500,
-    status: 'Scheduled',
-    payment_method: 'COD',
-    payment_status: 'Unpaid',
-    source: 'form:f1',
-    items: [{ product_id: 'p3', name: 'Smart Blood Pressure Monitor', quantity: 1, unit_price_at_time_of_order: 22500 }],
-    created_at: new Date(Date.now() - 1 * 86400000).toISOString()
-  },
-  {
-    id: 'o4000000-0000-0000-0000-000000000004',
-    order_number: 'OLI-10004',
-    customer_name: 'Yetunde Sowande',
-    customer_phone: '+2348056677889',
-    customer_email: 'yetunde@gmail.com',
-    delivery_address: '5 Ring Road, Ibadan',
-    country: 'Nigeria',
-    state: 'Oyo',
-    subtotal: 18500,
-    delivery_fee: 2000,
-    total_amount: 20500,
-    status: 'Awaiting',
-    payment_method: 'COD',
-    payment_status: 'Unpaid',
-    source: 'form:f1',
-    items: [{ product_id: 'p1', name: 'Insulated Stainless Steel Lunch Box', quantity: 1, unit_price_at_time_of_order: 18500 }],
-    created_at: new Date(Date.now() - 6 * 3600000).toISOString()
-  },
-  {
-    id: 'o5000000-0000-0000-0000-000000000005',
-    order_number: 'OLI-10005',
-    customer_name: 'Njabulo Dlamini',
-    customer_phone: '+27821234567',
-    customer_email: 'njabulo@joburg.co.za',
-    delivery_address: '88 Sandton Drive, Johannesburg',
-    country: 'South Africa',
-    state: 'Gauteng',
-    subtotal: 28000,
-    delivery_fee: 4000,
-    total_amount: 32000,
-    status: 'Pending',
-    payment_method: 'COD',
-    payment_status: 'Unpaid',
-    source: 'form:f2',
-    items: [{ product_id: 'p2', name: 'Cordless Rechargeable Spin Mop', quantity: 1, unit_price_at_time_of_order: 28000 }],
-    created_at: new Date(Date.now() - 2 * 3600000).toISOString()
-  },
-  {
-    id: 'o6000000-0000-0000-0000-000000000006',
-    order_number: 'OLI-10006',
-    customer_name: 'Kofi Annan',
-    customer_phone: '+2348109988112',
-    customer_email: 'kofi@drafts.com',
-    delivery_address: 'Unfinished step address',
-    country: 'Nigeria',
-    state: 'Lagos',
-    subtotal: 18500,
-    delivery_fee: 0,
-    total_amount: 18500,
-    status: 'Draft',
-    payment_method: 'COD',
-    payment_status: 'Unpaid',
-    resume_token: 'RESUME-DRAFT-10006',
-    form_step_reached: 2,
-    source: 'form:f1',
-    items: [{ product_id: 'p1', name: 'Insulated Stainless Steel Lunch Box', quantity: 1, unit_price_at_time_of_order: 18500 }],
-    created_at: new Date(Date.now() - 25 * 60000).toISOString(),
-    last_activity_at: new Date(Date.now() - 25 * 60000).toISOString()
-  }
-];
+let mockOrders = [];
 
 /**
  * Phone Sanitization for Nigerian and International Phone Numbers
@@ -167,11 +47,12 @@ function normalizePhone(phone) {
 }
 
 export async function getOrders(req, res) {
-  const { status, state, country, search, store_id } = req.query;
+  const { status, state, country, search } = req.query;
+  const effectiveStoreId = req.user?.store_id || req.query.store_id;
 
   if (supabase) {
     let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
-    if (store_id) query = query.eq('store_id', store_id);
+    if (effectiveStoreId) query = query.eq('store_id', effectiveStoreId);
     if (status) query = query.eq('status', status);
     if (state) query = query.eq('state', state);
     if (country) query = query.eq('country', country);
@@ -185,9 +66,8 @@ export async function getOrders(req, res) {
 
   let filtered = [...mockOrders];
 
-  // If user belongs to a custom new store, only return custom orders for that store
-  if (store_id && store_id !== '00000000-0000-0000-0000-000000000001' && !store_id.startsWith('a100') && !store_id.startsWith('u100')) {
-    filtered = filtered.filter(o => o.store_id === store_id);
+  if (effectiveStoreId && effectiveStoreId !== '00000000-0000-0000-0000-000000000001' && !effectiveStoreId.startsWith('a100') && !effectiveStoreId.startsWith('u100')) {
+    filtered = filtered.filter(o => o.store_id === effectiveStoreId);
   }
 
   if (status) filtered = filtered.filter(o => o.status === status);
@@ -221,6 +101,7 @@ export async function createOrUpdateDraftOrder(req, res) {
     upsell_source,
     delivery_fee,
     notification_email,
+    thank_you_url,
     store_id
   } = req.body;
 
@@ -265,6 +146,7 @@ export async function createOrUpdateDraftOrder(req, res) {
       delivery_fee: fee,
       total_amount: subtotal + fee,
       form_step_reached: form_step_reached || existing.form_step_reached,
+      thank_you_url: thank_you_url !== undefined ? thank_you_url : (existing.thank_you_url || null),
       last_activity_at: new Date().toISOString(),
       is_duplicate_flagged: isDuplicate,
       duplicate_reason: duplicateReason,
@@ -299,6 +181,7 @@ export async function createOrUpdateDraftOrder(req, res) {
       source: 'form:embedded',
       resume_token: is_final_submit ? null : `RESUME-${Date.now()}`,
       form_step_reached: form_step_reached || 1,
+      thank_you_url: thank_you_url || null,
       is_duplicate_flagged: isDuplicate,
       duplicate_reason: duplicateReason,
       created_at: new Date().toISOString(),
@@ -326,7 +209,22 @@ export async function createOrUpdateDraftOrder(req, res) {
 
   // Trigger Notifications on Final Order Submit
   if (is_final_submit) {
-    const targetNotificationEmail = notification_email || 'olisapaul1@gmail.com';
+    let targetNotificationEmail = notification_email;
+    if (!targetNotificationEmail && store_id && supabase) {
+      try {
+        const { data: storeForm } = await supabase.from('forms').select('notification_email').eq('store_id', store_id).limit(1).maybeSingle();
+        if (storeForm && storeForm.notification_email) {
+          targetNotificationEmail = storeForm.notification_email;
+        }
+      } catch (e) {
+        // ignore error
+      }
+    }
+    if (!targetNotificationEmail || targetNotificationEmail === 'merchant@gmail.com') {
+      targetNotificationEmail = process.env.SENDER_EMAIL || 'olisapaul1@gmail.com';
+    }
+
+    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Merchant Target: ${targetNotificationEmail}, Customer: ${finalOrder.customer_email || 'None'})`);
     NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail).catch(err => {
       console.error('Failed to send order finalized notifications:', err);
     });

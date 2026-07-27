@@ -40,6 +40,9 @@ export default function ProductsInventory({
   const [formBasePrice, setFormBasePrice] = useState('');
   const [formSku, setFormSku] = useState('');
   const [formStock, setFormStock] = useState('50');
+  const [formDescription, setFormDescription] = useState('');
+  const [formImage, setFormImage] = useState('');
+  const [customFields, setCustomFields] = useState([]);
 
   // Bundles State (Multiple Selling Price Tiers)
   const [bundles, setBundles] = useState([
@@ -85,6 +88,9 @@ export default function ProductsInventory({
     setFormBasePrice('');
     setFormSku('');
     setFormStock('50');
+    setFormDescription('');
+    setFormImage('');
+    setCustomFields([]);
     setBundles([
       { qty: 1, label: '1 Item + Free Delivery', price: '18500' },
       { qty: 2, label: '2 Items + Free Delivery', price: '35500' }
@@ -95,22 +101,38 @@ export default function ProductsInventory({
   // Open Edit Product Modal
   const openEditModal = (p) => {
     setShowEditProductModal(p);
-    setFormProdName(p.name);
+    setFormProdName(p.name || '');
     setFormCategory(p.category_name || 'kitchen wares');
     setFormCountry(p.country || selectedCountry || 'Nigeria');
-    setFormCostPrice(p.cost_price || '');
-    setFormBasePrice(p.base_price || '');
+    setFormCostPrice(p.cost_price !== undefined ? p.cost_price : '');
+    setFormBasePrice(p.base_price !== undefined ? p.base_price : '');
     setFormSku(p.sku || '');
-    setFormStock(p.available_stock || '0');
-    setBundles(p.price_bundles || [
+    setFormStock(p.available_stock !== undefined ? p.available_stock : '0');
+    setFormDescription(p.description || '');
+    setFormImage((p.images && p.images[0]) ? p.images[0] : '');
+    setCustomFields(Array.isArray(p.custom_fields) ? p.custom_fields : []);
+    setBundles(Array.isArray(p.price_bundles) && p.price_bundles.length > 0 ? p.price_bundles : [
       { qty: 1, label: `1 ${p.name} + Free Delivery`, price: p.base_price }
     ]);
     setActiveMenuProductId(null);
   };
 
-  // Add Bundle Row
+  // Add / Remove Bundle Rows
   const addBundleRow = () => {
     setBundles(prev => [...prev, { qty: prev.length + 1, label: `${prev.length + 1} Items + Free Delivery`, price: '' }]);
+  };
+
+  const removeBundleRow = (idx) => {
+    setBundles(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // Add / Remove Custom Fields
+  const addCustomFieldRow = () => {
+    setCustomFields(prev => [...prev, { key: '', value: '' }]);
+  };
+
+  const removeCustomFieldRow = (idx) => {
+    setCustomFields(prev => prev.filter((_, i) => i !== idx));
   };
 
   // Submit Create Product
@@ -123,10 +145,13 @@ export default function ProductsInventory({
       name: formProdName,
       category_name: formCategory,
       country: formCountry,
+      description: formDescription,
       cost_price: Number(formCostPrice) || 0,
       base_price: Number(formBasePrice) || 0,
       sku: formSku || `${formProdName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8)}-${Date.now().toString().slice(-4)}`,
       initial_stock: Number(formStock) || 0,
+      images: formImage ? [formImage] : [],
+      custom_fields: customFields.filter(f => f.key.trim() !== ''),
       price_bundles: bundles.map(b => ({
         qty: Number(b.qty),
         label: b.label || `${b.qty} ${formProdName} + Free Delivery`,
@@ -162,10 +187,13 @@ export default function ProductsInventory({
       name: formProdName,
       category_name: formCategory,
       country: formCountry,
+      description: formDescription,
       cost_price: Number(formCostPrice) || 0,
       base_price: Number(formBasePrice) || 0,
       sku: formSku,
       available_stock: Number(formStock),
+      images: formImage ? [formImage] : [],
+      custom_fields: customFields.filter(f => f.key.trim() !== ''),
       price_bundles: bundles
     };
 
@@ -578,6 +606,28 @@ export default function ProductsInventory({
                 </div>
               </div>
 
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Detailed product features, specifications, and details..."
+                  value={formDescription}
+                  onChange={e => setFormDescription(e.target.value)}
+                  className="input text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Image URL</label>
+                <input
+                  type="text"
+                  placeholder="https://images.unsplash.com/..."
+                  value={formImage}
+                  onChange={e => setFormImage(e.target.value)}
+                  className="input text-xs font-mono"
+                />
+              </div>
+
               {/* Selling Price Variations / Quantity Bundles */}
               <div className="space-y-2 border-t border-slate-800 pt-3">
                 <div className="flex items-center justify-between">
@@ -587,7 +637,7 @@ export default function ProductsInventory({
                   <button
                     type="button"
                     onClick={addBundleRow}
-                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300"
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
                   >
                     + Add Bundle Tier
                   </button>
@@ -625,8 +675,71 @@ export default function ProductsInventory({
                       }}
                       className="w-24 input text-xs py-1"
                     />
+                    {bundles.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBundleRow(idx)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove bundle tier"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))}
+              </div>
+
+              {/* Dynamic Custom Product Attributes / Fields */}
+              <div className="space-y-2 border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5" /> Custom Attributes / Specifications
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addCustomFieldRow}
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    + Add Field
+                  </button>
+                </div>
+
+                {customFields.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 italic">No custom fields added yet. Click "+ Add Field" to specify attributes like Material, Warranty, Color, etc.</p>
+                ) : (
+                  customFields.map((field, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                      <input
+                        type="text"
+                        placeholder="Field Name (e.g. Material)"
+                        value={field.key}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, key: val } : item));
+                        }}
+                        className="w-1/3 input text-xs py-1 font-semibold"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Field Value (e.g. Stainless Steel)"
+                        value={field.value}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, value: val } : item));
+                        }}
+                        className="flex-1 input text-xs py-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCustomFieldRow(idx)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove custom field"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="flex gap-2 pt-3">
@@ -656,18 +769,29 @@ export default function ProductsInventory({
             </div>
 
             <form onSubmit={handleUpdateProduct} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Name</label>
-                <input
-                  type="text"
-                  required
-                  value={formProdName}
-                  onChange={e => setFormProdName(e.target.value)}
-                  className="input text-xs"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Product Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formProdName}
+                    onChange={e => setFormProdName(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">SKU</label>
+                  <input
+                    type="text"
+                    value={formSku}
+                    onChange={e => setFormSku(e.target.value)}
+                    className="input text-xs font-mono"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Category</label>
                   <input
@@ -676,6 +800,18 @@ export default function ProductsInventory({
                     onChange={e => setFormCategory(e.target.value)}
                     className="input text-xs"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Country</label>
+                  <select
+                    value={formCountry}
+                    onChange={e => setFormCountry(e.target.value)}
+                    className="select w-full text-xs py-2.5"
+                  >
+                    {AFRICAN_LOCATIONS.map(loc => (
+                      <option key={loc.code} value={loc.country} className="bg-slate-900">{loc.country}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Stock Left</label>
@@ -699,14 +835,149 @@ export default function ProductsInventory({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Base Price ({curr})</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Base Selling Price ({curr}) *</label>
                   <input
                     type="number"
+                    required
                     value={formBasePrice}
                     onChange={e => setFormBasePrice(e.target.value)}
                     className="input text-xs"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Description</label>
+                <textarea
+                  rows={2}
+                  value={formDescription}
+                  onChange={e => setFormDescription(e.target.value)}
+                  className="input text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Image URL</label>
+                <input
+                  type="text"
+                  value={formImage}
+                  onChange={e => setFormImage(e.target.value)}
+                  className="input text-xs font-mono"
+                />
+              </div>
+
+              {/* Selling Price Variations / Quantity Bundles */}
+              <div className="space-y-2 border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" /> Selling Price Bundles (Quantity Discounts)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addBundleRow}
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    + Add Bundle Tier
+                  </button>
+                </div>
+
+                {bundles.map((b, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                    <input
+                      type="number"
+                      placeholder="Qty"
+                      value={b.qty}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, qty: val } : item));
+                      }}
+                      className="w-14 input text-xs py-1"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Bundle Label (e.g. 1 Item + Free Delivery)"
+                      value={b.label}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, label: val } : item));
+                      }}
+                      className="flex-1 input text-xs py-1"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Price"
+                      value={b.price}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, price: val } : item));
+                      }}
+                      className="w-24 input text-xs py-1"
+                    />
+                    {bundles.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBundleRow(idx)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove bundle tier"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Dynamic Custom Product Attributes / Fields */}
+              <div className="space-y-2 border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5" /> Custom Attributes / Specifications
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addCustomFieldRow}
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    + Add Field
+                  </button>
+                </div>
+
+                {customFields.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 italic">No custom fields added yet. Click "+ Add Field" to specify attributes like Material, Warranty, Color, etc.</p>
+                ) : (
+                  customFields.map((field, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                      <input
+                        type="text"
+                        placeholder="Field Name (e.g. Material)"
+                        value={field.key}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, key: val } : item));
+                        }}
+                        className="w-1/3 input text-xs py-1 font-semibold"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Field Value (e.g. Stainless Steel)"
+                        value={field.value}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, value: val } : item));
+                        }}
+                        className="flex-1 input text-xs py-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCustomFieldRow(idx)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove custom field"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="flex gap-2 pt-3">

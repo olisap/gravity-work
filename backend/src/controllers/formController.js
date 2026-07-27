@@ -133,20 +133,20 @@ function prepareSupabasePayload(body, existingFieldsConfig = {}) {
 }
 
 export async function getForms(req, res) {
-  const { store_id } = req.query;
+  const effectiveStoreId = req.user?.store_id || req.query.store_id;
   if (supabase) {
     let query = supabase.from('forms').select('*');
-    if (store_id) query = query.eq('store_id', store_id);
+    if (effectiveStoreId) query = query.eq('store_id', effectiveStoreId);
     const { data, error } = await query;
     if (!error && data) {
       if (data.length > 0) return res.json(data.map(formatForm));
-      if (store_id) return res.json([]);
+      if (effectiveStoreId) return res.json([]);
     }
   }
 
   let list = [...mockForms];
-  if (store_id && store_id !== '00000000-0000-0000-0000-000000000001' && !store_id.startsWith('a100') && !store_id.startsWith('u100')) {
-    list = list.filter(f => f.store_id === store_id);
+  if (effectiveStoreId && effectiveStoreId !== '00000000-0000-0000-0000-000000000001' && !effectiveStoreId.startsWith('a100') && !effectiveStoreId.startsWith('u100')) {
+    list = list.filter(f => f.store_id === effectiveStoreId);
   }
   res.json(list.map(formatForm));
 }

@@ -1,7 +1,8 @@
 import { supabase } from '../config/supabase.js';
 
 export async function getDashboardStats(req, res) {
-  const { country, state, period, store_id } = req.query;
+  const { country, state, period } = req.query;
+  const effectiveStoreId = req.user?.store_id || req.query.store_id;
 
   let orders = [];
 
@@ -9,8 +10,8 @@ export async function getDashboardStats(req, res) {
   if (supabase) {
     try {
       let query = supabase.from('orders').select('*');
-      if (store_id) {
-        query = query.eq('store_id', store_id);
+      if (effectiveStoreId) {
+        query = query.eq('store_id', effectiveStoreId);
       }
       if (country && country !== 'All') {
         query = query.eq('country', country);
@@ -28,8 +29,7 @@ export async function getDashboardStats(req, res) {
   }
 
   // 2. If no Supabase data or mock mode, calculate dynamically based on store_id
-  // Demo store ID: '00000000-0000-0000-0000-000000000001'
-  if (orders.length === 0 && (!store_id || store_id === '00000000-0000-0000-0000-000000000001' || store_id.startsWith('a100') || store_id.startsWith('u100'))) {
+  if (orders.length === 0 && (!effectiveStoreId || effectiveStoreId === '00000000-0000-0000-0000-000000000001' || effectiveStoreId.startsWith('a100') || effectiveStoreId.startsWith('u100'))) {
     // Default demo store orders
     orders = [
       { id: '1', total_amount: 20500, status: 'Delivered', country: 'Nigeria', state: 'Lagos' },

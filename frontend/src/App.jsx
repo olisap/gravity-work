@@ -5,6 +5,9 @@ import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import OrdersPipeline from './pages/OrdersPipeline';
 import ProductsInventory from './pages/ProductsInventory';
+import StockInventory from './pages/StockInventory';
+import SuppliersManager from './pages/SuppliersManager';
+import DeliveryAgentsManager from './pages/DeliveryAgentsManager';
 import FormBuilder from './pages/FormBuilder';
 import DraftReminders from './pages/DraftReminders';
 import NotificationCenter from './pages/NotificationCenter';
@@ -332,7 +335,26 @@ function CrmAppContent() {
             <MarketingHub type="email" selectedCountry={selectedCountry} />
           )}
 
-          {['users', 'webhooks', 'suppliers', 'agents', 'payment-gateways'].includes(activeTab) && (
+          {activeTab === 'products-inventory' && (
+            <StockInventory
+              products={products}
+              selectedCountry={selectedCountry}
+              onProductUpdated={handleProductUpdated}
+            />
+          )}
+
+          {activeTab === 'suppliers' && (
+            <SuppliersManager />
+          )}
+
+          {activeTab === 'agents' && (
+            <DeliveryAgentsManager
+              products={products}
+              selectedCountry={selectedCountry}
+            />
+          )}
+
+          {['users', 'webhooks', 'payment-gateways'].includes(activeTab) && (
             <GenericModuleView moduleKey={activeTab} />
           )}
         </main>

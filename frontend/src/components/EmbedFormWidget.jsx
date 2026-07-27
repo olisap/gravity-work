@@ -128,6 +128,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         is_final_submit: isFinal,
         delivery_fee: deliveryFee,
         notification_email: formConfig?.notification_email || 'olisapaul1@gmail.com',
+        thank_you_url: formConfig?.thank_you_url || '',
         store_id: formConfig?.store_id || null,
         items: [
           {
@@ -160,24 +161,60 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         setSubmittedOrder(data);
         if (onOrderSubmitted) onOrderSubmitted(data);
 
-        // Redirect to Thank You Page on the same tab if configured
-        const redirectUrl = formConfig?.thank_you_url || data?.thank_you_url;
-        if (redirectUrl && redirectUrl.trim() !== '' && redirectUrl !== 'http://yourthankyoupage.com') {
-          let targetUrl = redirectUrl.trim();
-          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-            targetUrl = 'https://' + targetUrl;
+        // Normalize and redirect to Thank You Page on the SAME TAB
+        const rawRedirectUrl = formConfig?.thank_you_url || data?.thank_you_url;
+        const normalizeRedirectUrl = (url) => {
+          if (!url || typeof url !== 'string') return null;
+          let trimmed = url.trim();
+          if (!trimmed) return null;
+          const lower = trimmed.toLowerCase();
+          if (lower === 'http://yourthankyoupage.com' || lower === 'https://yourthankyoupage.com' || lower === 'http://yourthankyoupage.com/' || lower === 'https://yourthankyoupage.com/') {
+            return null;
           }
+          if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('//')) {
+            return trimmed;
+          }
+          if (trimmed.startsWith('/')) {
+            return trimmed;
+          }
+          if (trimmed.includes('.')) {
+            return 'https://' + trimmed;
+          }
+          return '/' + trimmed;
+        };
+
+        const targetUrl = normalizeRedirectUrl(rawRedirectUrl);
+
+        if (targetUrl) {
           setTimeout(() => {
             try {
-              if (window.top) {
-                window.top.location.href = targetUrl;
-              } else {
+              // 1. Send postMessage to parent frame if host page is listening
+              if (window.parent && window.parent !== window) {
+                try {
+                  window.parent.postMessage({ type: 'redirect-thank-you', url: targetUrl }, '*');
+                } catch (pe) {}
+              }
+              // 2. Redirect top window on the SAME TAB
+              const win = window.open(targetUrl, '_top');
+              if (!win) {
+                if (window.top) {
+                  window.top.location.href = targetUrl;
+                } else {
+                  window.location.href = targetUrl;
+                }
+              }
+            } catch (e1) {
+              try {
+                if (window.top) {
+                  window.top.location.href = targetUrl;
+                } else {
+                  window.location.href = targetUrl;
+                }
+              } catch (e2) {
                 window.location.href = targetUrl;
               }
-            } catch (e) {
-              window.location.href = targetUrl;
             }
-          }, 300);
+          }, 150);
         }
       }
     } catch (err) {
