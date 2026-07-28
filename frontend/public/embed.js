@@ -32,10 +32,17 @@
   container.appendChild(iframe);
   currentScript.parentNode.insertBefore(container, currentScript);
 
-  // Listen for messages from iframe to resize
+  // Listen for messages from iframe to resize and redirect
   window.addEventListener('message', function(event) {
-    if (event.data && event.data.type === 'resize-iframe') {
-      iframe.style.height = event.data.height + 'px';
+    if (event.data) {
+      if (event.data.type === 'resize-iframe') {
+        iframe.style.height = event.data.height + 'px';
+      }
+      if (event.data.type === 'redirect-thank-you' || event.data.type === 'redirect') {
+        if (event.data.url) {
+          window.location.href = event.data.url;
+        }
+      }
     }
   });
 })();

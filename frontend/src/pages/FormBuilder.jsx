@@ -247,9 +247,16 @@ export default function FormBuilder({
   <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;"></iframe>
   <script>
     window.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'resize-iframe') {
-        var iframe = document.getElementById('${iframeId}');
-        if (iframe) iframe.style.height = e.data.height + 'px';
+      if (e.data) {
+        if (e.data.type === 'resize-iframe') {
+          var iframe = document.getElementById('${iframeId}');
+          if (iframe) iframe.style.height = e.data.height + 'px';
+        }
+        if (e.data.type === 'redirect-thank-you' || e.data.type === 'redirect') {
+          if (e.data.url) {
+            window.location.href = e.data.url;
+          }
+        }
       }
     });
   </script>
