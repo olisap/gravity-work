@@ -82,7 +82,7 @@ export default function FormBuilder({
   const [upsellTitle, setUpsellTitle] = useState('Special 1-Click Offer!');
   const [upsellDescription, setUpsellDescription] = useState('Add an extra item to your order for a special price!');
   const [upsellPrice, setUpsellPrice] = useState(7000);
-  const [thankYouUrl, setThankYouUrl] = useState('http://yourthankyoupage.com');
+  const [thankYouUrl, setThankYouUrl] = useState('');
 
   // Payment Toggles
   const [payCod, setPayCod] = useState(true);
@@ -811,6 +811,7 @@ export default function FormBuilder({
                 <label className="text-xs font-semibold text-slate-300 block mb-1">THANK YOU PAGE URL</label>
                 <input
                   type="text"
+                  placeholder="https://yourwebsite.com/thank-you"
                   value={thankYouUrl}
                   onChange={e => setThankYouUrl(e.target.value)}
                   className="input text-xs font-mono"

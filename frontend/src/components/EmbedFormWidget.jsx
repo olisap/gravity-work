@@ -161,16 +161,12 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         setSubmittedOrder(data);
         if (onOrderSubmitted) onOrderSubmitted(data);
 
-        // Normalize and redirect to Thank You Page on the SAME TAB
+        // Normalize and redirect to Thank You Page
         const rawRedirectUrl = formConfig?.thank_you_url || data?.thank_you_url;
         const normalizeRedirectUrl = (url) => {
           if (!url || typeof url !== 'string') return null;
           let trimmed = url.trim();
           if (!trimmed) return null;
-          const lower = trimmed.toLowerCase();
-          if (lower === 'http://yourthankyoupage.com' || lower === 'https://yourthankyoupage.com' || lower === 'http://yourthankyoupage.com/' || lower === 'https://yourthankyoupage.com/') {
-            return null;
-          }
           if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('//')) {
             return trimmed;
           }
@@ -186,35 +182,23 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         const targetUrl = normalizeRedirectUrl(rawRedirectUrl);
 
         if (targetUrl) {
-          setTimeout(() => {
-            try {
-              // 1. Send postMessage to parent frame if host page is listening
-              if (window.parent && window.parent !== window) {
-                try {
-                  window.parent.postMessage({ type: 'redirect-thank-you', url: targetUrl }, '*');
-                } catch (pe) {}
-              }
-              // 2. Redirect top window on the SAME TAB
-              const win = window.open(targetUrl, '_top');
-              if (!win) {
-                if (window.top) {
-                  window.top.location.href = targetUrl;
-                } else {
-                  window.location.href = targetUrl;
-                }
-              }
-            } catch (e1) {
+          try {
+            // Send postMessage to parent frame if host page is listening
+            if (window.parent && window.parent !== window) {
               try {
-                if (window.top) {
-                  window.top.location.href = targetUrl;
-                } else {
-                  window.location.href = targetUrl;
-                }
-              } catch (e2) {
-                window.location.href = targetUrl;
-              }
+                window.parent.postMessage({ type: 'redirect-thank-you', url: targetUrl }, '*');
+                window.parent.postMessage({ type: 'redirect', url: targetUrl }, '*');
+              } catch (pe) {}
             }
-          }, 150);
+            // Navigate top window on same tab
+            if (window.top && window.top.location) {
+              window.top.location.href = targetUrl;
+            } else {
+              window.location.href = targetUrl;
+            }
+          } catch (e1) {
+            window.location.href = targetUrl;
+          }
         }
       }
     } catch (err) {
