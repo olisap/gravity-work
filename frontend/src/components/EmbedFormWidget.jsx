@@ -158,7 +158,6 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
       if (data.resume_token) setResumeToken(data.resume_token);
 
       if (isFinal) {
-        setSubmittedOrder(data);
         if (onOrderSubmitted) onOrderSubmitted(data);
 
         // Normalize and redirect to Thank You Page
@@ -199,7 +198,11 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           } catch (e1) {
             window.location.href = targetUrl;
           }
+          return;
         }
+
+        // Fallback: show inline success card ONLY if no Thank You URL is provided
+        setSubmittedOrder(data);
       }
     } catch (err) {
       console.error('Failed to save form draft:', err);

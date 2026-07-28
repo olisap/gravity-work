@@ -9,7 +9,7 @@ function isValidUUID(str) {
 }
 
 function prepareOrderPayloadForSupabase(order) {
-  const { items, ...rest } = order;
+  const { items, thank_you_url, notification_email, ...rest } = order;
   return {
     ...rest,
     id: isValidUUID(rest.id) ? rest.id : crypto.randomUUID(),
