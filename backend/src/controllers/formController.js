@@ -18,6 +18,7 @@ let mockForms = [
     payment_flutterwave_enabled: false,
     payment_bank_enabled: false,
     notification_email: 'merchant@gmail.com',
+    thank_you_url: '',
     upsell_enabled: true,
     upsell_product_id: '22000000-0000-0000-0000-000000000004',
     upsell_title: 'Special 1-Click Offer!',
@@ -42,6 +43,7 @@ let mockForms = [
     payment_flutterwave_enabled: false,
     payment_bank_enabled: false,
     notification_email: 'merchant@gmail.com',
+    thank_you_url: '',
     upsell_enabled: true,
     upsell_product_id: '22000000-0000-0000-0000-000000000004',
     upsell_title: 'Special 1-Click Offer!',
@@ -66,6 +68,7 @@ let mockForms = [
     payment_flutterwave_enabled: false,
     payment_bank_enabled: false,
     notification_email: 'merchant@gmail.com',
+    thank_you_url: '',
     upsell_enabled: true,
     upsell_product_id: '22000000-0000-0000-0000-000000000004',
     upsell_title: 'Special 1-Click Offer!',
@@ -103,7 +106,7 @@ function prepareSupabasePayload(body, existingFieldsConfig = {}) {
     'button_text_color', 'form_bg_color', 'show_country_code',
     'payment_cod_enabled', 'payment_paystack_enabled',
     'payment_flutterwave_enabled', 'payment_bank_enabled',
-    'notification_email', 'is_active', 'created_at', 'updated_at'
+    'notification_email', 'thank_you_url', 'is_active', 'created_at', 'updated_at'
   ];
 
   const payload = {};

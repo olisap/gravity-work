@@ -161,6 +161,8 @@ ALTER TABLE forms ADD COLUMN IF NOT EXISTS payment_paystack_enabled BOOLEAN DEFA
 ALTER TABLE forms ADD COLUMN IF NOT EXISTS payment_flutterwave_enabled BOOLEAN DEFAULT FALSE;
 ALTER TABLE forms ADD COLUMN IF NOT EXISTS payment_bank_enabled BOOLEAN DEFAULT FALSE;
 ALTER TABLE forms ADD COLUMN IF NOT EXISTS notification_email VARCHAR(255) DEFAULT 'merchant@gmail.com';
+ALTER TABLE forms ADD COLUMN IF NOT EXISTS thank_you_url TEXT;
+ALTER TABLE forms ADD COLUMN IF NOT EXISTS fields_config JSONB DEFAULT '{}'::jsonb;
 
 -- Orders
 CREATE TABLE IF NOT EXISTS orders (

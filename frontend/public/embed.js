@@ -34,14 +34,17 @@
 
   // Listen for messages from iframe to resize and redirect
   window.addEventListener('message', function(event) {
-    if (event.data) {
-      if (event.data.type === 'resize-iframe') {
-        iframe.style.height = event.data.height + 'px';
-      }
-      if (event.data.type === 'redirect-thank-you' || event.data.type === 'redirect') {
-        if (event.data.url) {
-          window.location.href = event.data.url;
-        }
+    if (!event.data) return;
+    let data = event.data;
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch(e) {}
+    }
+    if (data.type === 'resize-iframe') {
+      if (data.height) iframe.style.height = data.height + 'px';
+    }
+    if (data.type === 'redirect-thank-you' || data.type === 'redirect') {
+      if (data.url) {
+        window.location.href = data.url;
       }
     }
   });

@@ -13,6 +13,7 @@ export default function CheckoutPage() {
       try {
         const params = new URLSearchParams(window.location.search);
         const embedKey = params.get('form') || 'EMBED-POTKNOBORD-5463';
+        const queryThankYouUrl = params.get('thank_you_url') || params.get('redirect_url') || '';
 
         // Fetch form configuration
         let formData = null;
@@ -40,11 +41,14 @@ export default function CheckoutPage() {
             form_bg_color: '#0f172a',
             show_country_code: 'Yes',
             payment_cod_enabled: true,
+            thank_you_url: queryThankYouUrl || '',
             upsell_enabled: true,
             upsell_title: 'Special 1-Click Offer!',
             upsell_description: 'Add an extra product to your order for a special price!',
             upsell_price: 7000
           };
+        } else if (queryThankYouUrl) {
+          formData.thank_you_url = queryThankYouUrl;
         }
         setForm(formData);
 

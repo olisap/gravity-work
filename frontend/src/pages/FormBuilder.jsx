@@ -189,6 +189,10 @@ export default function FormBuilder({
           throw new Error(errData.error || `Server error ${res.status}`);
         }
         const updated = await res.json();
+        if (thankYouUrl) {
+          localStorage.setItem('form_thank_you_' + editingFormId, thankYouUrl);
+          localStorage.setItem('last_thank_you_url', thankYouUrl);
+        }
         if (onFormUpdated) onFormUpdated(updated);
         alert('✅ Form updated successfully!');
       } catch (err) {
@@ -208,6 +212,10 @@ export default function FormBuilder({
           throw new Error(errData.error || `Server error ${res.status}`);
         }
         const created = await res.json();
+        if (thankYouUrl) {
+          localStorage.setItem('form_thank_you_' + (created.id || created.embed_key), thankYouUrl);
+          localStorage.setItem('last_thank_you_url', thankYouUrl);
+        }
         if (onFormCreated) onFormCreated(created);
         alert(`✅ Form "${created.name || 'Order Form'}" created!\nEmbed Key: ${created.embed_key}`);
       } catch (err) {
@@ -241,21 +249,25 @@ export default function FormBuilder({
     }
   };
 
+  const embedThankYouQuery = selectedFormForEmbed.thank_you_url ? `&thank_you_url=${encodeURIComponent(selectedFormForEmbed.thank_you_url)}` : '';
   const scriptCode = `<script src="https://olinwa.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
   const iframeId = `olinwa-iframe-${selectedFormForEmbed.embed_key}`;
   const iframeCode = `<div class="olinwa-iframe-wrapper">
-  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;"></iframe>
+  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}${embedThankYouQuery}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;"></iframe>
   <script>
     window.addEventListener('message', function(e) {
-      if (e.data) {
-        if (e.data.type === 'resize-iframe') {
-          var iframe = document.getElementById('${iframeId}');
-          if (iframe) iframe.style.height = e.data.height + 'px';
-        }
-        if (e.data.type === 'redirect-thank-you' || e.data.type === 'redirect') {
-          if (e.data.url) {
-            window.location.href = e.data.url;
-          }
+      if (!e.data) return;
+      var data = e.data;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch(err) {}
+      }
+      if (data.type === 'resize-iframe') {
+        var iframe = document.getElementById('${iframeId}');
+        if (iframe && data.height) iframe.style.height = data.height + 'px';
+      }
+      if (data.type === 'redirect-thank-you' || data.type === 'redirect') {
+        if (data.url) {
+          window.location.href = data.url;
         }
       }
     });

@@ -161,44 +161,80 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         if (onOrderSubmitted) onOrderSubmitted(data);
 
         // Normalize and redirect to Thank You Page
-        const rawRedirectUrl = formConfig?.thank_you_url || data?.thank_you_url;
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const storedThankYou = typeof localStorage !== 'undefined' ? (localStorage.getItem('form_thank_you_' + formConfig?.id) || localStorage.getItem('last_thank_you_url')) : null;
+        const rawRedirectUrl = formConfig?.thank_you_url || data?.thank_you_url || (urlParams ? (urlParams.get('thank_you_url') || urlParams.get('redirect_url')) : null) || storedThankYou;
+        
         const normalizeRedirectUrl = (url) => {
           if (!url || typeof url !== 'string') return null;
           let trimmed = url.trim();
           if (!trimmed) return null;
+
           if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('//')) {
             return trimmed;
           }
+          if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+/.test(trimmed)) {
+            return 'https://' + trimmed;
+          }
+          try {
+            if (document.referrer) {
+              return new URL(trimmed, document.referrer).href;
+            }
+          } catch (e) {}
+
           if (trimmed.startsWith('/')) {
             return trimmed;
-          }
-          if (trimmed.includes('.')) {
-            return 'https://' + trimmed;
           }
           return '/' + trimmed;
         };
 
         const targetUrl = normalizeRedirectUrl(rawRedirectUrl);
 
+        console.log('🔗 Thank-You Page Redirect Check:', { rawRedirectUrl, targetUrl });
+
         if (targetUrl) {
-          try {
-            // Send postMessage to parent frame if host page is listening
-            if (window.parent && window.parent !== window) {
-              try {
-                window.parent.postMessage({ type: 'redirect-thank-you', url: targetUrl }, '*');
-                window.parent.postMessage({ type: 'redirect', url: targetUrl }, '*');
-              } catch (pe) {}
-            }
-            // Navigate top window on same tab
-            if (window.top && window.top.location) {
-              window.top.location.href = targetUrl;
-            } else {
-              window.location.href = targetUrl;
-            }
-          } catch (e1) {
-            window.location.href = targetUrl;
+          // Send postMessage to parent window listeners
+          if (window.parent && window.parent !== window) {
+            try {
+              window.parent.postMessage({ type: 'redirect-thank-you', url: targetUrl }, '*');
+              window.parent.postMessage({ type: 'redirect', url: targetUrl }, '*');
+            } catch (pe) {}
           }
+
+          // Direct location assignment (bypasses browser async popup blocker restrictions)
+          try {
+            if (window.top && window.self !== window.top) {
+              window.top.location.href = targetUrl;
+            }
+          } catch (topErr) {
+            try {
+              if (window.parent && window.parent !== window) {
+                window.parent.location.href = targetUrl;
+              }
+            } catch (parentErr) {}
+          }
+
+          // Show high-converting success state with direct redirect button (guarantees top navigation even if sandboxed)
+          setSubmittedOrder({
+            ...(data || {}),
+            order_number: data?.order_number || 'OLI-CONFIRMED',
+            customer_name: customerName,
+            customer_phone: customerPhone,
+            delivery_address: deliveryAddress,
+            state: selectedState,
+            total_amount: totalAmount,
+            redirect_target_url: targetUrl
+          });
+
+          setTimeout(() => {
+            try {
+              window.location.href = targetUrl;
+            } catch (locErr) {}
+          }, 1200);
+
           return;
+        } else {
+          console.warn('⚠️ No Thank You Page URL configured for this form. Displaying inline order confirmation.');
         }
 
         // Fallback: show inline success card ONLY if no Thank You URL is provided
@@ -206,6 +242,18 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
       }
     } catch (err) {
       console.error('Failed to save form draft:', err);
+      // Even if API network call fails on final submit, perform redirect if URL exists
+      if (isFinal) {
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const storedThankYou = typeof localStorage !== 'undefined' ? (localStorage.getItem('form_thank_you_' + formConfig?.id) || localStorage.getItem('last_thank_you_url')) : null;
+        const rawUrl = formConfig?.thank_you_url || (urlParams ? (urlParams.get('thank_you_url') || urlParams.get('redirect_url')) : null) || storedThankYou;
+        if (rawUrl) {
+          let trimmed = rawUrl.trim();
+          if (!trimmed.startsWith('http') && !trimmed.startsWith('/')) trimmed = 'https://' + trimmed;
+          try { if (window.top) window.top.location.href = trimmed; } catch(e) {}
+          window.location.href = trimmed;
+        }
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -216,18 +264,36 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   };
 
   if (submittedOrder) {
+    const targetRedirect = submittedOrder.redirect_target_url;
     return (
-      <div className={lightMode ? "bg-white p-6 text-center max-w-md mx-auto my-4 border border-slate-200 rounded-2xl shadow-md text-slate-800" : "glass-panel p-6 text-center max-w-md mx-auto my-4 border-emerald-500/30 rounded-2xl"}>
+      <div className={lightMode ? "bg-white p-6 text-center max-w-md mx-auto my-4 border border-slate-200 rounded-2xl shadow-md text-slate-800" : "glass-panel p-6 text-center max-w-md mx-auto my-4 border-emerald-500/30 rounded-2xl text-slate-100"}>
         <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto mb-3">
-          <CheckCircle className="w-6 h-6" />
+          <CheckCircle className="w-6 h-6 animate-bounce" />
         </div>
         <h3 className={lightMode ? "font-bold text-slate-800 text-lg" : "font-bold text-slate-100 text-lg"}>Order Placed Successfully!</h3>
         <p className="text-xs text-slate-400 mt-1">Order Ref: <span className="font-mono text-emerald-600 font-bold">{submittedOrder.order_number}</span></p>
-        <div className={lightMode ? "my-4 p-3.5 bg-slate-50 rounded-xl text-left text-xs space-y-1.5 border border-slate-200 text-slate-700" : "my-4 p-3.5 bg-slate-900/60 rounded-xl text-left text-xs space-y-1.5 border border-slate-800"}>
-          <p className={lightMode ? "text-slate-600" : "text-slate-300"}><strong>Customer:</strong> {submittedOrder.customer_name} ({submittedOrder.customer_phone})</p>
-          <p className={lightMode ? "text-slate-600" : "text-slate-300"}><strong>Delivery Address:</strong> {submittedOrder.delivery_address}, {submittedOrder.state}</p>
-          <p className="text-emerald-600 font-bold mt-2 text-sm">Total Payable on Delivery (COD): {currentCountryObj.currency}{submittedOrder.total_amount?.toLocaleString()}</p>
-        </div>
+        
+        {targetRedirect ? (
+          <div className="my-5 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-3">
+            <p className={lightMode ? "text-xs text-slate-700 font-medium" : "text-xs text-slate-200 font-medium"}>
+              Redirecting to Thank You page...
+            </p>
+            <a
+              href={targetRedirect}
+              target="_top"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all"
+            >
+              Click Here to View Thank You Page <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
+        ) : (
+          <div className={lightMode ? "my-4 p-3.5 bg-slate-50 rounded-xl text-left text-xs space-y-1.5 border border-slate-200 text-slate-700" : "my-4 p-3.5 bg-slate-900/60 rounded-xl text-left text-xs space-y-1.5 border border-slate-800"}>
+            <p className={lightMode ? "text-slate-600" : "text-slate-300"}><strong>Customer:</strong> {submittedOrder.customer_name} ({submittedOrder.customer_phone})</p>
+            <p className={lightMode ? "text-slate-600" : "text-slate-300"}><strong>Delivery Address:</strong> {submittedOrder.delivery_address}, {submittedOrder.state}</p>
+            <p className="text-emerald-600 font-bold mt-2 text-sm">Total Payable on Delivery (COD): {currentCountryObj.currency}{submittedOrder.total_amount?.toLocaleString()}</p>
+          </div>
+        )}
         <p className="text-[11px] text-slate-500 leading-relaxed">Our representative will call your phone shortly to confirm delivery dispatch. Thank you!</p>
       </div>
     );
