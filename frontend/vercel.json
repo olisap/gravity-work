@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://gravity-work.onrender.com/api/$1"
+      "destination": "/api/$1"
     },
     {
       "source": "/(.*)",
