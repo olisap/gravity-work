@@ -85,7 +85,14 @@ app.get('/api/upsell/trigger/:productId', getUpsellOfferForProduct);
 // Start background draft abandonment scanner
 AbandonmentWorker.startWorker(60000);
 
-if (!process.env.VERCEL) {
+import { fileURLToPath } from 'url';
+
+const isMainModule = process.argv[1] && (
+  process.argv[1].endsWith('server.js') || 
+  fileURLToPath(import.meta.url) === process.argv[1]
+);
+
+if (isMainModule) {
   app.listen(PORT, () => {
     console.log(`🚀 Nigeria E-Commerce CRM Backend running on port ${PORT}`);
   });
