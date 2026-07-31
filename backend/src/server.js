@@ -82,8 +82,10 @@ app.get('/api/dashboard', requireAuth, requireRole(['owner', 'admin', 'confirmat
 app.get('/api/upsell', requireAuth, getUpsellOffers);
 app.get('/api/upsell/trigger/:productId', getUpsellOfferForProduct);
 
-// Start background draft abandonment scanner
-AbandonmentWorker.startWorker(60000);
+// Start background draft abandonment scanner (only in dedicated server mode)
+if (!process.env.VERCEL) {
+  AbandonmentWorker.startWorker(60000);
+}
 
 import { fileURLToPath } from 'url';
 
