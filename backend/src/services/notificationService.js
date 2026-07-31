@@ -197,6 +197,7 @@ export class NotificationService {
         } else {
           console.error(`❌ Brevo API Email Error for ${email}:`, resData.message || resData);
           await logNotification('Brevo API', 'failed', resData);
+          return { success: false, provider: 'Brevo API', error: resData.message || 'Brevo API Error' };
         }
       } catch (err) {
         console.error(`Failed to send Email via Brevo API to ${email}:`, err.message);
