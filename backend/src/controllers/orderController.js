@@ -8,6 +8,61 @@ function isValidUUID(str) {
   return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str);
 }
 
+/**
+ * Resolve which email address should receive the "New Order Alert" for a given store.
+ * Priority:
+ *   1. Explicit notification_email passed in the request body (e.g. set on the form itself)
+ *   2. The form's saved notification_email in Supabase (per-store setting)
+ *   3. The store owner's account email (users table, role = 'owner', matching store_id)
+ *   4. process.env.SENDER_EMAIL (last-resort fallback for single-tenant/dev setups)
+ * Returns null if nothing usable is found (caller should skip the merchant email rather than
+ * silently sending it to a hardcoded stranger's inbox).
+ */
+async function resolveMerchantNotificationEmail({ explicitEmail, storeId }) {
+  const isPlaceholder = (val) => !val || !val.trim() || val.trim().toLowerCase() === 'merchant@gmail.com';
+
+  if (!isPlaceholder(explicitEmail)) {
+    return explicitEmail.trim();
+  }
+
+  if (storeId && supabase) {
+    try {
+      const { data: storeForm } = await supabase
+        .from('forms')
+        .select('notification_email')
+        .eq('store_id', storeId)
+        .limit(1)
+        .maybeSingle();
+      if (storeForm && !isPlaceholder(storeForm.notification_email)) {
+        return storeForm.notification_email.trim();
+      }
+    } catch (e) {
+      console.error('resolveMerchantNotificationEmail: failed to read forms.notification_email', e);
+    }
+
+    try {
+      const { data: owner } = await supabase
+        .from('users')
+        .select('email')
+        .eq('store_id', storeId)
+        .eq('role', 'owner')
+        .limit(1)
+        .maybeSingle();
+      if (owner && !isPlaceholder(owner.email)) {
+        return owner.email.trim();
+      }
+    } catch (e) {
+      console.error('resolveMerchantNotificationEmail: failed to read store owner email', e);
+    }
+  }
+
+  if (!isPlaceholder(process.env.SENDER_EMAIL)) {
+    return process.env.SENDER_EMAIL.trim();
+  }
+
+  return null;
+}
+
 function prepareOrderPayloadForSupabase(order) {
   const { items, thank_you_url, notification_email, ...rest } = order;
   return {
@@ -56,7 +111,7 @@ export async function getOrders(req, res) {
     if (status) query = query.eq('status', status);
     if (state) query = query.eq('state', state);
     if (country) query = query.eq('country', country);
-    
+
     const { data, error } = await query;
     if (!error && data) {
       const formatted = data.map(formatOrderFromSupabase);
@@ -75,9 +130,9 @@ export async function getOrders(req, res) {
   if (country) filtered = filtered.filter(o => o.country === country);
   if (search) {
     const s = search.toLowerCase();
-    filtered = filtered.filter(o => 
-      o.customer_name?.toLowerCase().includes(s) || 
-      o.customer_phone?.includes(s) || 
+    filtered = filtered.filter(o =>
+      o.customer_name?.toLowerCase().includes(s) ||
+      o.customer_phone?.includes(s) ||
       o.order_number?.toLowerCase().includes(s)
     );
   }
@@ -111,10 +166,10 @@ export async function createOrUpdateDraftOrder(req, res) {
   let isDuplicate = false;
   let duplicateReason = '';
   if (normalizedPhone) {
-    const recentDuplicate = mockOrders.find(o => 
-      o.customer_phone === normalizedPhone && 
-      o.id !== id && 
-      o.status !== 'Cancelled' && 
+    const recentDuplicate = mockOrders.find(o =>
+      o.customer_phone === normalizedPhone &&
+      o.id !== id &&
+      o.status !== 'Cancelled' &&
       (Date.now() - new Date(o.created_at).getTime()) < 3600000
     );
     if (recentDuplicate) {
@@ -209,25 +264,23 @@ export async function createOrUpdateDraftOrder(req, res) {
 
   // Trigger Notifications on Final Order Submit
   if (is_final_submit) {
-    let targetNotificationEmail = notification_email;
-    if (!targetNotificationEmail && store_id && supabase) {
-      try {
-        const { data: storeForm } = await supabase.from('forms').select('notification_email').eq('store_id', store_id).limit(1).maybeSingle();
-        if (storeForm && storeForm.notification_email) {
-          targetNotificationEmail = storeForm.notification_email;
-        }
-      } catch (e) {
-        // ignore error
-      }
-    }
-    if (!targetNotificationEmail || targetNotificationEmail === 'merchant@gmail.com') {
-      targetNotificationEmail = process.env.SENDER_EMAIL || 'olisapaul1@gmail.com';
-    }
-
-    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Merchant Target: ${targetNotificationEmail}, Customer: ${finalOrder.customer_email || 'None'})`);
-    NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail).catch(err => {
-      console.error('Failed to send order finalized notifications:', err);
+    const targetNotificationEmail = await resolveMerchantNotificationEmail({
+      explicitEmail: notification_email,
+      storeId: store_id
     });
+
+    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Merchant Target: ${targetNotificationEmail || 'NONE - skipped'}, Customer: ${finalOrder.customer_email || 'None'})`);
+    if (targetNotificationEmail) {
+      NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail).catch(err => {
+        console.error('Failed to send order finalized notifications:', err);
+      });
+    } else {
+      console.warn(`⚠️ No merchant notification email resolved for store ${store_id}. Skipping merchant alert (customer receipt, if applicable, will still send).`);
+      // Still send the customer receipt even if we don't know who the merchant is.
+      NotificationService.sendOrderFinalizedNotifications(finalOrder, null).catch(err => {
+        console.error('Failed to send order finalized notifications:', err);
+      });
+    }
   }
 
   res.status(orderIndex >= 0 ? 200 : 201).json(finalOrder);
@@ -265,7 +318,7 @@ export async function updateOrderStatus(req, res) {
         const idx = mockOrders.findIndex(o => o.id === id);
         if (idx >= 0) mockOrders[idx] = { ...mockOrders[idx], ...formatted };
         else mockOrders.unshift(formatted);
-        
+
         console.log(`✅ Order #${formatted.order_number} status updated to "${status}" in Supabase (Scheduled Date: ${scheduled_delivery_date || 'N/A'})`);
         return res.json(formatted);
       }
@@ -280,7 +333,7 @@ export async function updateOrderStatus(req, res) {
   }
 
   const previousStatus = order.status;
-  
+
   // Enforce legal status transitions
   if (previousStatus === 'Delivered' && status !== 'Delivered') {
     return res.status(400).json({ error: 'Delivered orders cannot change status directly. Process a Return instead.' });
@@ -296,7 +349,7 @@ export async function updateOrderStatus(req, res) {
   if (status === 'Delivered') {
     order.delivered_at = new Date().toISOString();
     order.payment_status = 'Paid'; // COD payment collected upon delivery
-    
+
     // Automatically trigger delivery receipt notification
     NotificationService.send({
       templateName: 'order_delivered_receipt',
