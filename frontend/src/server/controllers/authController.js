@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { supabase } from '../config/supabase.js';
+import { NotificationService } from '../services/notificationService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'gravity_crm_jwt_secret_key_2026';
 
@@ -162,6 +163,9 @@ export async function signup(req, res) {
         const createdUser = userData[0];
         mockUsers.unshift(createdUser);
         console.log(`✅ New Merchant "${store_name}" (${cleanEmail}) saved to Supabase!`);
+        NotificationService.sendWelcomeEmail(createdUser).catch(err => {
+          console.error('Failed to send welcome email:', err);
+        });
         return res.status(201).json({
           token: `jwt_token_${createdUser.id}`,
           user: createdUser
@@ -190,6 +194,9 @@ export async function signup(req, res) {
   };
 
   mockUsers.unshift(newUser);
+  NotificationService.sendWelcomeEmail(newUser).catch(err => {
+    console.error('Failed to send welcome email:', err);
+  });
   res.status(201).json({
     token: `jwt_token_${newUser.id}`,
     user: newUser
@@ -218,7 +225,7 @@ export async function getMe(req, res) {
     try {
       const { data } = await supabase.from('users').select('*').eq('id', userId).single();
       if (data) return res.json({ user: data });
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const found = mockUsers.find(u => u.id === userId) || mockUsers[0];
@@ -234,7 +241,7 @@ export async function getTeamMembers(req, res) {
       if (store_id) query = query.eq('store_id', store_id);
       const { data, error } = await query;
       if (!error && data) return res.json(data);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   let filtered = [...mockUsers];

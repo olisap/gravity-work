@@ -95,8 +95,13 @@ export class NotificationService {
 
     const brevoKey = process.env.BREVO_API_KEY;
     const resendKey = process.env.RESEND_API_KEY;
-    const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER || 'olisapaul12@gmail.com';
-    const senderName = process.env.SENDER_NAME || 'E-Commerce Order System';
+    const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER;
+    const senderName = process.env.SENDER_NAME || 'Order Notifications';
+
+    if (!senderEmail) {
+      console.error('❌ No SENDER_EMAIL configured. Set SENDER_EMAIL (and SENDER_NAME) in your environment before sending live emails.');
+      return { success: false, provider: 'none', error: 'SENDER_EMAIL not configured' };
+    }
 
     const defaultHtml = `<div style="font-family:Arial,sans-serif;padding:20px;color:#1e293b;"><h2 style="color:#4f46e5;">Order Update</h2><p>${text}</p></div>`;
     const finalHtml = htmlBody || defaultHtml;
@@ -237,12 +242,52 @@ export class NotificationService {
   }
 
   /**
+   * Send a welcome email to a newly registered store owner.
+   */
+  static async sendWelcomeEmail(user) {
+    if (!user || !user.email) return;
+
+    const firstName = (user.full_name || 'there').split(' ')[0];
+    const storeName = user.store_name || 'your store';
+    const appUrl = process.env.APP_URL || 'https://app.olistores.com.ng';
+
+    const subject = `Welcome to ${process.env.SENDER_APP_NAME || 'the CRM'}, ${firstName}! 🎉`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
+        <div style="background-color: #4f46e5; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #ffffff; margin: 0; font-size: 20px;">Welcome aboard, ${firstName}!</h2>
+        </div>
+        <p style="font-size: 14px; color: #334155; line-height: 1.6;">Your store <strong>${storeName}</strong> has been created successfully. You're all set to start taking orders.</p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+          <p style="font-size: 13px; color: #475569; margin: 0 0 8px 0;"><strong>Next steps:</strong></p>
+          <ul style="font-size: 13px; color: #475569; margin: 0; padding-left: 18px; line-height: 1.8;">
+            <li>Add your first product</li>
+            <li>Set up your order form and embed it on your site</li>
+            <li>Confirm your notification email so you never miss an order</li>
+          </ul>
+        </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${appUrl}" style="background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: bold;">Go to Dashboard</a>
+        </div>
+        <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: 24px;">If you didn't create this account, you can safely ignore this email.</p>
+      </div>
+    `;
+
+    return await this.sendEmail(
+      user.email,
+      subject,
+      `Welcome ${firstName}! Your store "${storeName}" has been created successfully.`,
+      html
+    );
+  }
+
+  /**
    * Send all three notifications when an order is completed/finalized:
    * 1. Merchant Notification Email (form notification_email / store owner)
    * 2. Customer Receipt Email (if customer_email provided)
    * 3. Customer Order Confirmation SMS (to customer_phone)
    */
-  static async sendOrderFinalizedNotifications(order, merchantEmail = 'olisapaul1@gmail.com') {
+  static async sendOrderFinalizedNotifications(order, merchantEmail = null) {
     if (!order) return;
 
     const mainProductName = (order.items && order.items[0]) ? order.items[0].name : 'Product Order';
@@ -250,7 +295,7 @@ export class NotificationService {
     const itemsList = order.items || [];
 
     // ── 1. Merchant Order Alert Email ──
-    const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || 'olisapaul1@gmail.com';
+    const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || null;
     const merchantSubject = `🛒 NEW ORDER ALERT: #${order.order_number} - ${order.customer_name}`;
     const merchantHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
@@ -296,12 +341,16 @@ export class NotificationService {
       </div>
     `;
 
-    await this.sendEmail(
-      targetMerchantEmail,
-      merchantSubject,
-      `New order #${order.order_number} from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
-      merchantHtml
-    );
+    if (targetMerchantEmail) {
+      await this.sendEmail(
+        targetMerchantEmail,
+        merchantSubject,
+        `New order #${order.order_number} from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
+        merchantHtml
+      );
+    } else {
+      console.warn(`⚠️ Skipped merchant order alert for #${order.order_number}: no merchant notification email available.`);
+    }
 
     // ── 2. Customer Receipt Email ──
     if (order.customer_email && order.customer_email.trim().includes('@')) {
