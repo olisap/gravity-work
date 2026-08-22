@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function StockInventory({ products = [], selectedCountry, onProductUpdated }) {
   const { user } = useAuth();
@@ -28,7 +29,7 @@ export default function StockInventory({ products = [], selectedCountry, onProdu
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
       const storeId = user?.store_id || user?.id || '';
-      const res = await fetch(`/api/stock-movements?store_id=${storeId}`, { headers: authHeaders });
+      const res = await fetch(apiUrl(`/api/stock-movements?store_id=${storeId}`), { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setStockMovements(Array.isArray(data) ? data : []);
@@ -67,7 +68,7 @@ export default function StockInventory({ products = [], selectedCountry, onProdu
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch('/api/stock-movements', {
+      const res = await fetch(apiUrl('/api/stock-movements'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({

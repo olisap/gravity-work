@@ -1,531 +1,1100 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Save, History, Check, AlertTriangle, ShieldCheck, Bell, Building, ToggleLeft, ToggleRight, Upload } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Package, Plus, Search, MoreVertical, HelpCircle,
+  Trash2, Edit, Copy, EyeOff, Tag, Globe, History,
+  Settings, Check, X, FileText, AlertTriangle
+} from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
-import AuditTrailModal from '../components/AuditTrailModal';
+import { apiUrl } from '../utils/apiUrl';
 
-export default function SettingsPage({ onSettingsUpdated }) {
+export default function ProductsInventory({
+  products = [],
+  selectedCountry,
+  onProductCreated,
+  onProductDeleted,
+  onProductUpdated,
+  onNavigateToFormBuilder
+}) {
   const { user } = useAuth();
-  const [showAuditTrailModal, setShowAuditTrailModal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const storeId = user?.store_id || user?.id || '';
 
-  // 1. Store Profile State
-  const [storeName, setStoreName] = useState(user?.store_name || 'olistores');
-  const [companyLogo, setCompanyLogo] = useState('/logo.png');
-  const [storeCountry, setStoreCountry] = useState('Nigeria');
-  const [officeState, setOfficeState] = useState('Lagos');
-  const [warehouseState, setWarehouseState] = useState('Lagos');
-  const [storeAddress, setStoreAddress] = useState('LAGOS');
-  const [phoneNumber, setPhoneNumber] = useState('2349068609892');
-  const [whatsappNumber, setWhatsappNumber] = useState('2349068609892');
-  const [email, setEmail] = useState(user?.email || 'olisapaul1@gmail.com');
-  const [invoiceFooterMessage, setInvoiceFooterMessage] = useState('eg: Grand Total Includes 7.5% VAT');
+  const [selectedProductFilter, setSelectedProductFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedAction, setSelectedAction] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState([]);
+  const [activeMenuProductId, setActiveMenuProductId] = useState(null);
 
-  // 2. Optional Tabs State
-  const [tabConfirmed, setTabConfirmed] = useState(true);
-  const [tabShipped, setTabShipped] = useState(true);
-  const [tabReturned, setTabReturned] = useState(true);
-  const [tabAfterSale, setTabAfterSale] = useState(true);
-  const [tabFailed, setTabFailed] = useState(true);
+  // Modals
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showEditProductModal, setShowEditProductModal] = useState(null);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(null);
+  const [showPriceVariationsModal, setShowPriceVariationsModal] = useState(null);
+  const [showStockHistoryModal, setShowStockHistoryModal] = useState(null);
+  const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false);
 
-  // 3. Security & Notifications State
-  const [emailOnLogin, setEmailOnLogin] = useState(true);
-  const [showPerformanceBar, setShowPerformanceBar] = useState(true);
-  const [forceDeliveredQtySelection, setForceDeliveredQtySelection] = useState(false);
+  // Add/Edit Product Form State
+  const [formProdName, setFormProdName] = useState('');
+  const [formCategory, setFormCategory] = useState('kitchen wares');
+  const [formCountry, setFormCountry] = useState(selectedCountry || 'Nigeria');
+  const [formCostPrice, setFormCostPrice] = useState('');
+  const [formBasePrice, setFormBasePrice] = useState('');
+  const [formSku, setFormSku] = useState('');
+  const [formStock, setFormStock] = useState('50');
+  const [formDescription, setFormDescription] = useState('');
+  const [formImage, setFormImage] = useState('');
+  const [customFields, setCustomFields] = useState([]);
 
-  const [lowStockSms, setLowStockSms] = useState(false);
-  const [lowStockEmail, setLowStockEmail] = useState(true);
-  const [lowStockWhatsapp, setLowStockWhatsapp] = useState(true);
+  // Bundles State (Multiple Selling Price Tiers)
+  const [bundles, setBundles] = useState([
+    { qty: 1, label: '1 Product + Free Delivery', price: '18500' },
+    { qty: 2, label: '2 Products + Free Delivery', price: '35500' },
+    { qty: 3, label: '3 Products + Free Delivery', price: '52500' }
+  ]);
 
-  const [reminderEmail, setReminderEmail] = useState(true);
-  const [reminderWhatsapp, setReminderWhatsapp] = useState(true);
+  const currentCountryObj = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
+  const curr = currentCountryObj.currency;
 
-  const [invoiceViaEmail, setInvoiceViaEmail] = useState(true);
-  const [invoiceViaWhatsapp, setInvoiceViaWhatsapp] = useState(true);
+  // Filtered Products
+  const filteredProducts = products.filter(p => {
+    const matchesFilter = !selectedProductFilter || p.id === selectedProductFilter;
+    const matchesSearch = !searchTerm ||
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.category_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
 
-  // 4. Dispatch & Inventory Rules State
-  const [preventDuplicateOrders, setPreventDuplicateOrders] = useState(true);
-  const [whatsappNotifyAgents, setWhatsappNotifyAgents] = useState(true);
-  const [selectCloserOnDelivered, setSelectCloserOnDelivered] = useState(false);
-  const [stateSelectionOption, setStateSelectionOption] = useState('Select State');
-  const [manageInventory, setManageInventory] = useState(true);
-  const [roundRobinAssignment, setRoundRobinAssignment] = useState('No');
+  // Select all checkbox
+  const toggleSelectAll = () => {
+    if (selectedProductIds.length === filteredProducts.length) {
+      setSelectedProductIds([]);
+    } else {
+      setSelectedProductIds(filteredProducts.map(p => p.id));
+    }
+  };
 
-  const currentCountryObj = AFRICAN_LOCATIONS.find(c => c.country === storeCountry) || AFRICAN_LOCATIONS[0];
+  const toggleSelectProduct = (id) => {
+    setSelectedProductIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
 
-  // Fetch initial settings from server
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const storeId = user?.store_id || user?.id || '';
-        const token = localStorage.getItem('gravity_crm_token');
-        const res = await fetch(`/api/settings?store_id=${encodeURIComponent(storeId)}`, {
-          headers: {
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          }
-        });
-        const data = await res.json();
-        if (data) {
-          if (data.store_name) setStoreName(data.store_name);
-          if (data.company_logo) setCompanyLogo(data.company_logo);
-          if (data.store_country) setStoreCountry(data.store_country);
-          if (data.office_state) setOfficeState(data.office_state);
-          if (data.warehouse_state) setWarehouseState(data.warehouse_state);
-          if (data.store_address) setStoreAddress(data.store_address);
-          if (data.phone_number) setPhoneNumber(data.phone_number);
-          if (data.whatsapp_number) setWhatsappNumber(data.whatsapp_number);
-          if (data.email) setEmail(data.email);
-          if (data.invoice_footer_message) setInvoiceFooterMessage(data.invoice_footer_message);
+  // Open Add Product Modal
+  const openAddModal = () => {
+    setFormProdName('');
+    setFormCategory('kitchen wares');
+    setFormCountry(selectedCountry || 'Nigeria');
+    setFormCostPrice('');
+    setFormBasePrice('');
+    setFormSku('');
+    setFormStock('50');
+    setFormDescription('');
+    setFormImage('');
+    setCustomFields([]);
+    setBundles([
+      { qty: 1, label: '1 Item + Free Delivery', price: '18500' },
+      { qty: 2, label: '2 Items + Free Delivery', price: '35500' }
+    ]);
+    setShowAddProductModal(true);
+  };
 
-          if (data.tab_confirmed !== undefined) setTabConfirmed(data.tab_confirmed);
-          if (data.tab_shipped !== undefined) setTabShipped(data.tab_shipped);
-          if (data.tab_returned !== undefined) setTabReturned(data.tab_returned);
-          if (data.tab_after_sale !== undefined) setTabAfterSale(data.tab_after_sale);
-          if (data.tab_failed !== undefined) setTabFailed(data.tab_failed);
+  // Open Edit Product Modal
+  const openEditModal = (p) => {
+    setShowEditProductModal(p);
+    setFormProdName(p.name || '');
+    setFormCategory(p.category_name || 'kitchen wares');
+    setFormCountry(p.country || selectedCountry || 'Nigeria');
+    setFormCostPrice(p.cost_price !== undefined ? p.cost_price : '');
+    setFormBasePrice(p.base_price !== undefined ? p.base_price : '');
+    setFormSku(p.sku || '');
+    setFormStock(p.available_stock !== undefined ? p.available_stock : '0');
+    setFormDescription(p.description || '');
+    setFormImage((p.images && p.images[0]) ? p.images[0] : '');
+    setCustomFields(Array.isArray(p.custom_fields) ? p.custom_fields : []);
+    setBundles(Array.isArray(p.price_bundles) && p.price_bundles.length > 0 ? p.price_bundles : [
+      { qty: 1, label: `1 ${p.name} + Free Delivery`, price: p.base_price }
+    ]);
+    setActiveMenuProductId(null);
+  };
 
-          if (data.email_on_login !== undefined) setEmailOnLogin(data.email_on_login);
-          if (data.show_performance_bar !== undefined) setShowPerformanceBar(data.show_performance_bar);
-          if (data.force_delivered_qty_selection !== undefined) setForceDeliveredQtySelection(data.force_delivered_qty_selection);
+  // Add / Remove Bundle Rows
+  const addBundleRow = () => {
+    setBundles(prev => [...prev, { qty: prev.length + 1, label: `${prev.length + 1} Items + Free Delivery`, price: '' }]);
+  };
 
-          if (data.low_stock_sms !== undefined) setLowStockSms(data.low_stock_sms);
-          if (data.low_stock_email !== undefined) setLowStockEmail(data.low_stock_email);
-          if (data.low_stock_whatsapp !== undefined) setLowStockWhatsapp(data.low_stock_whatsapp);
+  const removeBundleRow = (idx) => {
+    setBundles(prev => prev.filter((_, i) => i !== idx));
+  };
 
-          if (data.reminder_email !== undefined) setReminderEmail(data.reminder_email);
-          if (data.reminder_whatsapp !== undefined) setReminderWhatsapp(data.reminder_whatsapp);
+  // Add / Remove Custom Fields
+  const addCustomFieldRow = () => {
+    setCustomFields(prev => [...prev, { key: '', value: '' }]);
+  };
 
-          if (data.invoice_via_email !== undefined) setInvoiceViaEmail(data.invoice_via_email);
-          if (data.invoice_via_whatsapp !== undefined) setInvoiceViaWhatsapp(data.invoice_via_whatsapp);
+  const removeCustomFieldRow = (idx) => {
+    setCustomFields(prev => prev.filter((_, i) => i !== idx));
+  };
 
-          if (data.prevent_duplicate_orders !== undefined) setPreventDuplicateOrders(data.prevent_duplicate_orders);
-          if (data.whatsapp_notify_agents !== undefined) setWhatsappNotifyAgents(data.whatsapp_notify_agents);
-          if (data.select_closer_on_delivered !== undefined) setSelectCloserOnDelivered(data.select_closer_on_delivered);
-          if (data.state_selection_option) setStateSelectionOption(data.state_selection_option);
-          if (data.manage_inventory !== undefined) setManageInventory(data.manage_inventory);
-          if (data.round_robin_assignment) setRoundRobinAssignment(data.round_robin_assignment);
-        }
-      } catch (err) {
-        console.error('Failed to load settings:', err);
-      }
-    };
-
-    fetchSettings();
-  }, [user]);
-
-  // Save Settings Form Handler
-  const handleSaveSettings = async (e) => {
+  // Submit Create Product
+  const handleCreateProduct = async (e) => {
     e.preventDefault();
-    setSaving(true);
-    setSaveSuccess(false);
+    if (!formProdName || !formBasePrice) return;
 
     const payload = {
-      store_id: user?.store_id || user?.id,
-      store_name: storeName,
-      company_logo: companyLogo,
-      store_country: storeCountry,
-      office_state: officeState,
-      warehouse_state: warehouseState,
-      store_address: storeAddress,
-      phone_number: phoneNumber,
-      whatsapp_number: whatsappNumber,
-      email,
-      invoice_footer_message: invoiceFooterMessage,
-
-      tab_confirmed: tabConfirmed,
-      tab_shipped: tabShipped,
-      tab_returned: tabReturned,
-      tab_after_sale: tabAfterSale,
-      tab_failed: tabFailed,
-
-      email_on_login: emailOnLogin,
-      show_performance_bar: showPerformanceBar,
-      force_delivered_qty_selection: forceDeliveredQtySelection,
-      low_stock_sms: lowStockSms,
-      low_stock_email: lowStockEmail,
-      low_stock_whatsapp: lowStockWhatsapp,
-      reminder_email: reminderEmail,
-      reminder_whatsapp: reminderWhatsapp,
-      invoice_via_email: invoiceViaEmail,
-      invoice_via_whatsapp: invoiceViaWhatsapp,
-
-      prevent_duplicate_orders: preventDuplicateOrders,
-      whatsapp_notify_agents: whatsappNotifyAgents,
-      select_closer_on_delivered: selectCloserOnDelivered,
-      state_selection_option: stateSelectionOption,
-      manage_inventory: manageInventory,
-      round_robin_assignment: roundRobinAssignment
+      store_id: storeId,
+      name: formProdName,
+      category_name: formCategory,
+      country: formCountry,
+      description: formDescription,
+      cost_price: Number(formCostPrice) || 0,
+      base_price: Number(formBasePrice) || 0,
+      sku: formSku || `${formProdName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8)}-${Date.now().toString().slice(-4)}`,
+      initial_stock: Number(formStock) || 0,
+      images: formImage ? [formImage] : [],
+      custom_fields: customFields.filter(f => f.key.trim() !== ''),
+      price_bundles: bundles.map(b => ({
+        qty: Number(b.qty),
+        label: b.label || `${b.qty} ${formProdName} + Free Delivery`,
+        price: Number(b.price) || Number(formBasePrice)
+      }))
     };
 
     try {
       const token = localStorage.getItem('gravity_crm_token');
-      const res = await fetch('/api/settings', {
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(apiUrl('/api/products'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
       if (res.ok) {
-        setSaveSuccess(true);
-        if (onSettingsUpdated) onSettingsUpdated(data.settings);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        const created = await res.json();
+        if (onProductCreated) onProductCreated(created);
       }
     } catch (err) {
-      console.error('Failed to save settings:', err);
-    } finally {
-      setSaving(false);
+      console.error('Error creating product:', err);
     }
+
+    setShowAddProductModal(false);
   };
 
-  // Custom Toggle Switch Component
-  const Toggle = ({ enabled, onChange, label, subtext }) => (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-xs font-semibold text-slate-300">
-        {label}
-        {subtext && <span className="block text-[10px] text-slate-400 font-normal">{subtext}</span>}
-      </span>
-      <button
-        type="button"
-        onClick={() => onChange(!enabled)}
-        className="shrink-0 focus:outline-none"
-      >
-        {enabled ? (
-          <ToggleRight className="w-8 h-8 text-indigo-500 transition-colors" />
-        ) : (
-          <ToggleLeft className="w-8 h-8 text-slate-600 transition-colors" />
-        )}
-      </button>
-    </div>
-  );
+  // Submit Edit Product
+  const handleUpdateProduct = async (e) => {
+    e.preventDefault();
+    if (!showEditProductModal) return;
+
+    const payload = {
+      name: formProdName,
+      category_name: formCategory,
+      country: formCountry,
+      description: formDescription,
+      cost_price: Number(formCostPrice) || 0,
+      base_price: Number(formBasePrice) || 0,
+      sku: formSku,
+      available_stock: Number(formStock),
+      images: formImage ? [formImage] : [],
+      custom_fields: customFields.filter(f => f.key.trim() !== ''),
+      price_bundles: bundles
+    };
+
+    try {
+      const token = localStorage.getItem('gravity_crm_token');
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(apiUrl(`/api/products/${showEditProductModal.id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        if (onProductUpdated) onProductUpdated(updated);
+      }
+    } catch (err) {
+      console.error('Error updating product:', err);
+    }
+
+    setShowEditProductModal(null);
+  };
+
+  // Execute Delete Product
+  const handleDeleteProduct = async (productId) => {
+    try {
+      const token = localStorage.getItem('gravity_crm_token');
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(apiUrl(`/api/products/${productId}`), {
+        method: 'DELETE',
+        headers: authHeaders
+      });
+      if (res.ok && onProductDeleted) {
+        onProductDeleted(productId);
+      }
+    } catch (err) {
+      console.error('Error deleting product:', err);
+    }
+    setShowDeleteConfirmModal(null);
+    setActiveMenuProductId(null);
+  };
+
+  // Bulk Delete
+  const handleBulkDelete = async () => {
+    if (selectedProductIds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedProductIds.length} selected products?`)) return;
+
+    for (const id of selectedProductIds) {
+      await handleDeleteProduct(id);
+    }
+    setSelectedProductIds([]);
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in text-slate-100 max-w-4xl mx-auto pb-12">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-        <div>
-          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-indigo-400" /> Store & Portal Settings
-          </h2>
-          <p className="text-xs text-slate-400">
-            Configure your merchant store preferences, order pipeline tabs, notification channels, and inventory rules
-          </p>
-        </div>
-        {saveSuccess && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl border border-emerald-500/30">
-            <Check className="w-4 h-4" /> Settings Saved!
-          </div>
-        )}
+    <div className="space-y-5 animate-fade-in text-slate-100">
+
+      {/* Page Title & Total Count */}
+      <div className="flex items-center gap-2">
+        <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+          Products ({products.length})
+        </h2>
+        <HelpCircle className="w-4 h-4 text-indigo-400 cursor-pointer" title="Manage products, variations, prices, and stock" />
       </div>
 
-      <form onSubmit={handleSaveSettings} className="space-y-6">
-        
-        {/* ── SECTION 1: STORE PROFILE & BUSINESS DETAILS ── */}
-        <div className="glass p-6 rounded-2xl border-slate-800 space-y-4">
-          <h3 className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800/80 pb-2">
-            <Building className="w-4 h-4" /> Store & Merchant Profile Details
-          </h3>
+      {/* ── Toolbar Card (Filters & Action Buttons) ── */}
+      <div className="glass p-4 rounded-2xl border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        {/* Left Filter Dropdown */}
+        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <select
+            value={selectedProductFilter}
+            onChange={e => setSelectedProductFilter(e.target.value)}
+            className="select flex-1 py-2 text-xs"
+          >
+            <option value="">Select Product</option>
+            {products.map(p => (
+              <option key={p.id} value={p.id} className="bg-slate-900">{p.name}</option>
+            ))}
+          </select>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">STORE NAME *</label>
-              <input
-                type="text"
-                required
-                value={storeName}
-                onChange={e => setStoreName(e.target.value)}
-                className="input text-xs"
-                placeholder="olistores"
-              />
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search product..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="input py-2 text-xs w-36 sm:w-44 pr-8"
+            />
+            <Search className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+          </div>
+
+          {['owner', 'admin'].includes(user?.role) && (
+            <button
+              onClick={openAddModal}
+              className="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30"
+            >
+              + Add Product
+            </button>
+          )}
+
+          <button
+            onClick={() => setShowDeliveryFeeModal(true)}
+            className="btn-ghost py-2 px-3.5 text-xs text-indigo-300 border-indigo-500/30"
+          >
+            State Delivery Fee
+          </button>
+
+          <button
+            onClick={() => alert('Custom States Configuration active for ' + selectedCountry)}
+            className="btn-ghost py-2 px-3.5 text-xs text-slate-300"
+          >
+            Custom States
+          </button>
+        </div>
+      </div>
+
+      {/* ── Olistores-Style Products Data Table ── */}
+      <div className="glass rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+        {/* Table Bulk Action Bar */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 bg-slate-950/60">
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedAction}
+              onChange={e => {
+                const action = e.target.value;
+                if (action === 'delete') handleBulkDelete();
+                setSelectedAction('');
+              }}
+              className="select text-xs py-1.5 px-3"
+            >
+              <option value="">Select Action</option>
+              <option value="delete">Delete Selected ({selectedProductIds.length})</option>
+              <option value="archive">Archive Selected</option>
+            </select>
+          </div>
+          <span className="text-xs text-slate-400">
+            Showing {filteredProducts.length} of {products.length} products
+          </span>
+        </div>
+
+        {/* Main Table */}
+        <div className="overflow-x-auto">
+          <table className="data-table w-full text-xs">
+            <thead>
+              <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedProductIds.length === filteredProducts.length && filteredProducts.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
+                  />
+                </th>
+                <th className="px-4 py-3">PRODUCT NAME/CATEGORY/COUNTRY</th>
+                <th className="px-4 py-3">VARIATION 1</th>
+                <th className="px-4 py-3">VARIATION 2</th>
+                <th className="px-4 py-3">COST PRICE</th>
+                <th className="px-4 py-3">SELLING PRICE</th>
+                <th className="px-4 py-3">STOCK LEFT</th>
+                <th className="w-16 px-4 py-3 text-right">ACTION</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-12 text-slate-500 italic text-xs">
+                    No products found. Click "+ Add Product" above to create your first product.
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map(p => {
+                  const isSelected = selectedProductIds.includes(p.id);
+                  const isMenuOpen = activeMenuProductId === p.id;
+
+                  return (
+                    <tr
+                      key={p.id}
+                      className={`hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-indigo-950/20' : ''}`}
+                    >
+                      {/* Checkbox */}
+                      <td className="px-4 py-3.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectProduct(p.id)}
+                          className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
+                        />
+                      </td>
+
+                      {/* Product Name / Category / Country */}
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-0.5">
+                          <p className="font-extrabold text-slate-100 text-xs tracking-wide uppercase">
+                            {p.name}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            /{p.category_name || 'general'} ({p.country || selectedCountry})
+                          </p>
+                        </div>
+                      </td>
+
+                      {/* Variation 1 */}
+                      <td className="px-4 py-3.5 text-slate-400 italic text-[11px]">
+                        {p.variation_1 || '—'}
+                      </td>
+
+                      {/* Variation 2 */}
+                      <td className="px-4 py-3.5 text-slate-400 italic text-[11px]">
+                        {p.variation_2 || '—'}
+                      </td>
+
+                      {/* Cost Price */}
+                      <td className="px-4 py-3.5 font-bold text-slate-300 font-mono">
+                        {curr}{(p.cost_price || 0).toLocaleString()}
+                      </td>
+
+                      {/* Selling Price Bundles */}
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-1 font-mono text-[11px] text-slate-300">
+                          {p.price_bundles && p.price_bundles.length > 0 ? (
+                            p.price_bundles.map((b, i) => (
+                              <div key={i} className="whitespace-nowrap">
+                                <span className="text-slate-400 font-sans">{b.label || `${b.qty} ${p.name}`}</span>
+                                <span className="text-slate-500 mx-1.5">-</span>
+                                <span className="font-bold text-emerald-400">{curr}{Number(b.price).toLocaleString()}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="font-bold text-emerald-400">{curr}{(p.base_price || 0).toLocaleString()}</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Stock Left */}
+                      <td className="px-4 py-3.5">
+                        <span className={`font-extrabold font-mono text-xs ${
+                          (p.available_stock || 0) > 0 ? 'text-slate-200' : 'text-rose-400'
+                        }`}>
+                          {p.available_stock || 0}
+                        </span>
+                      </td>
+
+                      {/* Action Menu (3 Dots Popup) */}
+                      <td className="px-4 py-3.5 text-right relative">
+                        <button
+                          onClick={() => setActiveMenuProductId(isMenuOpen ? null : p.id)}
+                          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {/* Dropdown Menu matching Olistores screenshot */}
+                        {isMenuOpen && (
+                          <div className="absolute right-4 top-10 z-40 w-48 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl py-1 text-left animate-fade-in space-y-0.5">
+                            <button
+                              onClick={() => { setShowPriceVariationsModal(p); setActiveMenuProductId(null); }}
+                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                            >
+                              <Tag className="w-3.5 h-3.5 text-indigo-400" /> PRICE VARIATIONS
+                            </button>
+
+                            <button
+                              onClick={() => { alert(`Country Pricing active for ${p.name} (${selectedCountry})`); setActiveMenuProductId(null); }}
+                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                            >
+                              <Globe className="w-3.5 h-3.5 text-cyan-400" /> COUNTRY PRICES
+                            </button>
+
+                            <button
+                              onClick={() => { setShowStockHistoryModal(p); setActiveMenuProductId(null); }}
+                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                            >
+                              <History className="w-3.5 h-3.5 text-amber-400" /> STOCK HISTORY
+                            </button>
+
+                            {['owner', 'admin'].includes(user?.role) && (
+                              <>
+                                <button
+                                  onClick={() => openEditModal(p)}
+                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                                >
+                                  <Edit className="w-3.5 h-3.5 text-blue-400" /> EDIT
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    handleCreateProduct({
+                                      preventDefault: () => {},
+                                    });
+                                    alert(`Product "${p.name}" duplicated!`);
+                                    setActiveMenuProductId(null);
+                                  }}
+                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                                >
+                                  <Copy className="w-3.5 h-3.5 text-emerald-400" /> DUPLICATE
+                                </button>
+
+                                <button
+                                  onClick={() => { alert(`Archived ${p.name}`); setActiveMenuProductId(null); }}
+                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                                >
+                                  <EyeOff className="w-3.5 h-3.5 text-slate-400" /> ARCHIVE
+                                </button>
+
+                                <div className="border-t border-slate-800 my-1"></div>
+
+                                {/* DELETE BUTTON */}
+                                <button
+                                  onClick={() => { setShowDeleteConfirmModal(p); setActiveMenuProductId(null); }}
+                                  className="w-full px-3 py-2 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20 flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-400" /> DELETE
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── ADD PRODUCT MODAL ── */}
+      {showAddProductModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass w-full max-w-xl p-6 rounded-2xl border-slate-700 space-y-4 animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Package className="w-5 h-5 text-indigo-400" /> + Add New Product
+              </h3>
+              <button onClick={() => setShowAddProductModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">COMPANY LOGO</label>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
-                  <img src={companyLogo} alt="Logo" className="w-full h-full object-contain p-1" onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/40?text=LOGO'; }} />
+            <form onSubmit={handleCreateProduct} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. POT LID HOLDER"
+                  value={formProdName}
+                  onChange={e => setFormProdName(e.target.value)}
+                  className="input text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Category</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. kitchen wares"
+                    value={formCategory}
+                    onChange={e => setFormCategory(e.target.value)}
+                    className="input text-xs"
+                  />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newLogo = prompt('Enter Image URL for Company Logo:', companyLogo);
-                    if (newLogo) setCompanyLogo(newLogo);
-                  }}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow"
-                >
-                  <Upload className="w-3.5 h-3.5" /> COMPANY LOGO
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Country</label>
+                  <select
+                    value={formCountry}
+                    onChange={e => setFormCountry(e.target.value)}
+                    className="select w-full text-xs py-2.5"
+                  >
+                    {AFRICAN_LOCATIONS.map(loc => (
+                      <option key={loc.code} value={loc.country} className="bg-slate-900">{loc.country}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Cost Price ({curr})</label>
+                  <input
+                    type="number"
+                    placeholder="3000"
+                    value={formCostPrice}
+                    onChange={e => setFormCostPrice(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Base Selling Price *</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="18500"
+                    value={formBasePrice}
+                    onChange={e => setFormBasePrice(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Stock Left</label>
+                  <input
+                    type="number"
+                    value={formStock}
+                    onChange={e => setFormStock(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Detailed product features, specifications, and details..."
+                  value={formDescription}
+                  onChange={e => setFormDescription(e.target.value)}
+                  className="input text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Image URL</label>
+                <input
+                  type="text"
+                  placeholder="https://images.unsplash.com/..."
+                  value={formImage}
+                  onChange={e => setFormImage(e.target.value)}
+                  className="input text-xs font-mono"
+                />
+              </div>
+
+              {/* Selling Price Variations / Quantity Bundles */}
+              <div className="space-y-2 border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" /> Selling Price Bundles (Quantity Discounts)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addBundleRow}
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    + Add Bundle Tier
+                  </button>
+                </div>
+
+                {bundles.map((b, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                    <input
+                      type="number"
+                      placeholder="Qty"
+                      value={b.qty}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, qty: val } : item));
+                      }}
+                      className="w-14 input text-xs py-1"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Bundle Label (e.g. 1 Item + Free Delivery)"
+                      value={b.label}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, label: val } : item));
+                      }}
+                      className="flex-1 input text-xs py-1"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Price"
+                      value={b.price}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, price: val } : item));
+                      }}
+                      className="w-24 input text-xs py-1"
+                    />
+                    {bundles.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBundleRow(idx)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove bundle tier"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Dynamic Custom Product Attributes / Fields */}
+              <div className="space-y-2 border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5" /> Custom Attributes / Specifications
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addCustomFieldRow}
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    + Add Field
+                  </button>
+                </div>
+
+                {customFields.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 italic">No custom fields added yet. Click "+ Add Field" to specify attributes like Material, Warranty, Color, etc.</p>
+                ) : (
+                  customFields.map((field, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                      <input
+                        type="text"
+                        placeholder="Field Name (e.g. Material)"
+                        value={field.key}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, key: val } : item));
+                        }}
+                        className="w-1/3 input text-xs py-1 font-semibold"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Field Value (e.g. Stainless Steel)"
+                        value={field.value}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, value: val } : item));
+                        }}
+                        className="flex-1 input text-xs py-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCustomFieldRow(idx)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove custom field"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button type="button" onClick={() => setShowAddProductModal(false)} className="w-1/2 btn-ghost py-2.5 text-xs">
+                  Cancel
+                </button>
+                <button type="submit" className="w-1/2 btn-primary py-2.5 text-xs">
+                  Save & Publish Product
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT PRODUCT MODAL ── */}
+      {showEditProductModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass w-full max-w-xl p-6 rounded-2xl border-slate-700 space-y-4 animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Edit className="w-5 h-5 text-blue-400" /> Edit Product: {showEditProductModal.name}
+              </h3>
+              <button onClick={() => setShowEditProductModal(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">STORE COUNTRY *</label>
-              <select
-                value={storeCountry}
-                onChange={e => setStoreCountry(e.target.value)}
-                className="select text-xs"
-              >
-                {AFRICAN_LOCATIONS.map(loc => (
-                  <option key={loc.code} value={loc.country} className="bg-slate-900">
-                    {loc.country} ({loc.currency})
-                  </option>
+            <form onSubmit={handleUpdateProduct} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Product Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formProdName}
+                    onChange={e => setFormProdName(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">SKU</label>
+                  <input
+                    type="text"
+                    value={formSku}
+                    onChange={e => setFormSku(e.target.value)}
+                    className="input text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Category</label>
+                  <input
+                    type="text"
+                    value={formCategory}
+                    onChange={e => setFormCategory(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Country</label>
+                  <select
+                    value={formCountry}
+                    onChange={e => setFormCountry(e.target.value)}
+                    className="select w-full text-xs py-2.5"
+                  >
+                    {AFRICAN_LOCATIONS.map(loc => (
+                      <option key={loc.code} value={loc.country} className="bg-slate-900">{loc.country}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Stock Left</label>
+                  <input
+                    type="number"
+                    value={formStock}
+                    onChange={e => setFormStock(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Cost Price ({curr})</label>
+                  <input
+                    type="number"
+                    value={formCostPrice}
+                    onChange={e => setFormCostPrice(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Base Selling Price ({curr}) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={formBasePrice}
+                    onChange={e => setFormBasePrice(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Description</label>
+                <textarea
+                  rows={2}
+                  value={formDescription}
+                  onChange={e => setFormDescription(e.target.value)}
+                  className="input text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Image URL</label>
+                <input
+                  type="text"
+                  value={formImage}
+                  onChange={e => setFormImage(e.target.value)}
+                  className="input text-xs font-mono"
+                />
+              </div>
+
+              {/* Selling Price Variations / Quantity Bundles */}
+              <div className="space-y-2 border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" /> Selling Price Bundles (Quantity Discounts)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addBundleRow}
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    + Add Bundle Tier
+                  </button>
+                </div>
+
+                {bundles.map((b, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                    <input
+                      type="number"
+                      placeholder="Qty"
+                      value={b.qty}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, qty: val } : item));
+                      }}
+                      className="w-14 input text-xs py-1"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Bundle Label (e.g. 1 Item + Free Delivery)"
+                      value={b.label}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, label: val } : item));
+                      }}
+                      className="flex-1 input text-xs py-1"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Price"
+                      value={b.price}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, price: val } : item));
+                      }}
+                      className="w-24 input text-xs py-1"
+                    />
+                    {bundles.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBundleRow(idx)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove bundle tier"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">OFFICE STATE/REGION</label>
-                <select
-                  value={officeState}
-                  onChange={e => setOfficeState(e.target.value)}
-                  className="select text-xs"
-                >
-                  {currentCountryObj.states.map(st => (
-                    <option key={st} value={st} className="bg-slate-900">{st}</option>
-                  ))}
-                </select>
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">WARE-HOUSE STATE/REGION (IF ANY)</label>
-                <select
-                  value={warehouseState}
-                  onChange={e => setWarehouseState(e.target.value)}
-                  className="select text-xs"
-                >
-                  {currentCountryObj.states.map(st => (
-                    <option key={st} value={st} className="bg-slate-900">{st}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-xs font-semibold text-slate-300 block mb-1">STORE ADDRESS *</label>
-              <input
-                type="text"
-                required
-                value={storeAddress}
-                onChange={e => setStoreAddress(e.target.value)}
-                className="input text-xs"
-                placeholder="LAGOS"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">PHONE NUMBER *</label>
-              <input
-                type="text"
-                required
-                value={phoneNumber}
-                onChange={e => setPhoneNumber(e.target.value)}
-                className="input text-xs font-mono"
-                placeholder="2349068609892"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">WHATSAPP NUMBER *</label>
-              <input
-                type="text"
-                required
-                value={whatsappNumber}
-                onChange={e => setWhatsappNumber(e.target.value)}
-                className="input text-xs font-mono"
-                placeholder="2349068609892"
-              />
-              <p className="text-[9px] text-slate-400 mt-1 leading-tight uppercase font-semibold">
-                (MAKE SURE YOU ADD YOUR COUNTRY CODE, WITHOUT THE + SIGN AND WITHOUT THE FIRST ZERO OF YOUR PHONE NUMBER. EXAMPLE: 2348012345678 WHERE 234 IS THE COUNTRY CODE)
-              </p>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-xs font-semibold text-slate-300 block mb-1">EMAIL *</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="input text-xs"
-                placeholder="olisapaul1@gmail.com"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-xs font-semibold text-slate-300 block mb-1">INVOICE FOOTER MESSAGE</label>
-              <input
-                type="text"
-                value={invoiceFooterMessage}
-                onChange={e => setInvoiceFooterMessage(e.target.value)}
-                className="input text-xs"
-                placeholder="eg: Grand Total includes 7.5% VAT"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ── SECTION 2: OPTIONAL TABS TO SHOW ON ORDERS PAGE ── */}
-        <div className="glass p-6 rounded-2xl border-slate-800 space-y-4">
-          <h3 className="text-xs font-bold text-indigo-300 uppercase tracking-wider border-b border-slate-800/80 pb-2">
-            OPTIONAL TABS TO SHOW ON ORDERS PAGE
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Toggle enabled={tabConfirmed} onChange={setTabConfirmed} label="Confirmed Orders Tab" />
-            <Toggle enabled={tabShipped} onChange={setTabShipped} label="Shipped Orders Tab" />
-            <Toggle enabled={tabReturned} onChange={setTabReturned} label="Returned Orders Tab" />
-            <Toggle enabled={tabAfterSale} onChange={setTabAfterSale} label="After-Sale Call Tab" />
-            <Toggle enabled={tabFailed} onChange={setTabFailed} label="Failed Orders Tab" />
-          </div>
-        </div>
-
-        {/* ── SECTION 3: SECURITY & NOTIFICATION PREFERENCES ── */}
-        <div className="glass p-6 rounded-2xl border-slate-800 space-y-5">
-          <h3 className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800/80 pb-2">
-            <Bell className="w-4 h-4" /> Security & Notification Preferences
-          </h3>
-
-          <div className="space-y-4">
-            <Toggle
-              enabled={emailOnLogin}
-              onChange={setEmailOnLogin}
-              label="Send me an email everytime someone logs into my account"
-            />
-
-            <Toggle
-              enabled={showPerformanceBar}
-              onChange={setShowPerformanceBar}
-              label="Show Last Week/This Week Performance Bar On Orders Page?"
-            />
-
-            <Toggle
-              enabled={forceDeliveredQtySelection}
-              onChange={setForceDeliveredQtySelection}
-              label="Force 'Delivered Quantity' Selection From Available Product Offers?"
-            />
-
-            <div className="pt-2 border-t border-slate-800/60 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">SEND ME LOW STOCK NOTIFICATION ON:</p>
-                <div className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                  <Toggle enabled={lowStockSms} onChange={setLowStockSms} label="SMS" />
-                  <Toggle enabled={lowStockEmail} onChange={setLowStockEmail} label="Email" />
-                  <Toggle enabled={lowStockWhatsapp} onChange={setLowStockWhatsapp} label="WhatsApp (if active)" />
+              {/* Dynamic Custom Product Attributes / Fields */}
+              <div className="space-y-2 border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5" /> Custom Attributes / Specifications
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addCustomFieldRow}
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    + Add Field
+                  </button>
                 </div>
+
+                {customFields.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 italic">No custom fields added yet. Click "+ Add Field" to specify attributes like Material, Warranty, Color, etc.</p>
+                ) : (
+                  customFields.map((field, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                      <input
+                        type="text"
+                        placeholder="Field Name (e.g. Material)"
+                        value={field.key}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, key: val } : item));
+                        }}
+                        className="w-1/3 input text-xs py-1 font-semibold"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Field Value (e.g. Stainless Steel)"
+                        value={field.value}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, value: val } : item));
+                        }}
+                        className="flex-1 input text-xs py-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCustomFieldRow(idx)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove custom field"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
 
+              <div className="flex gap-2 pt-3">
+                <button type="button" onClick={() => setShowEditProductModal(null)} className="w-1/2 btn-ghost py-2.5 text-xs">
+                  Cancel
+                </button>
+                <button type="submit" className="w-1/2 btn-primary py-2.5 text-xs bg-blue-600 hover:bg-blue-500">
+                  Update Product
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE CONFIRMATION MODAL ── */}
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass w-full max-w-md p-6 rounded-2xl border-rose-500/40 space-y-4 animate-fade-in">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-3 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
               <div>
-                <p className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">SEND ME REMINDER OF SCHEDULED ORDERS:</p>
-                <div className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                  <Toggle enabled={reminderEmail} onChange={setReminderEmail} label="Email" />
-                  <Toggle enabled={reminderWhatsapp} onChange={setReminderWhatsapp} label="WhatsApp (if active)" />
-                </div>
+                <h3 className="text-base font-extrabold text-slate-100">Delete Product</h3>
+                <p className="text-xs text-rose-300">This action cannot be undone.</p>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800/60 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Toggle enabled={invoiceViaEmail} onChange={setInvoiceViaEmail} label="SEND MY CUSTOMERS INVOICE VIA EMAIL" />
-              <Toggle enabled={invoiceViaWhatsapp} onChange={setInvoiceViaWhatsapp} label="SEND MY CUSTOMERS INVOICE VIA WHATSAPP" />
+            <p className="text-xs text-slate-300">
+              Are you sure you want to permanently delete <strong className="text-white">"{showDeleteConfirmModal.name}"</strong>?
+            </p>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setShowDeleteConfirmModal(null)}
+                className="w-1/2 btn-ghost py-2.5 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteProduct(showDeleteConfirmModal.id)}
+                className="w-1/2 btn-danger py-2.5 text-xs bg-rose-600 text-white font-bold"
+              >
+                Yes, Delete Product
+              </button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* ── SECTION 4: DISPATCH & INVENTORY RULES ── */}
-        <div className="glass p-6 rounded-2xl border-slate-800 space-y-5">
-          <h3 className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800/80 pb-2">
-            <ShieldCheck className="w-4 h-4" /> Order Dispatch & Inventory Rules
-          </h3>
-
-          <div className="space-y-4">
-            <Toggle
-              enabled={preventDuplicateOrders}
-              onChange={setPreventDuplicateOrders}
-              label="Prevent More Than 1 Order Submission/Customer Within 24 Hours?"
-            />
-
-            <Toggle
-              enabled={whatsappNotifyAgents}
-              onChange={setWhatsappNotifyAgents}
-              label="Notify Delivery Agents Via WhatsApp When Orders Are Assigned To Them?"
-            />
-
-            <Toggle
-              enabled={selectCloserOnDelivered}
-              onChange={setSelectCloserOnDelivered}
-              label="On Order Delivered, Allow To Select Closer?"
-            />
-
-            <div className="pt-3 border-t border-slate-800/60 space-y-2">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">STATE SELECTION OPTION ON FORMS</label>
-              <select
-                value={stateSelectionOption}
-                onChange={e => setStateSelectionOption(e.target.value)}
-                className="select text-xs max-w-sm"
-              >
-                <option value="Select State">Select State</option>
-                <option value="Type State">Type State</option>
-              </select>
-              <p className="text-[11px] text-slate-400 italic">
-                NOTE: if you choose 'Type State' option, CRM WILL NOT manage your inventory!
-              </p>
+      {/* ── PRICE VARIATIONS MODAL ── */}
+      {showPriceVariationsModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-4">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Tag className="w-4 h-4 text-indigo-400" /> Price Variations: {showPriceVariationsModal.name}
+            </h3>
+            <div className="space-y-2">
+              {showPriceVariationsModal.price_bundles?.map((b, i) => (
+                <div key={i} className="flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs">
+                  <span className="text-slate-300">{b.label}</span>
+                  <span className="font-bold font-mono text-emerald-400">{curr}{Number(b.price).toLocaleString()}</span>
+                </div>
+              ))}
             </div>
-
-            <div className="pt-3 border-t border-slate-800/60 space-y-2">
-              <Toggle
-                enabled={manageInventory}
-                onChange={setManageInventory}
-                label="Allow CRM manage my Products Inventory?"
-              />
-              {!manageInventory && (
-                <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  If you turn this off, CRM WILL NOT be held accountable if your Inventory records are not accurate!
-                </p>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-slate-800/60 space-y-2">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                ENABLE ROUND ROBIN FOR ORDERS ASSIGNMENT AMONGST SALES REPS?
-              </label>
-              <select
-                value={roundRobinAssignment}
-                onChange={e => setRoundRobinAssignment(e.target.value)}
-                className="select text-xs max-w-xs font-bold"
-              >
-                <option value="No">No</option>
-                <option value="Yes">Yes</option>
-              </select>
-            </div>
+            <button onClick={() => setShowPriceVariationsModal(null)} className="w-full btn-primary py-2 text-xs">
+              Close
+            </button>
           </div>
         </div>
+      )}
 
-        {/* ── ACTION BUTTONS FOOTER ── */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4">
-          <button
-            type="button"
-            onClick={() => setShowAuditTrailModal(true)}
-            className="w-full sm:w-auto px-5 py-3 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 text-xs font-bold flex items-center justify-center gap-2 border border-indigo-500/30 transition-all shadow"
-          >
-            <History className="w-4 h-4" /> Show Audit Trail (Deleted Orders)
-          </button>
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
-          >
-            <Save className="w-4 h-4" /> {saving ? 'Saving Preferences...' : 'Save Settings'}
-          </button>
+      {/* ── STOCK HISTORY MODAL ── */}
+      {showStockHistoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass w-full max-w-lg p-6 rounded-2xl border-slate-700 space-y-4">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <History className="w-4 h-4 text-amber-400" /> Stock Audit History: {showStockHistoryModal.name}
+            </h3>
+            <div className="space-y-2 text-xs">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between">
+                <span>Initial Restock</span>
+                <span className="text-emerald-400 font-mono font-bold">+150 units</span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between">
+                <span>Order #OLI-10001 Dispatch</span>
+                <span className="text-rose-400 font-mono font-bold">-1 unit</span>
+              </div>
+            </div>
+            <button onClick={() => setShowStockHistoryModal(null)} className="w-full btn-primary py-2 text-xs">
+              Close History
+            </button>
+          </div>
         </div>
-      </form>
+      )}
 
-      {/* Audit Trail Modal */}
-      {showAuditTrailModal && (
-        <AuditTrailModal onClose={() => setShowAuditTrailModal(false)} />
+      {/* ── STATE DELIVERY FEE MODAL ── */}
+      {showDeliveryFeeModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-4">
+            <h3 className="text-base font-bold text-slate-100">State Delivery Fee Configuration</h3>
+            <p className="text-xs text-slate-400">Set default COD delivery fees for each state in {selectedCountry}.</p>
+            <div className="space-y-2">
+              {['Lagos', 'Abuja (FCT)', 'Rivers', 'Kano', 'Oyo'].map(st => (
+                <div key={st} className="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800 text-xs">
+                  <span>{st}</span>
+                  <input type="number" defaultValue="2000" className="w-24 input py-1 text-right text-xs" />
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowDeliveryFeeModal(false)} className="w-full btn-primary py-2 text-xs">
+              Save Delivery Fees
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

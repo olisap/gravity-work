@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Shield, Key, Mail, Phone, CheckCircle, X, Lock } from 'lucide-react';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function TeamManagementModal({ user, onClose }) {
   const [teamMembers, setTeamMembers] = useState([]);
@@ -21,7 +22,7 @@ export default function TeamManagementModal({ user, onClose }) {
     try {
       const storeId = user?.store_id || user?.id || '';
       const token = localStorage.getItem('gravity_crm_token');
-      const res = await fetch(`/api/team?store_id=${encodeURIComponent(storeId)}`, {
+      const res = await fetch(apiUrl(`/api/team?store_id=${encodeURIComponent(storeId)}`), {
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
@@ -49,7 +50,7 @@ export default function TeamManagementModal({ user, onClose }) {
       const storeId = user?.store_id || user?.id || '';
       const storeName = user?.store_name || 'My E-Commerce Store';
       const token = localStorage.getItem('gravity_crm_token');
-      const res = await fetch('/api/team', {
+      const res = await fetch(apiUrl('/api/team'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function DeliveryAgentsManager({ products = [], selectedCountry }) {
   const { user } = useAuth();
@@ -37,7 +38,7 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
       const storeId = user?.store_id || user?.id || '';
-      const res = await fetch(`/api/delivery-agents?store_id=${storeId}`, { headers: authHeaders });
+      const res = await fetch(apiUrl(`/api/delivery-agents?store_id=${storeId}`), { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setAgents(Array.isArray(data) ? data : []);
@@ -104,7 +105,7 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
       const storeId = user?.store_id || user?.id || '';
-      const res = await fetch('/api/delivery-agents', {
+      const res = await fetch(apiUrl('/api/delivery-agents'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
@@ -137,7 +138,7 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/delivery-agents/${showEditModal.id}`, {
+      const res = await fetch(apiUrl(`/api/delivery-agents/${showEditModal.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
@@ -169,7 +170,7 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/delivery-agents/${showAssignStockModal.id}/stock`, {
+      const res = await fetch(apiUrl(`/api/delivery-agents/${showAssignStockModal.id}/stock`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
@@ -194,7 +195,7 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/delivery-agents/${id}`, { method: 'DELETE', headers: authHeaders });
+      const res = await fetch(apiUrl(`/api/delivery-agents/${id}`), { method: 'DELETE', headers: authHeaders });
       if (res.ok) {
         setAgents(prev => prev.filter(a => a.id !== id));
       }

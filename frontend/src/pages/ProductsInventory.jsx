@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function ProductsInventory({
   products = [],
@@ -162,7 +163,7 @@ export default function ProductsInventory({
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch('/api/products', {
+      const res = await fetch(apiUrl('/api/products'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(payload)
@@ -200,7 +201,7 @@ export default function ProductsInventory({
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/products/${showEditProductModal.id}`, {
+      const res = await fetch(apiUrl(`/api/products/${showEditProductModal.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(payload)
@@ -221,7 +222,7 @@ export default function ProductsInventory({
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/products/${productId}`, {
+      const res = await fetch(apiUrl(`/api/products/${productId}`), {
         method: 'DELETE',
         headers: authHeaders
       });

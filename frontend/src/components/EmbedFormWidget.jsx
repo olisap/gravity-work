@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingBag, CheckCircle, ArrowRight, ArrowLeft, ShieldCheck, Zap } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function EmbedFormWidget({ products = [], allProducts = [], formConfig = null, onOrderSubmitted, lightMode = true }) {
   const [selectedProduct, setSelectedProduct] = useState(products[0] || null);
@@ -147,7 +148,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         ]
       };
 
-      const res = await fetch('/api/orders/draft', {
+      const res = await fetch(apiUrl('/api/orders/draft'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

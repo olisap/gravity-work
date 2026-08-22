@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import EmbedFormWidget from '../components/EmbedFormWidget';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
@@ -18,7 +19,7 @@ export default function CheckoutPage() {
         // Fetch form configuration
         let formData = null;
         try {
-          const formRes = await fetch(`/api/forms/embed/${embedKey}`);
+          const formRes = await fetch(apiUrl(`/api/forms/embed/${embedKey}`));
           if (formRes.ok) {
             formData = await formRes.json();
           }
@@ -58,7 +59,7 @@ export default function CheckoutPage() {
 
         let productsData = [];
         try {
-          const productsRes = await fetch('/api/products', { headers });
+          const productsRes = await fetch(apiUrl('/api/products'), { headers });
           if (productsRes.ok) {
             const resData = await productsRes.json();
             if (Array.isArray(resData)) {

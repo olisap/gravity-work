@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { History, X, Trash2, ShieldAlert, CheckCircle, Clock } from 'lucide-react';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function AuditTrailModal({ onClose }) {
   const [logs, setLogs] = useState([]);
@@ -9,7 +10,7 @@ export default function AuditTrailModal({ onClose }) {
     const fetchAuditLogs = async () => {
       try {
         const token = localStorage.getItem('gravity_crm_token');
-        const res = await fetch('/api/audit-trail', {
+        const res = await fetch(apiUrl('/api/audit-trail'), {
           headers: {
             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
           }

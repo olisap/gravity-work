@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layers, Plus, Search, Trash2, Edit, X, Globe, Mail, Phone, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function SuppliersManager() {
   const { user } = useAuth();
@@ -25,7 +26,7 @@ export default function SuppliersManager() {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
       const storeId = user?.store_id || user?.id || '';
-      const res = await fetch(`/api/suppliers?store_id=${storeId}`, { headers: authHeaders });
+      const res = await fetch(apiUrl(`/api/suppliers?store_id=${storeId}`), { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setSuppliers(Array.isArray(data) ? data : []);
@@ -69,7 +70,7 @@ export default function SuppliersManager() {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
       const storeId = user?.store_id || user?.id || '';
-      const res = await fetch('/api/suppliers', {
+      const res = await fetch(apiUrl('/api/suppliers'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
@@ -100,7 +101,7 @@ export default function SuppliersManager() {
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/suppliers/${showEditModal.id}`, {
+      const res = await fetch(apiUrl(`/api/suppliers/${showEditModal.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
@@ -127,7 +128,7 @@ export default function SuppliersManager() {
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/suppliers/${id}`, { method: 'DELETE', headers: authHeaders });
+      const res = await fetch(apiUrl(`/api/suppliers/${id}`), { method: 'DELETE', headers: authHeaders });
       if (res.ok) {
         setSuppliers(prev => prev.filter(s => s.id !== id));
       }

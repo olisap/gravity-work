@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import EmbedFormWidget from '../components/EmbedFormWidget';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function FormBuilder({
   products = [],
@@ -179,7 +180,7 @@ export default function FormBuilder({
 
     if (editingFormId) {
       try {
-        const res = await fetch(`/api/forms/${editingFormId}`, {
+        const res = await fetch(apiUrl(`/api/forms/${editingFormId}`), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify(payload)
@@ -202,7 +203,7 @@ export default function FormBuilder({
       }
     } else {
       try {
-        const res = await fetch('/api/forms', {
+        const res = await fetch(apiUrl('/api/forms'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify(payload)
@@ -234,7 +235,7 @@ export default function FormBuilder({
     try {
       const token = localStorage.getItem('gravity_crm_token');
       const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/forms/${id}`, {
+      const res = await fetch(apiUrl(`/api/forms/${id}`), {
         method: 'DELETE',
         headers: authHeaders
       });
