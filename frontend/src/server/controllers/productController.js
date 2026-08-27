@@ -16,23 +16,22 @@ function sanitizeUuid(val) {
 export async function getProducts(req, res) {
   const effectiveStoreId = req.user?.store_id || req.query.store_id;
   if (supabase) {
-    let query = supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (effectiveStoreId) query = query.eq('store_id', effectiveStoreId);
-    const { data, error } = await query;
-    if (!error && data) {
-      if (data.length > 0) return res.json(data);
-      // Fallback: If store_id filter yielded 0 items, fetch all products so created products are never hidden
-      const { data: allProds } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-      if (allProds && allProds.length > 0) return res.json(allProds);
+    // Fetch all products ordered by created_at desc
+    const { data: allProds, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    if (!error && allProds) {
+      if (allProds.length > 0) {
+        // If effectiveStoreId is supplied, check if store-specific items exist
+        if (effectiveStoreId) {
+          const storeSpecific = allProds.filter(p => p.store_id === effectiveStoreId || !p.store_id || p.store_id === '00000000-0000-0000-0000-784637855674');
+          if (storeSpecific.length > 0) return res.json(storeSpecific);
+        }
+        return res.json(allProds);
+      }
       return res.json([]);
     }
   }
 
   let list = [...mockProducts];
-  if (effectiveStoreId && effectiveStoreId !== '00000000-0000-0000-0000-000000000001' && !effectiveStoreId.startsWith('a100') && !effectiveStoreId.startsWith('u100')) {
-    const filtered = list.filter(p => p.store_id === effectiveStoreId);
-    if (filtered.length > 0) return res.json(filtered);
-  }
   res.json(list);
 }
 
@@ -58,7 +57,8 @@ export async function createProduct(req, res) {
   } = req.body;
 
   const sanitizedCategoryId = sanitizeUuid(category_id);
-  const sanitizedStoreId = sanitizeUuid(store_id || req.query.store_id);
+  const DEFAULT_PRIMARY_STORE_ID = '00000000-0000-0000-0000-784637855674';
+  const sanitizedStoreId = sanitizeUuid(store_id || req.query.store_id || req.user?.store_id) || DEFAULT_PRIMARY_STORE_ID;
 
   const newProduct = {
     id: `22000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
