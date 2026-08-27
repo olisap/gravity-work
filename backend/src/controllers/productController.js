@@ -41,6 +41,12 @@ export async function getCategories(req, res) {
   res.json(mockCategories);
 }
 
+function prepareProductPayloadForSupabase(prod) {
+  if (!prod) return prod;
+  const { custom_fields, ...rest } = prod;
+  return rest;
+}
+
 export async function createProduct(req, res) {
   const {
     name, category_id, category_name, country, description,
@@ -76,7 +82,8 @@ export async function createProduct(req, res) {
   };
 
   if (supabase) {
-    const { data, error } = await supabase.from('products').insert([newProduct]).select();
+    const dbPayload = prepareProductPayloadForSupabase(newProduct);
+    const { data, error } = await supabase.from('products').insert([dbPayload]).select();
     if (!error && data && data.length > 0) {
       mockProducts.unshift(data[0]);
       console.log('✅ Product successfully saved to Supabase:', data[0].name);
@@ -95,7 +102,8 @@ export async function updateProduct(req, res) {
   const updates = req.body;
 
   if (supabase) {
-    const { data, error } = await supabase.from('products').update(updates).eq('id', id).select();
+    const dbPayload = prepareProductPayloadForSupabase(updates);
+    const { data, error } = await supabase.from('products').update(dbPayload).eq('id', id).select();
     if (!error && data && data.length > 0) {
       const idx = mockProducts.findIndex(p => p.id === id);
       if (idx !== -1) mockProducts[idx] = { ...mockProducts[idx], ...data[0] };
