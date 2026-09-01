@@ -284,6 +284,13 @@ export class NotificationService {
     );
   }
 
+  static async sendStaffInvitationEmail({ full_name, email, password, role, store_name }) {
+    const subject = `You have been invited to ${store_name || 'the CRM'}`;
+    const text = `Hello ${full_name}, your ${role} account has been created for ${store_name || 'the CRM'}. Login email: ${email}. Temporary password: ${password}.`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;color:#1e293b;"><h2>Team account created</h2><p>Hello ${full_name},</p><p>You have been added as <strong>${role}</strong> to <strong>${store_name || 'the CRM'}</strong>.</p><p><strong>Login email:</strong> ${email}<br><strong>Temporary password:</strong> ${password}</p><p>Please change this password after signing in.</p></div>`;
+    return this.sendEmail(email, subject, text, html);
+  }
+
   /**
    * Send all three notifications when an order is completed/finalized:
    * 1. Merchant Notification Email (form notification_email / store owner)

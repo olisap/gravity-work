@@ -1,82 +1,6 @@
 import { supabase } from '../config/supabase.js';
 
-let mockForms = [
-  {
-    id: '33000000-0000-0000-0000-000000000001',
-    name: 'POT KNOB Order Form',
-    linked_product_id: '22000000-0000-0000-0000-784714673902',
-    embed_key: 'EMBED-POTKNOBORD-5463',
-    header_text: 'Please Fill The Form Below To Place Your Order',
-    subheader_text: 'Only Serious Buyers Should Fill The Form Below',
-    button_text: 'ORDER NOW',
-    button_bg_color: '#4f46e5',
-    button_text_color: '#ffffff',
-    form_bg_color: '#0f172a',
-    show_country_code: 'Yes',
-    payment_cod_enabled: true,
-    payment_paystack_enabled: false,
-    payment_flutterwave_enabled: false,
-    payment_bank_enabled: false,
-    notification_email: 'merchant@gmail.com',
-    thank_you_url: '',
-    upsell_enabled: true,
-    upsell_product_id: '22000000-0000-0000-0000-000000000004',
-    upsell_title: 'Special 1-Click Offer!',
-    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra (Normal Price: ₦9,500)!',
-    upsell_price: 7000,
-    is_active: true
-  },
-  {
-    id: '33000000-0000-0000-0000-000000000003',
-    name: 'Lunchbox Landing Page Form',
-    linked_product_id: '22000000-0000-0000-0000-784714673902',
-    embed_key: 'EMBED-LUNCHBOX-2026',
-    header_text: 'Please Fill The Form Below To Place Your Order',
-    subheader_text: 'Only Serious Buyers Should Fill The Form Below',
-    button_text: 'ORDER NOW',
-    button_bg_color: '#4f46e5',
-    button_text_color: '#ffffff',
-    form_bg_color: '#0f172a',
-    show_country_code: 'Yes',
-    payment_cod_enabled: true,
-    payment_paystack_enabled: false,
-    payment_flutterwave_enabled: false,
-    payment_bank_enabled: false,
-    notification_email: 'merchant@gmail.com',
-    thank_you_url: '',
-    upsell_enabled: true,
-    upsell_product_id: '22000000-0000-0000-0000-000000000004',
-    upsell_title: 'Special 1-Click Offer!',
-    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra (Normal Price: ₦9,500)!',
-    upsell_price: 7000,
-    is_active: true
-  },
-  {
-    id: '33000000-0000-0000-0000-000000000002',
-    name: 'Spin Mop Promo Form',
-    linked_product_id: '22000000-0000-0000-0000-000000000002',
-    embed_key: 'EMBED-SPINMOP-2026',
-    header_text: 'Order Your Rechargeable Spin Mop Today',
-    subheader_text: 'Free Delivery & Pay On Delivery Nationwide',
-    button_text: 'COMPLETE MY ORDER NOW',
-    button_bg_color: '#10b981',
-    button_text_color: '#ffffff',
-    form_bg_color: '#0f172a',
-    show_country_code: 'Yes',
-    payment_cod_enabled: true,
-    payment_paystack_enabled: false,
-    payment_flutterwave_enabled: false,
-    payment_bank_enabled: false,
-    notification_email: 'merchant@gmail.com',
-    thank_you_url: '',
-    upsell_enabled: true,
-    upsell_product_id: '22000000-0000-0000-0000-000000000004',
-    upsell_title: 'Special 1-Click Offer!',
-    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra!',
-    upsell_price: 7000,
-    is_active: true
-  }
-];
+let mockForms = [];
 
 function sanitizeUuid(val) {
   if (!val || typeof val !== 'string' || val.trim() === '') return null;
@@ -171,7 +95,7 @@ export async function createForm(req, res) {
 
   const newForm = {
     id: `33000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
-    store_id: sanitizeUuid(body.store_id || req.query.store_id),
+    store_id: sanitizeUuid(req.storeId),
     name: body.name || 'Product Order Form',
     linked_product_id: sanitizeUuid(body.linked_product_id),
     embed_key,
@@ -186,7 +110,7 @@ export async function createForm(req, res) {
     payment_paystack_enabled: body.payment_paystack_enabled || false,
     payment_flutterwave_enabled: body.payment_flutterwave_enabled || false,
     payment_bank_enabled: body.payment_bank_enabled || false,
-    notification_email: body.notification_email || 'merchant@gmail.com',
+    notification_email: body.notification_email || null,
     upsell_enabled: body.upsell_enabled !== undefined ? body.upsell_enabled : true,
     upsell_product_id: sanitizeUuid(body.upsell_product_id),
     upsell_title: body.upsell_title || 'Special 1-Click Offer!',
@@ -221,11 +145,11 @@ export async function updateForm(req, res) {
   const updates = req.body;
 
   if (supabase) {
-    const { data: existing } = await supabase.from('forms').select('*').eq('id', id).single();
+    const { data: existing } = await supabase.from('forms').select('*').eq('id', id).eq('store_id', req.storeId).single();
     const existingCfg = existing ? existing.fields_config : {};
     const supabasePayload = prepareSupabasePayload(updates, existingCfg);
 
-    const { data, error } = await supabase.from('forms').update(supabasePayload).eq('id', id).select();
+    const { data, error } = await supabase.from('forms').update(supabasePayload).eq('id', id).eq('store_id', req.storeId).select();
     if (!error && data && data.length > 0) {
       const formatted = formatForm(data[0]);
       const idx = mockForms.findIndex(f => f.id === id);
@@ -249,7 +173,7 @@ export async function deleteForm(req, res) {
   const { id } = req.params;
 
   if (supabase) {
-    const { error } = await supabase.from('forms').delete().eq('id', id);
+    const { error } = await supabase.from('forms').delete().eq('id', id).eq('store_id', req.storeId);
     if (!error) {
       mockForms = mockForms.filter(f => f.id !== id);
       return res.json({ success: true, id });
@@ -257,7 +181,7 @@ export async function deleteForm(req, res) {
     return res.status(502).json({ error: 'Form could not be deleted from Supabase', details: error.message });
   }
 
-  mockForms = mockForms.filter(f => f.id !== id);
+  mockForms = mockForms.filter(f => f.id !== id || f.store_id !== req.storeId);
   res.json({ success: true, id });
 }
 

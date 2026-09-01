@@ -1,10 +1,6 @@
 import { supabase } from '../config/supabase.js';
 
-let mockCategories = [
-  { id: '11000000-0000-0000-0000-000000000001', name: 'Kitchen Wares & Dining' },
-  { id: '11000000-0000-0000-0000-000000000002', name: 'Household Gadgets & Cleaning' },
-  { id: '11000000-0000-0000-0000-000000000003', name: 'Health & Personal Care' }
-];
+let mockCategories = [];
 
 let mockProducts = [];
 
@@ -15,19 +11,13 @@ function sanitizeUuid(val) {
 
 export async function getProducts(req, res) {
   const effectiveStoreId = req.user?.store_id || req.query.store_id;
+  if (!effectiveStoreId) {
+    return res.status(400).json({ error: 'store_id is required for public product access' });
+  }
   if (supabase) {
-    // Fetch all products ordered by created_at desc
-    const { data: allProds, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    const { data: allProds, error } = await supabase.from('products').select('*').eq('store_id', effectiveStoreId).order('created_at', { ascending: false });
     if (!error && allProds) {
-      if (allProds.length > 0) {
-        // If effectiveStoreId is supplied, check if store-specific items exist
-        if (effectiveStoreId) {
-          const storeSpecific = allProds.filter(p => p.store_id === effectiveStoreId || !p.store_id || p.store_id === '00000000-0000-0000-0000-784637855674');
-          if (storeSpecific.length > 0) return res.json(storeSpecific);
-        }
-        return res.json(allProds);
-      }
-      return res.json([]);
+      return res.json(allProds);
     }
   }
 
@@ -53,12 +43,12 @@ export async function createProduct(req, res) {
   const {
     name, category_id, category_name, country, description,
     cost_price, base_price, sku, initial_stock, price_bundles,
-    store_id
+    store_id: ignoredStoreId
   } = req.body;
 
   const sanitizedCategoryId = sanitizeUuid(category_id);
   const DEFAULT_PRIMARY_STORE_ID = '00000000-0000-0000-0000-784637855674';
-  const sanitizedStoreId = sanitizeUuid(store_id || req.query.store_id || req.user?.store_id) || DEFAULT_PRIMARY_STORE_ID;
+  const sanitizedStoreId = sanitizeUuid(req.storeId) || DEFAULT_PRIMARY_STORE_ID;
 
   const newProduct = {
     id: `22000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
@@ -125,11 +115,11 @@ export async function updateProduct(req, res) {
 
   if (supabase) {
     let dbPayload = prepareProductPayloadForSupabase(updates);
-    let { data, error } = await supabase.from('products').update(dbPayload).eq('id', id).select();
+    let { data, error } = await supabase.from('products').update(dbPayload).eq('id', id).eq('store_id', req.storeId).select();
 
     if (error && (error.code === '23503' || error.message?.includes('foreign key'))) {
       dbPayload.category_id = null;
-      const retry = await supabase.from('products').update(dbPayload).eq('id', id).select();
+      const retry = await supabase.from('products').update(dbPayload).eq('id', id).eq('store_id', req.storeId).select();
       data = retry.data;
       error = retry.error;
     }
@@ -154,7 +144,7 @@ export async function deleteProduct(req, res) {
   const { id } = req.params;
 
   if (supabase) {
-    const { error } = await supabase.from('products').delete().eq('id', id);
+    const { error } = await supabase.from('products').delete().eq('id', id).eq('store_id', req.storeId);
     if (!error) {
       mockProducts = mockProducts.filter(p => p.id !== id);
       return res.json({ success: true, id });
@@ -170,7 +160,8 @@ export async function createCategory(req, res) {
   const { name } = req.body;
   const newCategory = {
     id: `11000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
-    name
+    name,
+    store_id: req.storeId
   };
 
   if (supabase) {
@@ -208,10 +199,10 @@ export async function recordStockAdjustment(req, res) {
 
   if (supabase) {
     try {
-      const { data: prod } = await supabase.from('products').select('available_stock').eq('id', product_id).single();
+      const { data: prod } = await supabase.from('products').select('available_stock').eq('id', product_id).eq('store_id', req.storeId).single();
       if (prod) {
         const newStock = Math.max(0, (prod.available_stock || 0) + delta);
-        await supabase.from('products').update({ available_stock: newStock }).eq('id', product_id);
+        await supabase.from('products').update({ available_stock: newStock }).eq('id', product_id).eq('store_id', req.storeId);
       }
       await supabase.from('stock_movements').insert([{
         product_id,

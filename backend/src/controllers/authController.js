@@ -13,41 +13,7 @@ function generateJwtToken(userPayload) {
   }, JWT_SECRET, { expiresIn: '7d' });
 }
 
-let mockUsers = [
-  {
-    id: 'a1000000-0000-0000-0000-000000000001',
-    full_name: 'Amina Bello',
-    email: 'owner@merchant.ng',
-    password_hash: 'password123',
-    phone: '+2348031234567',
-    role: 'owner',
-    store_name: 'OliStores Nigeria',
-    country: 'Nigeria',
-    currency: 'NGN'
-  },
-  {
-    id: 'a2000000-0000-0000-0000-000000000002',
-    full_name: 'Chidi Okafor',
-    email: 'chidi@merchant.ng',
-    password_hash: 'password123',
-    phone: '+2348029876543',
-    role: 'confirmation_staff',
-    store_name: 'OliStores Nigeria',
-    country: 'Nigeria',
-    currency: 'NGN'
-  },
-  {
-    id: 'a3000000-0000-0000-0000-000000000003',
-    full_name: 'Babajide Adeleke',
-    email: 'logistics@merchant.ng',
-    password_hash: 'password123',
-    phone: '+2348051112223',
-    role: 'logistics',
-    store_name: 'OliStores Nigeria',
-    country: 'Nigeria',
-    currency: 'NGN'
-  }
-];
+let mockUsers = [];
 
 export async function login(req, res) {
   const { email, password } = req.body;
@@ -167,18 +133,24 @@ export async function signup(req, res) {
           console.error('Failed to send welcome email:', err);
         });
         return res.status(201).json({
-          token: `jwt_token_${createdUser.id}`,
+          token: generateJwtToken(createdUser),
           user: createdUser
         });
       } else if (userError) {
         console.error('⚠️ Supabase user insert error:', userError);
+        return res.status(502).json({ error: 'Account could not be saved to Supabase', details: userError.message });
       }
     } catch (err) {
       console.error('Supabase signup exception:', err);
+      return res.status(502).json({ error: 'Account could not be saved to Supabase', details: err.message });
     }
   }
 
-  // 2. Fallback to mockUsers array
+  if (supabase) {
+    return res.status(502).json({ error: 'Account could not be saved to Supabase' });
+  }
+
+  // 2. Fallback to mockUsers array for offline development only
   const newUser = {
     id: userId,
     full_name: full_name || 'Merchant Owner',
@@ -233,7 +205,7 @@ export async function getMe(req, res) {
 }
 
 export async function getTeamMembers(req, res) {
-  const { store_id } = req.query;
+  const store_id = req.storeId;
 
   if (supabase) {
     try {
@@ -261,7 +233,7 @@ function normalizeRole(role) {
 }
 
 export async function createTeamMember(req, res) {
-  const { full_name, email, password, role, phone, store_id, store_name } = req.body;
+  const { full_name, email, password, role, phone, store_name } = req.body;
 
   if (!email || !password || !full_name) {
     return res.status(400).json({ error: 'Full name, email, and password are required' });
@@ -273,7 +245,7 @@ export async function createTeamMember(req, res) {
 
   const userPayload = {
     id: userId,
-    store_id: store_id || null,
+    store_id: req.storeId,
     full_name,
     email: cleanEmail,
     password_hash: password,
@@ -289,12 +261,21 @@ export async function createTeamMember(req, res) {
       if (!error && data && data[0]) {
         mockUsers.unshift(userPayload);
         console.log(`✅ Staff Member "${full_name}" (${validRole}) created in Supabase!`);
+        NotificationService.sendStaffInvitationEmail({
+          full_name,
+          email: cleanEmail,
+          password,
+          role: validRole,
+          store_name: userPayload.store_name
+        }).catch(err => console.error('Failed to send staff invitation email:', err));
         return res.status(201).json(data[0]);
       } else if (error) {
         console.error('⚠️ Supabase staff creation error:', error);
+        return res.status(502).json({ error: 'Staff account could not be saved to Supabase', details: error.message });
       }
     } catch (err) {
       console.error('Supabase staff creation error:', err);
+      return res.status(502).json({ error: 'Staff account could not be saved to Supabase', details: err.message });
     }
   }
 

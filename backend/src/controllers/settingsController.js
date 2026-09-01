@@ -73,7 +73,7 @@ let mockAuditTrail = [
 ];
 
 export async function getSettings(req, res) {
-  const { store_id } = req.query;
+  const store_id = req.storeId;
 
   if (supabase) {
     try {
@@ -110,9 +110,10 @@ export async function updateSettings(req, res) {
 
   if (supabase) {
     try {
-      const storeId = req.user?.store_id || newSettings.store_id;
+      const storeId = req.storeId;
       if (storeId) {
-        await supabase.from('settings').upsert([{ store_id: storeId, ...mockStoreSettings }]);
+        const { error } = await supabase.from('settings').upsert([{ store_id: storeId, ...mockStoreSettings }]);
+        if (error) return res.status(502).json({ error: 'Settings could not be saved to Supabase', details: error.message });
       }
     } catch (e) {
       console.error('Supabase settings update error:', e);

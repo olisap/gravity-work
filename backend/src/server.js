@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 import { login, signup, getMe, getTeamMembers, createTeamMember } from './controllers/authController.js';
-import { requireAuth, requireRole } from './middleware/authMiddleware.js';
+import { requireAuth, requireStoreContext, requireRole } from './middleware/authMiddleware.js';
 import { getOrders, createOrUpdateDraftOrder, updateOrderStatus, addUpsellToOrder } from './controllers/orderController.js';
 import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory, getStockMovements, recordStockAdjustment } from './controllers/productController.js';
 import { getForms, getFormByEmbedKey, createForm, updateForm, deleteForm } from './controllers/formController.js';
@@ -31,56 +31,56 @@ app.get('/health', (req, res) => {
 app.post('/api/auth/login', login);
 app.post('/api/auth/signup', signup);
 app.get('/api/auth/me', requireAuth, getMe);
-app.get('/api/team', requireAuth, requireRole(['owner', 'admin']), getTeamMembers);
-app.post('/api/team', requireAuth, requireRole(['owner', 'admin']), createTeamMember);
+app.get('/api/team', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), getTeamMembers);
+app.post('/api/team', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createTeamMember);
 
 // Store Settings & Preferences Routes
-app.get('/api/settings', requireAuth, getSettings);
-app.post('/api/settings', requireAuth, requireRole(['owner', 'admin']), updateSettings);
+app.get('/api/settings', requireAuth, requireStoreContext, getSettings);
+app.post('/api/settings', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), updateSettings);
 app.get('/api/audit-trail', requireAuth, requireRole(['owner', 'admin']), getAuditTrail);
 
 // Orders & Pipeline Routes
-app.get('/api/orders', requireAuth, getOrders);
+app.get('/api/orders', requireAuth, requireStoreContext, getOrders);
 app.post('/api/orders/draft', createOrUpdateDraftOrder);
-app.patch('/api/orders/:id/status', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics']), updateOrderStatus);
-app.post('/api/orders/:id/upsell', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), addUpsellToOrder);
+app.patch('/api/orders/:id/status', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics']), updateOrderStatus);
+app.post('/api/orders/:id/upsell', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), addUpsellToOrder);
 
 // Products & Stock Inventory Routes
 app.get('/api/products', getProducts);
-app.post('/api/products', requireAuth, requireRole(['owner', 'admin']), createProduct);
-app.patch('/api/products/:id', requireAuth, requireRole(['owner', 'admin']), updateProduct);
-app.delete('/api/products/:id', requireAuth, requireRole(['owner', 'admin']), deleteProduct);
+app.post('/api/products', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createProduct);
+app.patch('/api/products/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), updateProduct);
+app.delete('/api/products/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), deleteProduct);
 app.get('/api/categories', getCategories);
-app.post('/api/categories', requireAuth, requireRole(['owner', 'admin']), createCategory);
-app.get('/api/stock-movements', requireAuth, getStockMovements);
-app.post('/api/stock-movements', requireAuth, requireRole(['owner', 'admin', 'logistics']), recordStockAdjustment);
+app.post('/api/categories', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createCategory);
+app.get('/api/stock-movements', requireAuth, requireStoreContext, getStockMovements);
+app.post('/api/stock-movements', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), recordStockAdjustment);
 
 // Suppliers & Wholesale Partners Routes
-app.get('/api/suppliers', requireAuth, getSuppliers);
-app.post('/api/suppliers', requireAuth, requireRole(['owner', 'admin', 'logistics']), createSupplier);
-app.patch('/api/suppliers/:id', requireAuth, requireRole(['owner', 'admin', 'logistics']), updateSupplier);
-app.delete('/api/suppliers/:id', requireAuth, requireRole(['owner', 'admin']), deleteSupplier);
+app.get('/api/suppliers', requireAuth, requireStoreContext, getSuppliers);
+app.post('/api/suppliers', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), createSupplier);
+app.patch('/api/suppliers/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), updateSupplier);
+app.delete('/api/suppliers/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), deleteSupplier);
 
 // Delivery Fleet & Courier Agents Routes
-app.get('/api/delivery-agents', requireAuth, getDeliveryAgents);
-app.post('/api/delivery-agents', requireAuth, requireRole(['owner', 'admin', 'logistics']), createDeliveryAgent);
-app.patch('/api/delivery-agents/:id', requireAuth, requireRole(['owner', 'admin', 'logistics']), updateDeliveryAgent);
-app.delete('/api/delivery-agents/:id', requireAuth, requireRole(['owner', 'admin']), deleteDeliveryAgent);
-app.post('/api/delivery-agents/:id/stock', requireAuth, requireRole(['owner', 'admin', 'logistics']), assignStockToAgent);
+app.get('/api/delivery-agents', requireAuth, requireStoreContext, getDeliveryAgents);
+app.post('/api/delivery-agents', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), createDeliveryAgent);
+app.patch('/api/delivery-agents/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), updateDeliveryAgent);
+app.delete('/api/delivery-agents/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), deleteDeliveryAgent);
+app.post('/api/delivery-agents/:id/stock', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), assignStockToAgent);
 
 // Forms Routes (Embed route remains public for checkout iframe)
-app.get('/api/forms', requireAuth, getForms);
-app.post('/api/forms', requireAuth, requireRole(['owner', 'admin']), createForm);
-app.patch('/api/forms/:id', requireAuth, requireRole(['owner', 'admin']), updateForm);
-app.delete('/api/forms/:id', requireAuth, requireRole(['owner', 'admin']), deleteForm);
+app.get('/api/forms', requireAuth, requireStoreContext, getForms);
+app.post('/api/forms', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createForm);
+app.patch('/api/forms/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), updateForm);
+app.delete('/api/forms/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), deleteForm);
 app.get('/api/forms/embed/:embedKey', getFormByEmbedKey);
 
 // Dashboard Analytics Routes
-app.get('/api/dashboard', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), getDashboardStats);
+app.get('/api/dashboard', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), getDashboardStats);
 
 // Upsell Routes
-app.get('/api/upsell', requireAuth, getUpsellOffers);
-app.get('/api/upsell/trigger/:productId', getUpsellOfferForProduct);
+app.get('/api/upsell', requireAuth, requireStoreContext, getUpsellOffers);
+app.get('/api/upsell/trigger/:productId', requireAuth, requireStoreContext, getUpsellOfferForProduct);
 
 // Start background draft abandonment scanner (only in dedicated server mode)
 if (!process.env.VERCEL) {

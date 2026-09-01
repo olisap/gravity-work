@@ -27,27 +27,8 @@ export default function CheckoutPage() {
           console.warn('Failed to fetch form configuration, using fallback form');
         }
 
-        // Fallback default form configuration if API failed or embed key was not found
         if (!formData || formData.error) {
-          formData = {
-            id: '33000000-0000-0000-0000-000000000001',
-            name: 'POT KNOB Order Form',
-            linked_product_id: '22000000-0000-0000-0000-784714673902',
-            embed_key: embedKey,
-            header_text: 'Please Fill The Form Below To Place Your Order',
-            subheader_text: 'Only Serious Buyers Should Fill The Form Below',
-            button_text: 'ORDER NOW',
-            button_bg_color: '#4f46e5',
-            button_text_color: '#ffffff',
-            form_bg_color: '#0f172a',
-            show_country_code: 'Yes',
-            payment_cod_enabled: true,
-            thank_you_url: queryThankYouUrl || '',
-            upsell_enabled: true,
-            upsell_title: 'Special 1-Click Offer!',
-            upsell_description: 'Add an extra product to your order for a special price!',
-            upsell_price: 7000
-          };
+          throw new Error('Order form was not found');
         } else if (queryThankYouUrl) {
           formData.thank_you_url = queryThankYouUrl;
         }
@@ -59,7 +40,8 @@ export default function CheckoutPage() {
 
         let productsData = [];
         try {
-          const productsRes = await fetch(apiUrl('/api/products'), { headers });
+          const productsQuery = formData.store_id ? `?store_id=${encodeURIComponent(formData.store_id)}` : '';
+          const productsRes = await fetch(apiUrl(`/api/products${productsQuery}`), { headers });
           if (productsRes.ok) {
             const resData = await productsRes.json();
             if (Array.isArray(resData)) {
@@ -76,36 +58,13 @@ export default function CheckoutPage() {
         if (!linkedProduct && productsData.length > 0) {
           linkedProduct = productsData[0];
         }
-        if (!linkedProduct) {
-          linkedProduct = {
-            id: formData.linked_product_id || '22000000-0000-0000-0000-000000000001',
-            name: 'Product Item',
-            base_price: 18500,
-            price_bundles: [
-              { qty: 1, label: `1 x Product + Free Delivery`, price: 18500 },
-              { qty: 2, label: `2 x Product + Free Delivery`, price: 35500 }
-            ]
-          };
-        }
+        if (!linkedProduct) throw new Error('Product for this order form was not found');
         setProduct(linkedProduct);
       } catch (err) {
         console.error('Checkout initialization failed:', err);
-        // Ensure standard fallbacks exist so form always renders smoothly
-        setForm(prev => prev || {
-          header_text: 'Please Fill The Form Below To Place Your Order',
-          subheader_text: 'Only Serious Buyers Should Fill The Form Below',
-          button_text: 'ORDER NOW'
-        });
-        setProduct(prev => prev || {
-          id: '22000000-0000-0000-0000-784714673902',
-          name: 'POT KNOB',
-          base_price: 18500,
-          price_bundles: [
-            { qty: 2, label: `2 pieces + Free Delivery`, price: 18500 },
-            { qty: 4, label: `4 pieces + Free Delivery`, price: 35500 },
-            { qty: 5, label: `5 pieces + Free Delivery`, price: 45500 }
-          ]
-        });
+        setError(err.message || 'Checkout data could not be loaded');
+        setForm(null);
+        setProduct(null);
       } finally {
         setLoading(false);
       }

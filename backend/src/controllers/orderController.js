@@ -312,7 +312,7 @@ export async function updateOrderStatus(req, res) {
         updates.payment_status = 'Paid';
       }
 
-      const { data: dbData, error: dbErr } = await supabase.from('orders').update(updates).eq('id', id).select();
+      const { data: dbData, error: dbErr } = await supabase.from('orders').update(updates).eq('id', id).eq('store_id', req.storeId).select();
       if (!dbErr && dbData && dbData[0]) {
         const formatted = formatOrderFromSupabase(dbData[0]);
         const idx = mockOrders.findIndex(o => o.id === id);
@@ -327,7 +327,7 @@ export async function updateOrderStatus(req, res) {
     }
   }
 
-  let order = mockOrders.find(o => o.id === id);
+  let order = mockOrders.find(o => o.id === id && o.store_id === req.storeId);
   if (!order) {
     return res.status(404).json({ error: 'Order not found' });
   }
