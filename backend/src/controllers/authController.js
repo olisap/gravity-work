@@ -34,6 +34,9 @@ export async function login(req, res) {
       if (!error && data && data.length > 0) {
         // Find user with matching password or default fallback
         const matchingUser = data.find(u => u.password_hash === password || u.password === password || password === 'password123') || data[0];
+        if (matchingUser.is_active === false) {
+          return res.status(403).json({ error: 'This account has been deactivated. Contact your store administrator.' });
+        }
         const isValidPassword = matchingUser.password_hash === password || matchingUser.password === password || password === 'password123';
 
         if (isValidPassword) {
@@ -209,7 +212,7 @@ export async function getTeamMembers(req, res) {
 
   if (supabase) {
     try {
-      let query = supabase.from('users').select('id, full_name, email, role, phone, store_name, created_at');
+      let query = supabase.from('users').select('id, full_name, email, role, phone, store_name, is_active, created_at');
       if (store_id) query = query.eq('store_id', store_id);
       const { data, error } = await query;
       if (!error && data) return res.json(data);
@@ -252,6 +255,7 @@ export async function createTeamMember(req, res) {
     phone: phone || '+2348000000000',
     role: validRole,
     store_name: store_name || 'My E-Commerce Store',
+    is_active: true,
     created_at: new Date().toISOString()
   };
 
@@ -281,4 +285,33 @@ export async function createTeamMember(req, res) {
 
   mockUsers.unshift(userPayload);
   res.status(201).json(userPayload);
+}
+
+export async function updateTeamMemberStatus(req, res) {
+  const { id } = req.params;
+  const { is_active } = req.body;
+
+  if (typeof is_active !== 'boolean') {
+    return res.status(400).json({ error: 'is_active must be a boolean' });
+  }
+  if (id === req.user.id) {
+    return res.status(400).json({ error: 'You cannot deactivate your own account' });
+  }
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ is_active })
+      .eq('id', id)
+      .eq('store_id', req.storeId)
+      .select('id, full_name, email, role, phone, store_name, is_active, created_at');
+    if (error) return res.status(502).json({ error: 'Staff status could not be updated', details: error.message });
+    if (data && data[0]) return res.json(data[0]);
+    return res.status(404).json({ error: 'Staff member not found in your store' });
+  }
+
+  const member = mockUsers.find(user => user.id === id && user.store_id === req.storeId);
+  if (!member) return res.status(404).json({ error: 'Staff member not found in your store' });
+  member.is_active = is_active;
+  return res.json(member);
 }

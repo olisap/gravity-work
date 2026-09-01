@@ -84,6 +84,26 @@ export default function TeamManagementModal({ user, onClose }) {
     }
   };
 
+  const handleToggleStatus = async (member) => {
+    const nextStatus = member.is_active === false;
+    try {
+      const token = localStorage.getItem('gravity_crm_token');
+      const res = await fetch(apiUrl(`/api/team/${member.id}/status`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ is_active: nextStatus })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update staff status');
+      setTeamMembers(prev => prev.map(item => item.id === member.id ? data : item));
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="glass-panel w-full max-w-2xl p-6 rounded-2xl border-slate-700 space-y-5 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto scrollbar-none">
@@ -215,13 +235,14 @@ export default function TeamManagementModal({ user, onClose }) {
                 <th className="p-3">Email ID</th>
                 <th className="p-3">Role</th>
                 <th className="p-3">Phone</th>
+                <th className="p-3">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {isLoading ? (
-                <tr><td colSpan={4} className="text-center py-6 text-slate-500 italic">Loading team members...</td></tr>
+                <tr><td colSpan={5} className="text-center py-6 text-slate-500 italic">Loading team members...</td></tr>
               ) : teamMembers.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-6 text-slate-500 italic">No team accounts added yet.</td></tr>
+                <tr><td colSpan={5} className="text-center py-6 text-slate-500 italic">No team accounts added yet.</td></tr>
               ) : (
                 teamMembers.map(m => (
                   <tr key={m.id} className="hover:bg-slate-800/40 transition-colors">
@@ -238,6 +259,17 @@ export default function TeamManagementModal({ user, onClose }) {
                       </span>
                     </td>
                     <td className="p-3 text-slate-400">{m.phone || '—'}</td>
+                    <td className="p-3">
+                      {m.role !== 'owner' && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(m)}
+                          className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${m.is_active === false ? 'text-emerald-300 border-emerald-500/30' : 'text-rose-300 border-rose-500/30'}`}
+                        >
+                          {m.is_active === false ? 'Reactivate' : 'Deactivate'}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

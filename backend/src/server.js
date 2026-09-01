@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-import { login, signup, getMe, getTeamMembers, createTeamMember } from './controllers/authController.js';
+import { login, signup, getMe, getTeamMembers, createTeamMember, updateTeamMemberStatus } from './controllers/authController.js';
 import { requireAuth, requireStoreContext, requireRole } from './middleware/authMiddleware.js';
 import { getOrders, createOrUpdateDraftOrder, updateOrderStatus, addUpsellToOrder } from './controllers/orderController.js';
 import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory, getStockMovements, recordStockAdjustment } from './controllers/productController.js';
@@ -33,6 +33,7 @@ app.post('/api/auth/signup', signup);
 app.get('/api/auth/me', requireAuth, getMe);
 app.get('/api/team', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), getTeamMembers);
 app.post('/api/team', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createTeamMember);
+app.patch('/api/team/:id/status', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), updateTeamMemberStatus);
 
 // Store Settings & Preferences Routes
 app.get('/api/settings', requireAuth, requireStoreContext, getSettings);
