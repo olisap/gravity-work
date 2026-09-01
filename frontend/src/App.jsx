@@ -23,6 +23,7 @@ import CheckoutPage from './pages/CheckoutPage';
 import SettingsPage from './pages/SettingsPage';
 
 import TeamManagementModal from './components/TeamManagementModal';
+import { apiUrl } from './utils/apiUrl';
 
 function CrmAppContent() {
   const { user, isAuthenticated } = useAuth();
@@ -96,9 +97,9 @@ function CrmAppContent() {
       const headers = storedToken ? { 'Authorization': `Bearer ${storedToken}` } : {};
 
       const [ordersRes, productsRes, formsRes] = await Promise.all([
-        fetch(`/api/orders${queryStr}`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/products${queryStr}`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/forms${queryStr}`, { headers }).then(r => r.ok ? r.json() : []).catch(() => [])
+        fetch(apiUrl(`/api/orders${queryStr}`), { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(apiUrl(`/api/products${queryStr}`), { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(apiUrl(`/api/forms${queryStr}`), { headers }).then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
 
       if (Array.isArray(ordersRes)) setOrders(ordersRes);
@@ -116,7 +117,7 @@ function CrmAppContent() {
   const handleUpdateStatus = async (orderId, newStatus, notes, scheduleData) => {
     try {
       const token = localStorage.getItem('gravity_crm_token');
-      const res = await fetch(`/api/orders/${orderId}/status`, {
+      const res = await fetch(apiUrl(`/api/orders/${orderId}/status`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +143,7 @@ function CrmAppContent() {
 
   const handleAddUpsell = async (orderId, upsellItem, source) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/upsell`, {
+      const res = await fetch(apiUrl(`/api/orders/${orderId}/upsell`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ upsell_item: upsellItem, upsell_source: source })

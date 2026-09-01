@@ -236,9 +236,12 @@ export class NotificationService {
       }
     }
 
-    console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Content length: ${finalHtml.length} chars`);
-    await logNotification('Sandbox', 'sent_sandbox', { note: 'No live email credentials active or all providers failed' });
-    return { success: true, provider: 'Sandbox', mockSent: true };
+    const reason = smtpHost || resendKey || brevoKey
+      ? 'All configured email providers failed'
+      : 'No live email provider credentials configured';
+    console.error(`❌ Email was not sent to ${email}: ${reason}`);
+    await logNotification('None', 'failed', { note: reason });
+    return { success: false, provider: 'none', error: reason };
   }
 
   /**

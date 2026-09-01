@@ -207,6 +207,7 @@ export async function createForm(req, res) {
       return res.status(201).json(formatted);
     } else if (error) {
       console.error('❌ Supabase form insert error:', error.message, error.details || '');
+      return res.status(502).json({ error: 'Form could not be saved to Supabase', details: error.message });
     }
   }
 
@@ -232,6 +233,7 @@ export async function updateForm(req, res) {
       return res.json(formatted);
     } else if (error) {
       console.error('❌ Supabase form update error:', error.message);
+      return res.status(502).json({ error: 'Form could not be updated in Supabase', details: error.message });
     }
   }
 
@@ -252,6 +254,7 @@ export async function deleteForm(req, res) {
       mockForms = mockForms.filter(f => f.id !== id);
       return res.json({ success: true, id });
     }
+    return res.status(502).json({ error: 'Form could not be deleted from Supabase', details: error.message });
   }
 
   mockForms = mockForms.filter(f => f.id !== id);

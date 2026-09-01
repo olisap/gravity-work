@@ -111,6 +111,7 @@ export async function createProduct(req, res) {
       return res.status(201).json(data[0]);
     } else if (error) {
       console.error('❌ Supabase product insert error:', error.message);
+      return res.status(502).json({ error: 'Product could not be saved to Supabase', details: error.message });
     }
   }
 
@@ -138,6 +139,7 @@ export async function updateProduct(req, res) {
       if (idx !== -1) mockProducts[idx] = { ...mockProducts[idx], ...data[0] };
       return res.json(data[0]);
     }
+    if (error) return res.status(502).json({ error: 'Product could not be updated in Supabase', details: error.message });
   }
 
   const idx = mockProducts.findIndex(p => p.id === id);
@@ -157,6 +159,7 @@ export async function deleteProduct(req, res) {
       mockProducts = mockProducts.filter(p => p.id !== id);
       return res.json({ success: true, id });
     }
+    return res.status(502).json({ error: 'Product could not be deleted from Supabase', details: error.message });
   }
 
   mockProducts = mockProducts.filter(p => p.id !== id);
@@ -176,6 +179,7 @@ export async function createCategory(req, res) {
       mockCategories.push(data[0]);
       return res.status(201).json(data[0]);
     }
+    if (error) return res.status(502).json({ error: 'Category could not be saved to Supabase', details: error.message });
   }
 
   mockCategories.push(newCategory);

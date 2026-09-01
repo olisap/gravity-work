@@ -17,3 +17,7 @@ services:
         sync: false
       - key: BREVO_API_KEY
         sync: false
+      - key: SENDER_EMAIL
+        sync: false
+      - key: SENDER_NAME
+        sync: false

@@ -22,7 +22,7 @@ export default function UpsellManager({ selectedCountry, onNavigateToFormBuilder
         const token = localStorage.getItem('gravity_crm_token');
         const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
         const storeId = user?.store_id || user?.id || '';
-        const res = await fetch(`/api/upsell?store_id=${storeId}`, { headers: authHeaders });
+        const res = await fetch(apiUrl(`/api/upsell?store_id=${storeId}`), { headers: authHeaders });
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.campaigns)) {
