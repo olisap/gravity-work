@@ -13,6 +13,7 @@ export default function ExpensesAccounting({ selectedCountry, orders = [] }) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Advertising');
   const [amount, setAmount] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loc = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
   const curr = loc.currency;
@@ -27,13 +28,19 @@ export default function ExpensesAccounting({ selectedCountry, orders = [] }) {
   const handleAddExpense = (e) => {
     e.preventDefault();
     if (!title || !amount) return;
-    setExpenses(prev => [
-      { id: Date.now(), title, category, amount: Number(amount), date: new Date().toISOString().slice(0, 10) },
-      ...prev
-    ]);
-    setShowAddModal(false);
-    setTitle('');
-    setAmount('');
+    setIsSubmitting(true);
+    
+    // Simulate network request
+    setTimeout(() => {
+      setExpenses(prev => [
+        { id: Date.now(), title, category, amount: Number(amount), date: new Date().toISOString().slice(0, 10) },
+        ...prev
+      ]);
+      setShowAddModal(false);
+      setTitle('');
+      setAmount('');
+      setIsSubmitting(false);
+    }, 600);
   };
 
   return (
@@ -144,7 +151,13 @@ export default function ExpensesAccounting({ selectedCountry, orders = [] }) {
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setShowAddModal(false)} className="w-1/2 btn-ghost py-2 text-xs">Cancel</button>
-                <button type="submit" className="w-1/2 btn-primary py-2 text-xs">Save Expense</button>
+                <button type="submit" disabled={isSubmitting} className="w-1/2 btn-primary py-2 text-xs">
+                  {isSubmitting ? (
+                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
+                  ) : (
+                    'Save Expense'
+                  )}
+                </button>
               </div>
             </form>
           </div>

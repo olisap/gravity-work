@@ -10,7 +10,7 @@ import SuppliersManager from './pages/SuppliersManager';
 import DeliveryAgentsManager from './pages/DeliveryAgentsManager';
 import FormBuilder from './pages/FormBuilder';
 import DraftReminders from './pages/DraftReminders';
-import NotificationCenter from './pages/NotificationCenter';
+
 import UpsellManager from './pages/UpsellManager';
 import ExpensesAccounting from './pages/ExpensesAccounting';
 import DeliveriesFollowups from './pages/DeliveriesFollowups';
@@ -36,6 +36,7 @@ function CrmAppContent() {
 
   const [viewMode, setViewMode] = useState('crm'); // 'crm', 'login', 'onboarding'
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [selectedCountry, setSelectedCountry] = useState('Nigeria');
   const [selectedState, setSelectedState] = useState('All Regions');
@@ -70,20 +71,20 @@ function CrmAppContent() {
       owner: null, // Full access
       admin: null, // Full access
       confirmation_staff: [
-        'dashboard', 'categories', 'products', 'form-builder',
-        'todays-deliveries', 'todays-followups', 'orders', 'draft-reminders',
-        'whatsapp-marketing', 'notifications', 'email-marketing', 'upsells'
+        'dashboard', 'products', 'form-builder',
+        'dispatch', 'orders', 'draft-reminders',
+        'marketing', 'upsells'
       ],
       logistics: [
-        'todays-deliveries', 'todays-followups', 'orders',
+        'dispatch', 'orders',
         'suppliers', 'agents', 'products-inventory', 'products'
       ]
     };
 
     const allowedTabs = roleTabPermissions[effectiveRole];
     if (allowedTabs && !allowedTabs.includes(activeTab)) {
-      const fallbackTab = effectiveRole === 'logistics' ? 'todays-deliveries' : 'dashboard';
-      console.warn(`Tab "${activeTab}" is not authorized for role "${effectiveRole}". Falling back to "${fallbackTab}".`);
+      const fallbackTab = effectiveRole === 'logistics' ? 'dispatch' : 'dashboard';
+      console.warn(`Tab "${activeTab}" not authorized for "${effectiveRole}". Falling back to "${fallbackTab}".`);
       setActiveTab(fallbackTab);
     }
   }, [activeRole, activeTab, user]);
@@ -212,8 +213,16 @@ function CrmAppContent() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#090d16] text-slate-100">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} activeRole={activeRole} />
+      <Sidebar activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); setIsSidebarOpen(false); }} activeRole={activeRole} isOpen={isSidebarOpen} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -226,6 +235,7 @@ function CrmAppContent() {
           setActiveRole={setActiveRole}
           onRefresh={fetchData}
           onOpenTeamModal={() => setShowTeamModal(true)}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
 
         <main className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-none">
@@ -267,15 +277,6 @@ function CrmAppContent() {
             />
           )}
 
-          {activeTab === 'categories' && (
-            <ProductsInventory
-              products={products}
-              selectedCountry={selectedCountry}
-              onProductCreated={handleProductCreated}
-              onProductDeleted={handleProductDeleted}
-              onProductUpdated={handleProductUpdated}
-            />
-          )}
 
           {activeTab === 'form-builder' && (
             <FormBuilder
@@ -294,9 +295,6 @@ function CrmAppContent() {
             />
           )}
 
-          {activeTab === 'notifications' && (
-            <NotificationCenter />
-          )}
 
           {activeTab === 'upsells' && (
             <UpsellManager selectedCountry={selectedCountry} />
@@ -309,18 +307,8 @@ function CrmAppContent() {
             />
           )}
 
-          {activeTab === 'todays-deliveries' && (
+          {activeTab === 'dispatch' && (
             <DeliveriesFollowups
-              type="deliveries"
-              orders={orders}
-              selectedCountry={selectedCountry}
-              onUpdateStatus={handleUpdateStatus}
-            />
-          )}
-
-          {activeTab === 'todays-followups' && (
-            <DeliveriesFollowups
-              type="followups"
               orders={orders}
               selectedCountry={selectedCountry}
               onOpenConfirmationModal={(order) => setActiveModalOrder(order)}
@@ -328,12 +316,8 @@ function CrmAppContent() {
             />
           )}
 
-          {activeTab === 'whatsapp-marketing' && (
-            <MarketingHub type="whatsapp" selectedCountry={selectedCountry} />
-          )}
-
-          {activeTab === 'email-marketing' && (
-            <MarketingHub type="email" selectedCountry={selectedCountry} />
+          {activeTab === 'marketing' && (
+            <MarketingHub selectedCountry={selectedCountry} />
           )}
 
           {activeTab === 'products-inventory' && (

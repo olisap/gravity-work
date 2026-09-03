@@ -19,11 +19,37 @@ export default function ProductsInventory({
   const { user } = useAuth();
   const storeId = user?.store_id || user?.id || '';
 
+  const [activeSegment, setActiveSegment] = useState('products');
+  const [categories, setCategories] = useState([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+
   const [selectedProductFilter, setSelectedProductFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [activeMenuProductId, setActiveMenuProductId] = useState(null);
+
+  // Fetch categories
+  React.useEffect(() => {
+    const fetchCategories = async () => {
+      setLoadingCategories(true);
+      try {
+        const token = localStorage.getItem('gravity_crm_token');
+        const h = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const res = await fetch(apiUrl('/api/categories'), { headers: h });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) setCategories(data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch categories:', e);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    fetchCategories();
+  }, []);
+
 
   // Modals
   const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -251,12 +277,67 @@ export default function ProductsInventory({
     <div className="space-y-5 animate-fade-in text-slate-100">
 
       {/* Page Title & Total Count */}
-      <div className="flex items-center gap-2">
-        <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-          Products ({products.length})
-        </h2>
-        <HelpCircle className="w-4 h-4 text-indigo-400 cursor-pointer" title="Manage products, variations, prices, and stock" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <h2 className="section-title">
+            <Package className="w-5 h-5" style={{ color: 'var(--brand)' }} />
+            Products & Catalog
+          </h2>
+          <p className="section-subtitle">Manage products, variations, prices, and categories.</p>
+        </div>
+        
+        <div className="segment-toggle w-fit">
+          <button
+            className={`segment-btn${activeSegment === 'products' ? ' active' : ''}`}
+            onClick={() => setActiveSegment('products')}
+          >
+            <Package className="w-3.5 h-3.5" /> Products ({products.length})
+          </button>
+          <button
+            className={`segment-btn${activeSegment === 'categories' ? ' active' : ''}`}
+            onClick={() => setActiveSegment('categories')}
+          >
+            <Tag className="w-3.5 h-3.5" /> Categories ({categories.length})
+          </button>
+        </div>
       </div>
+
+      {activeSegment === 'categories' ? (
+        <div className="glass p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-200">Category Manager</h3>
+            <button className="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500">
+              + New Category
+            </button>
+          </div>
+          {loadingCategories ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => <div key={i} className="skeleton h-24 rounded-2xl" />)}
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="text-center py-10 text-xs text-slate-500 italic border border-slate-800 rounded-2xl border-dashed">
+              No categories found. Create one to organize your products.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {categories.map(cat => (
+                <div key={cat.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover-lift flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-bold text-slate-200 text-sm">{cat.name}</h4>
+                    <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{cat.description || 'No description provided'}</p>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="badge badge-scheduled">{cat.product_count || 0} Products</span>
+                    <button className="text-[11px] text-indigo-400 font-semibold hover:text-indigo-300">Edit</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+
 
       {/* ── Toolbar Card (Filters & Action Buttons) ── */}
       <div className="glass p-4 rounded-2xl border-slate-800 flex flex-wrap items-center justify-between gap-3">
@@ -373,7 +454,7 @@ export default function ProductsInventory({
                   return (
                     <tr
                       key={p.id}
-                      className={`hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-indigo-950/20' : ''}`}
+                      className={`group hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-indigo-950/20' : ''}`}
                     >
                       {/* Checkbox */}
                       <td className="px-4 py-3.5">
@@ -439,80 +520,67 @@ export default function ProductsInventory({
                       </td>
 
                       {/* Action Menu (3 Dots Popup) */}
-                      <td className="px-4 py-3.5 text-right relative">
-                        <button
-                          onClick={() => setActiveMenuProductId(isMenuOpen ? null : p.id)}
-                          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
+                      {/* Action Menu (Inline Buttons) */}
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex justify-end gap-1.5 opacity-100 md:opacity-60 md:group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => setShowPriceVariationsModal(p)}
+                            className="p-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400"
+                            title="Price Variations"
+                          >
+                            <Tag className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => alert(`Country Pricing active for ${p.name} (${selectedCountry})`)}
+                            className="p-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400"
+                            title="Country Prices"
+                          >
+                            <Globe className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setShowStockHistoryModal(p)}
+                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400"
+                            title="Stock History"
+                          >
+                            <History className="w-4 h-4" />
+                          </button>
 
-                        {/* Dropdown Menu matching Olistores screenshot */}
-                        {isMenuOpen && (
-                          <div className="absolute right-4 top-10 z-40 w-48 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl py-1 text-left animate-fade-in space-y-0.5">
-                            <button
-                              onClick={() => { setShowPriceVariationsModal(p); setActiveMenuProductId(null); }}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <Tag className="w-3.5 h-3.5 text-indigo-400" /> PRICE VARIATIONS
-                            </button>
-
-                            <button
-                              onClick={() => { alert(`Country Pricing active for ${p.name} (${selectedCountry})`); setActiveMenuProductId(null); }}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <Globe className="w-3.5 h-3.5 text-cyan-400" /> COUNTRY PRICES
-                            </button>
-
-                            <button
-                              onClick={() => { setShowStockHistoryModal(p); setActiveMenuProductId(null); }}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <History className="w-3.5 h-3.5 text-amber-400" /> STOCK HISTORY
-                            </button>
-
-                            {['owner', 'admin'].includes(user?.role) && (
-                              <>
-                                <button
-                                  onClick={() => openEditModal(p)}
-                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                                >
-                                  <Edit className="w-3.5 h-3.5 text-blue-400" /> EDIT
-                                </button>
-
-                                <button
-                                  onClick={() => {
-                                    handleCreateProduct({
-                                      preventDefault: () => {},
-                                    });
-                                    alert(`Product "${p.name}" duplicated!`);
-                                    setActiveMenuProductId(null);
-                                  }}
-                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                                >
-                                  <Copy className="w-3.5 h-3.5 text-emerald-400" /> DUPLICATE
-                                </button>
-
-                                <button
-                                  onClick={() => { alert(`Archived ${p.name}`); setActiveMenuProductId(null); }}
-                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                                >
-                                  <EyeOff className="w-3.5 h-3.5 text-slate-400" /> ARCHIVE
-                                </button>
-
-                                <div className="border-t border-slate-800 my-1"></div>
-
-                                {/* DELETE BUTTON */}
-                                <button
-                                  onClick={() => { setShowDeleteConfirmModal(p); setActiveMenuProductId(null); }}
-                                  className="w-full px-3 py-2 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20 flex items-center gap-2"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-rose-400" /> DELETE
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
+                          {['owner', 'admin'].includes(user?.role) && (
+                            <>
+                              <button
+                                onClick={() => openEditModal(p)}
+                                className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"
+                                title="Edit Product"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleCreateProduct({ preventDefault: () => {} });
+                                  alert(`Product "${p.name}" duplicated!`);
+                                }}
+                                className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400"
+                                title="Duplicate Product"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => alert(`Archived ${p.name}`)}
+                                className="p-1.5 rounded-lg bg-slate-500/10 hover:bg-slate-500/20 text-slate-400"
+                                title="Archive Product"
+                              >
+                                <EyeOff className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setShowDeleteConfirmModal(p)}
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
+                                title="Delete Product"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -522,6 +590,8 @@ export default function ProductsInventory({
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* ── ADD PRODUCT MODAL ── */}
       {showAddProductModal && (
@@ -794,13 +864,18 @@ export default function ProductsInventory({
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Category</label>
-                  <input
-                    type="text"
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Product Category</label>
+                  <select
                     value={formCategory}
                     onChange={e => setFormCategory(e.target.value)}
-                    className="input text-xs"
-                  />
+                    className="select w-full"
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                    <option value="kitchen wares">Kitchen Wares (Default)</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Country</label>

@@ -100,12 +100,12 @@ export default function StockInventory({ products = [], selectedCountry, onProdu
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
-          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+          <h2 className="section-title">
             <Layers className="w-5 h-5 text-indigo-400" /> Warehouse Stock Inventory & Ledger
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="section-subtitle">
             Real-time stock counts, total inventory valuation, and append-only audit trail
           </p>
         </div>
@@ -113,29 +113,18 @@ export default function StockInventory({ products = [], selectedCountry, onProdu
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="glass-panel p-5 rounded-2xl border-indigo-500/30 bg-indigo-950/10">
-          <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider block">Total Available Stock</span>
-          <h3 className="text-2xl font-extrabold text-slate-100 mt-1">{totalStockUnits.toLocaleString()} Units</h3>
-          <p className="text-[10px] text-slate-400 mt-1">Across all catalog items</p>
-        </div>
-
-        <div className="glass-panel p-5 rounded-2xl border-emerald-500/30 bg-emerald-950/10">
-          <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">Stock Valuation (Cost)</span>
-          <h3 className="text-2xl font-extrabold text-slate-100 mt-1">{curr}{totalValuation.toLocaleString()}</h3>
-          <p className="text-[10px] text-slate-400 mt-1">Total physical inventory worth</p>
-        </div>
-
-        <div className="glass-panel p-5 rounded-2xl border-amber-500/30 bg-amber-950/10">
-          <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">Low Stock Alert (≤10)</span>
-          <h3 className="text-2xl font-extrabold text-slate-100 mt-1">{lowStockCount} Products</h3>
-          <p className="text-[10px] text-slate-400 mt-1">Reorder threshold reached</p>
-        </div>
-
-        <div className="glass-panel p-5 rounded-2xl border-rose-500/30 bg-rose-950/10">
-          <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider block">Out of Stock (0)</span>
-          <h3 className="text-2xl font-extrabold text-slate-100 mt-1">{outOfStockCount} Products</h3>
-          <p className="text-[10px] text-slate-400 mt-1">Requires immediate restocking</p>
-        </div>
+        {[
+          { label: 'Total Available Stock', val: `${totalStockUnits.toLocaleString()} Units`, sub: 'Across all catalog items', accent: 'text-indigo-400', border: 'border-l-indigo-500' },
+          { label: 'Stock Valuation (Cost)', val: `${curr}${totalValuation.toLocaleString()}`, sub: 'Total physical inventory worth', accent: 'text-emerald-400', border: 'border-l-emerald-500' },
+          { label: 'Low Stock Alert (≤10)', val: `${lowStockCount} Products`, sub: 'Reorder threshold reached', accent: 'text-amber-400', border: 'border-l-amber-500' },
+          { label: 'Out of Stock (0)', val: `${outOfStockCount} Products`, sub: 'Requires immediate restocking', accent: 'text-rose-400', border: 'border-l-rose-500' }
+        ].map((k, i) => (
+          <div key={i} className={`glass kpi-card hover-lift border-l-4 ${k.border}`}>
+            <span className={`text-label ${k.accent} mb-1 block`}>{k.label}</span>
+            <h3 className="text-2xl font-extrabold text-slate-100">{k.val}</h3>
+            <p className="text-[11px] text-slate-400 mt-2 truncate">{k.sub}</p>
+          </div>
+        ))}
       </div>
 
       {/* Main Stock Inventory Table */}

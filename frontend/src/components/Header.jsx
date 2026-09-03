@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Globe, ShieldCheck, RefreshCw, LogOut, UserCheck, Users } from 'lucide-react';
+import { Search, Globe, ShieldCheck, RefreshCw, LogOut, UserCheck, Users, Menu } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,7 +11,8 @@ export default function Header({
   activeRole,
   setActiveRole,
   onRefresh,
-  onOpenTeamModal
+  onOpenTeamModal,
+  onToggleSidebar
 }) {
   const { user, logoutUser, switchDemoRole } = useAuth();
   const currentCountry = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
@@ -26,14 +27,24 @@ export default function Header({
   return (
     <header className="sticky top-0 z-20 bg-slate-900/75 backdrop-blur-xl border-b border-slate-800/80 px-5 py-3 flex items-center justify-between gap-4 shrink-0">
 
-      {/* Search Bar */}
-      <div className="relative w-64 shrink-0">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
-        <input
-          type="text"
-          placeholder="Search orders, customers, phone..."
-          className="input pl-9 py-1.5 text-xs"
-        />
+      <div className="flex items-center gap-3">
+        {/* Mobile Menu Toggle */}
+        <button
+          onClick={onToggleSidebar}
+          className="md:hidden p-1.5 -ml-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Search Bar */}
+        <div className="relative w-48 md:w-64 shrink-0 hidden sm:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search orders..."
+            className="input pl-9 py-1.5 text-xs"
+          />
+        </div>
       </div>
 
       {/* Right Controls */}

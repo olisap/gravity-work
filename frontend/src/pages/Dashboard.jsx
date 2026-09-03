@@ -12,8 +12,6 @@ const STATUS_META = {
 };
 
 export default function Dashboard({ selectedCountry, selectedState, orders = [] }) {
-  const [period, setPeriod] = useState('this_week');
-
   const loc = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
   const curr = loc.currency;
 
@@ -53,8 +51,7 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
       value: `${curr}${revenue.toLocaleString()}`,
       icon: CheckCircle2,
       accent: 'text-emerald-400',
-      bg: 'bg-emerald-500/10',
-      border: 'border-emerald-500/25',
+      borderAccent: 'border-l-emerald-500',
     },
     {
       label: 'Pipeline Expected',
@@ -62,8 +59,7 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
       value: `${curr}${expected.toLocaleString()}`,
       icon: Clock,
       accent: 'text-indigo-400',
-      bg: 'bg-indigo-500/10',
-      border: 'border-indigo-500/25',
+      borderAccent: 'border-l-indigo-500',
     },
     {
       label: 'Close / Conversion Rate',
@@ -71,17 +67,15 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
       value: `${closeRate}%`,
       icon: Award,
       accent: 'text-amber-400',
-      bg: 'bg-amber-500/10',
-      border: 'border-amber-500/25',
+      borderAccent: 'border-l-amber-500',
     },
     {
       label: 'Total Active Volume',
       sub: `${active.length} total non-cancelled orders`,
       value: `${curr}${totalAmt.toLocaleString()}`,
       icon: ShoppingBag,
-      accent: 'text-purple-400',
-      bg: 'bg-purple-500/10',
-      border: 'border-purple-500/25',
+      accent: 'text-cyan-400',
+      borderAccent: 'border-l-cyan-500',
     },
   ];
 
@@ -101,33 +95,23 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
             &nbsp;·&nbsp;{selectedState}
           </p>
         </div>
-        <div className="flex items-center gap-1 glass p-1 rounded-xl self-start sm:self-auto">
-          {['this_week','last_week'].map(p => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                period === p ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Calendar className="w-3 h-3" />
-              {p === 'this_week' ? 'This Week' : 'Last Week'}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-800">
+          <Calendar className="w-3.5 h-3.5" />
+          <span>Last 30 Days</span>
         </div>
       </div>
 
       {/* ── KPI cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {kpis.map(({ label, sub, value, icon: Icon, accent, bg, border }) => (
-          <div key={label} className={`glass-hover kpi-card border ${border} ${bg}`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className={`text-[11px] font-bold uppercase tracking-wider ${accent}`}>{label}</p>
-                <p className="text-2xl font-extrabold text-slate-100 mt-1 tracking-tight">{value}</p>
-                <p className="text-[11px] text-slate-400 mt-1 truncate">{sub}</p>
+        {kpis.map(({ label, sub, value, icon: Icon, accent, borderAccent }) => (
+          <div key={label} className={`glass kpi-card hover-lift border-l-4 ${borderAccent}`}>
+            <div className="flex items-start justify-between gap-3 h-full">
+              <div className="min-w-0 flex flex-col justify-between h-full">
+                <p className={`text-label ${accent} mb-1`}>{label}</p>
+                <p className="text-2xl font-extrabold text-slate-100 tracking-tight">{value}</p>
+                <p className="text-[11px] text-slate-400 mt-2 truncate">{sub}</p>
               </div>
-              <div className={`shrink-0 p-2.5 rounded-xl ${bg} border ${border}`}>
+              <div className="shrink-0 p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
                 <Icon className={`w-5 h-5 ${accent}`} />
               </div>
             </div>
@@ -198,13 +182,13 @@ export default function Dashboard({ selectedCountry, selectedState, orders = [] 
                   </td>
                   <td>
                     <div className="flex items-center gap-2.5">
-                      <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div className="w-full max-w-[200px] h-2 bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-700 ${STATUS_META[row.status]?.bar || 'bg-slate-500'}`}
                           style={{ width: `${Math.min(100, parseFloat(row.pct))}%` }}
                         />
                       </div>
-                      <span className="text-slate-500 font-mono text-[11px] w-9 text-right">{row.pct}%</span>
+                      <span className="text-slate-400 font-mono text-[11px] w-9 text-right">{row.pct}%</span>
                     </div>
                   </td>
                 </tr>

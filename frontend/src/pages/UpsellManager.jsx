@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Zap, CheckCircle2, TrendingUp, Phone, ShoppingBag, Send, Plus } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function UpsellManager({ selectedCountry, onNavigateToFormBuilder }) {
   const { user } = useAuth();

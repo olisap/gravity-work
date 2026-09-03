@@ -8,9 +8,14 @@ export default function DraftReminders({ orders = [], selectedCountry }) {
   const curr = currentCountryObj.currency;
 
   const drafts = orders.filter(o => o.status === 'Draft');
+  const [sendingId, setSendingId] = React.useState(null);
 
   const handleSendManualReminder = async (draft) => {
-    alert(`SMS reminder queued for customer ${draft.customer_name} (${draft.customer_phone}) with resume token link.`);
+    setSendingId(draft.id);
+    setTimeout(() => {
+      alert(`SMS reminder queued for customer ${draft.customer_name} (${draft.customer_phone}) with resume token link.`);
+      setSendingId(null);
+    }, 600);
   };
 
   return (
@@ -18,16 +23,16 @@ export default function DraftReminders({ orders = [], selectedCountry }) {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+          <h2 className="section-title">
             <Clock className="w-5 h-5 text-amber-400" /> Abandoned Form Drafts & Reminders
           </h2>
-          <p className="text-xs text-slate-400">
-            Automatically tracks form drop-offs after 10–15 minutes and dispatches SMS/Email reminders with pre-filled resume tokens
+          <p className="section-subtitle">
+            Automatically tracks form drop-offs after 10–15 minutes and dispatches SMS/Email reminders
           </p>
         </div>
 
-        <span className="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Abandonment Worker Active (60s)
+        <span className="badge badge-pending">
+          Abandonment Worker Active
         </span>
       </div>
 
@@ -85,9 +90,11 @@ export default function DraftReminders({ orders = [], selectedCountry }) {
                       </button>
                       <button
                         onClick={() => handleSendManualReminder(d)}
-                        className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs inline-flex items-center gap-1 shadow"
+                        disabled={sendingId === d.id}
+                        className="btn-primary py-1.5 px-3 text-xs"
                       >
-                        <Send className="w-3 h-3" /> Resend SMS
+                        {sendingId === d.id ? <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send className="w-3 h-3" />}
+                        {sendingId === d.id ? ' Sending...' : ' Resend SMS'}
                       </button>
                     </td>
                   </tr>

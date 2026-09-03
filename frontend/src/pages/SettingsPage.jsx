@@ -1,1098 +1,569 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Package, Plus, Search, MoreVertical, HelpCircle,
-  Trash2, Edit, Copy, EyeOff, Tag, Globe, History,
-  Settings, Check, X, FileText, AlertTriangle
+  Settings, Building, Bell, Users, History, ShieldAlert,
+  Save, CheckCircle, X, Plus, UserPlus, Lock, Mail, Phone,
+  Loader2, AlertTriangle, Globe, MapPin
 } from 'lucide-react';
-import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/apiUrl';
 
-export default function ProductsInventory({
-  products = [],
-  selectedCountry,
-  onProductCreated,
-  onProductDeleted,
-  onProductUpdated,
-  onNavigateToFormBuilder
-}) {
+// ── Inline Toggle Switch ──────────────────────────────────
+function Toggle({ checked, onChange, id }) {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="toggle-track shrink-0"
+      style={{ background: checked ? 'var(--brand)' : '' }}
+    >
+      <span
+        className="toggle-thumb"
+        style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)' }}
+      />
+    </button>
+  );
+}
+
+// ── Skeleton row ──────────────────────────────────────────
+function SkeletonRow({ cols = 3 }) {
+  return (
+    <tr>
+      {Array.from({ length: cols }).map((_, i) => (
+        <td key={i} className="px-4 py-3">
+          <div className="skeleton h-3.5 rounded" style={{ width: i === 0 ? '120px' : '80px' }} />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+// ── Sub-tabs ──────────────────────────────────────────────
+const TABS = [
+  { id: 'profile',      label: 'Store Profile',   icon: Building },
+  { id: 'pipeline',     label: 'Pipeline',         icon: Settings },
+  { id: 'notifications',label: 'Notifications',    icon: Bell },
+  { id: 'team',         label: 'Team & Staff',     icon: Users },
+  { id: 'audit',        label: 'Audit Trail',      icon: History },
+];
+
+export default function SettingsPage({ onSettingsUpdated }) {
   const { user } = useAuth();
-  const storeId = user?.store_id || user?.id || '';
+  const [activeSection, setActiveSection] = useState('profile');
 
-  const [selectedProductFilter, setSelectedProductFilter] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAction, setSelectedAction] = useState('');
-  const [selectedProductIds, setSelectedProductIds] = useState([]);
-  const [activeMenuProductId, setActiveMenuProductId] = useState(null);
+  // ── Settings state ──
+  const [settings, setSettings]         = useState(null);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [savingSettings, setSavingSettings]   = useState(false);
+  const [saveSuccess, setSaveSuccess]         = useState(false);
+  const [saveError, setSaveError]             = useState('');
 
-  // Modals
-  const [showAddProductModal, setShowAddProductModal] = useState(false);
-  const [showEditProductModal, setShowEditProductModal] = useState(null);
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(null);
-  const [showPriceVariationsModal, setShowPriceVariationsModal] = useState(null);
-  const [showStockHistoryModal, setShowStockHistoryModal] = useState(null);
-  const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false);
+  // ── Team state ──
+  const [teamMembers, setTeamMembers]   = useState([]);
+  const [loadingTeam, setLoadingTeam]   = useState(false);
+  const [showAddForm, setShowAddForm]   = useState(false);
+  const [newName,     setNewName]       = useState('');
+  const [newEmail,    setNewEmail]      = useState('');
+  const [newPassword, setNewPassword]   = useState('');
+  const [newRole,     setNewRole]       = useState('sales_agent');
+  const [newPhone,    setNewPhone]      = useState('');
+  const [addingMember, setAddingMember] = useState(false);
+  const [teamMsg, setTeamMsg]           = useState({ type: '', text: '' });
 
-  // Add/Edit Product Form State
-  const [formProdName, setFormProdName] = useState('');
-  const [formCategory, setFormCategory] = useState('kitchen wares');
-  const [formCountry, setFormCountry] = useState(selectedCountry || 'Nigeria');
-  const [formCostPrice, setFormCostPrice] = useState('');
-  const [formBasePrice, setFormBasePrice] = useState('');
-  const [formSku, setFormSku] = useState('');
-  const [formStock, setFormStock] = useState('50');
-  const [formDescription, setFormDescription] = useState('');
-  const [formImage, setFormImage] = useState('');
-  const [customFields, setCustomFields] = useState([]);
+  // ── Audit state ──
+  const [auditLogs, setAuditLogs]       = useState([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
 
-  // Bundles State (Multiple Selling Price Tiers)
-  const [bundles, setBundles] = useState([
-    { qty: 1, label: '1 Product + Free Delivery', price: '18500' },
-    { qty: 2, label: '2 Products + Free Delivery', price: '35500' },
-    { qty: 3, label: '3 Products + Free Delivery', price: '52500' }
-  ]);
+  const token = () => localStorage.getItem('gravity_crm_token');
+  const authH = () => ({ 'Authorization': `Bearer ${token()}` });
 
-  const currentCountryObj = AFRICAN_LOCATIONS.find(c => c.country === selectedCountry) || AFRICAN_LOCATIONS[0];
-  const curr = currentCountryObj.currency;
-
-  // Filtered Products
-  const filteredProducts = products.filter(p => {
-    const matchesFilter = !selectedProductFilter || p.id === selectedProductFilter;
-    const matchesSearch = !searchTerm ||
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
-
-  // Select all checkbox
-  const toggleSelectAll = () => {
-    if (selectedProductIds.length === filteredProducts.length) {
-      setSelectedProductIds([]);
-    } else {
-      setSelectedProductIds(filteredProducts.map(p => p.id));
-    }
-  };
-
-  const toggleSelectProduct = (id) => {
-    setSelectedProductIds(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
-  };
-
-  // Open Add Product Modal
-  const openAddModal = () => {
-    setFormProdName('');
-    setFormCategory('kitchen wares');
-    setFormCountry(selectedCountry || 'Nigeria');
-    setFormCostPrice('');
-    setFormBasePrice('');
-    setFormSku('');
-    setFormStock('50');
-    setFormDescription('');
-    setFormImage('');
-    setCustomFields([]);
-    setBundles([
-      { qty: 1, label: '1 Item + Free Delivery', price: '18500' },
-      { qty: 2, label: '2 Items + Free Delivery', price: '35500' }
-    ]);
-    setShowAddProductModal(true);
-  };
-
-  // Open Edit Product Modal
-  const openEditModal = (p) => {
-    setShowEditProductModal(p);
-    setFormProdName(p.name || '');
-    setFormCategory(p.category_name || 'kitchen wares');
-    setFormCountry(p.country || selectedCountry || 'Nigeria');
-    setFormCostPrice(p.cost_price !== undefined ? p.cost_price : '');
-    setFormBasePrice(p.base_price !== undefined ? p.base_price : '');
-    setFormSku(p.sku || '');
-    setFormStock(p.available_stock !== undefined ? p.available_stock : '0');
-    setFormDescription(p.description || '');
-    setFormImage((p.images && p.images[0]) ? p.images[0] : '');
-    setCustomFields(Array.isArray(p.custom_fields) ? p.custom_fields : []);
-    setBundles(Array.isArray(p.price_bundles) && p.price_bundles.length > 0 ? p.price_bundles : [
-      { qty: 1, label: `1 ${p.name} + Free Delivery`, price: p.base_price }
-    ]);
-    setActiveMenuProductId(null);
-  };
-
-  // Add / Remove Bundle Rows
-  const addBundleRow = () => {
-    setBundles(prev => [...prev, { qty: prev.length + 1, label: `${prev.length + 1} Items + Free Delivery`, price: '' }]);
-  };
-
-  const removeBundleRow = (idx) => {
-    setBundles(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  // Add / Remove Custom Fields
-  const addCustomFieldRow = () => {
-    setCustomFields(prev => [...prev, { key: '', value: '' }]);
-  };
-
-  const removeCustomFieldRow = (idx) => {
-    setCustomFields(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  // Submit Create Product
-  const handleCreateProduct = async (e) => {
-    e.preventDefault();
-    if (!formProdName || !formBasePrice) return;
-
-    const payload = {
-      store_id: storeId,
-      name: formProdName,
-      category_name: formCategory,
-      country: formCountry,
-      description: formDescription,
-      cost_price: Number(formCostPrice) || 0,
-      base_price: Number(formBasePrice) || 0,
-      sku: formSku || `${formProdName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8)}-${Date.now().toString().slice(-4)}`,
-      initial_stock: Number(formStock) || 0,
-      images: formImage ? [formImage] : [],
-      custom_fields: customFields.filter(f => f.key.trim() !== ''),
-      price_bundles: bundles.map(b => ({
-        qty: Number(b.qty),
-        label: b.label || `${b.qty} ${formProdName} + Free Delivery`,
-        price: Number(b.price) || Number(formBasePrice)
-      }))
+  // ── Fetch settings ──
+  useEffect(() => {
+    const fetchSettings = async () => {
+      setLoadingSettings(true);
+      try {
+        const res = await fetch(apiUrl('/api/settings'), { headers: authH() });
+        if (res.ok) setSettings(await res.json());
+      } catch (e) {
+        console.error('Settings fetch error:', e);
+      } finally {
+        setLoadingSettings(false);
+      }
     };
+    fetchSettings();
+  }, [user]);
 
+  // ── Fetch team when section active ──
+  useEffect(() => {
+    if (activeSection !== 'team') return;
+    const fetchTeam = async () => {
+      setLoadingTeam(true);
+      try {
+        const storeId = user?.store_id || user?.id || '';
+        const res = await fetch(
+          apiUrl(`/api/team?store_id=${encodeURIComponent(storeId)}`),
+          { headers: authH() }
+        );
+        if (res.ok) { const d = await res.json(); if (Array.isArray(d)) setTeamMembers(d); }
+      } catch (e) {
+        console.error('Team fetch error:', e);
+      } finally {
+        setLoadingTeam(false);
+      }
+    };
+    fetchTeam();
+  }, [activeSection, user]);
+
+  // ── Fetch audit when section active ──
+  useEffect(() => {
+    if (activeSection !== 'audit') return;
+    const fetchAudit = async () => {
+      setLoadingAudit(true);
+      try {
+        const res = await fetch(apiUrl('/api/audit-trail'), { headers: authH() });
+        if (res.ok) { const d = await res.json(); if (Array.isArray(d)) setAuditLogs(d); }
+      } catch (e) {
+        console.error('Audit fetch error:', e);
+      } finally {
+        setLoadingAudit(false);
+      }
+    };
+    fetchAudit();
+  }, [activeSection, user]);
+
+  // ── Save settings ──
+  const handleSave = async () => {
+    if (!settings) return;
+    setSavingSettings(true);
+    setSaveError('');
+    setSaveSuccess(false);
     try {
-      const token = localStorage.getItem('gravity_crm_token');
-      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(apiUrl('/api/products'), {
+      const res = await fetch(apiUrl('/api/settings'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify(payload)
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify(settings),
       });
-      if (res.ok) {
-        const created = await res.json();
-        if (onProductCreated) onProductCreated(created);
-      }
-    } catch (err) {
-      console.error('Error creating product:', err);
+      if (!res.ok) throw new Error('Save failed');
+      setSaveSuccess(true);
+      if (onSettingsUpdated) onSettingsUpdated();
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (e) {
+      setSaveError('Settings could not be saved. Please try again.');
+    } finally {
+      setSavingSettings(false);
     }
-
-    setShowAddProductModal(false);
   };
 
-  // Submit Edit Product
-  const handleUpdateProduct = async (e) => {
+  const setSetting = (key, val) => setSettings(prev => ({ ...prev, [key]: val }));
+
+  // ── Add team member ──
+  const handleAddMember = async (e) => {
     e.preventDefault();
-    if (!showEditProductModal) return;
-
-    const payload = {
-      name: formProdName,
-      category_name: formCategory,
-      country: formCountry,
-      description: formDescription,
-      cost_price: Number(formCostPrice) || 0,
-      base_price: Number(formBasePrice) || 0,
-      sku: formSku,
-      available_stock: Number(formStock),
-      images: formImage ? [formImage] : [],
-      custom_fields: customFields.filter(f => f.key.trim() !== ''),
-      price_bundles: bundles
-    };
-
+    setTeamMsg({ type: '', text: '' });
+    setAddingMember(true);
     try {
-      const token = localStorage.getItem('gravity_crm_token');
-      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(apiUrl(`/api/products/${showEditProductModal.id}`), {
+      const storeId = user?.store_id || user?.id || '';
+      const res = await fetch(apiUrl('/api/team'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({
+          full_name: newName, email: newEmail, password: newPassword,
+          role: newRole, phone: newPhone, store_id: storeId,
+          store_name: user?.store_name || 'Store',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create account');
+      setTeamMsg({ type: 'success', text: `Account created for ${newName}.` });
+      setNewName(''); setNewEmail(''); setNewPassword(''); setNewPhone('');
+      setShowAddForm(false);
+      // Refresh team
+      const r2 = await fetch(apiUrl(`/api/team?store_id=${user?.store_id || user?.id || ''}`), { headers: authH() });
+      if (r2.ok) { const d = await r2.json(); if (Array.isArray(d)) setTeamMembers(d); }
+    } catch (err) {
+      setTeamMsg({ type: 'error', text: err.message });
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
+  // ── Toggle member status ──
+  const handleToggleStatus = async (member) => {
+    try {
+      const res = await fetch(apiUrl(`/api/team/${member.id}/status`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify(payload)
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ is_active: !member.is_active }),
       });
       if (res.ok) {
-        const updated = await res.json();
-        if (onProductUpdated) onProductUpdated(updated);
+        setTeamMembers(prev =>
+          prev.map(m => m.id === member.id ? { ...m, is_active: !m.is_active } : m)
+        );
       }
-    } catch (err) {
-      console.error('Error updating product:', err);
+    } catch (e) {
+      console.error(e);
     }
-
-    setShowEditProductModal(null);
   };
 
-  // Execute Delete Product
-  const handleDeleteProduct = async (productId) => {
-    try {
-      const token = localStorage.getItem('gravity_crm_token');
-      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(apiUrl(`/api/products/${productId}`), {
-        method: 'DELETE',
-        headers: authHeaders
-      });
-      if (res.ok && onProductDeleted) {
-        onProductDeleted(productId);
-      }
-    } catch (err) {
-      console.error('Error deleting product:', err);
-    }
-    setShowDeleteConfirmModal(null);
-    setActiveMenuProductId(null);
-  };
-
-  // Bulk Delete
-  const handleBulkDelete = async () => {
-    if (selectedProductIds.length === 0) return;
-    if (!window.confirm(`Are you sure you want to delete ${selectedProductIds.length} selected products?`)) return;
-
-    for (const id of selectedProductIds) {
-      await handleDeleteProduct(id);
-    }
-    setSelectedProductIds([]);
-  };
+  const roleLabel = { owner: 'Owner', admin: 'Admin', sales_agent: 'Confirmation Staff', confirmation_staff: 'Confirmation Staff', logistics: 'Logistics' };
 
   return (
     <div className="space-y-5 animate-fade-in text-slate-100">
 
-      {/* Page Title & Total Count */}
-      <div className="flex items-center gap-2">
-        <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-          Products ({products.length})
-        </h2>
-        <HelpCircle className="w-4 h-4 text-indigo-400 cursor-pointer" title="Manage products, variations, prices, and stock" />
+      {/* Page header */}
+      <div className="flex items-center justify-between pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <h2 className="section-title">
+            <Settings className="w-5 h-5" style={{ color: 'var(--brand)' }} />
+            Store Settings
+          </h2>
+          <p className="section-subtitle">Configure your store profile, pipeline, notifications, and team access.</p>
+        </div>
+        {(activeSection === 'profile' || activeSection === 'pipeline' || activeSection === 'notifications') && (
+          <button
+            onClick={handleSave}
+            disabled={savingSettings || loadingSettings}
+            className="btn-primary text-xs gap-2"
+          >
+            {savingSettings
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+              : saveSuccess
+              ? <><CheckCircle className="w-3.5 h-3.5" /> Saved</>
+              : <><Save className="w-3.5 h-3.5" /> Save Changes</>
+            }
+          </button>
+        )}
       </div>
 
-      {/* ── Toolbar Card (Filters & Action Buttons) ── */}
-      <div className="glass p-4 rounded-2xl border-slate-800 flex flex-wrap items-center justify-between gap-3">
-        {/* Left Filter Dropdown */}
-        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-          <select
-            value={selectedProductFilter}
-            onChange={e => setSelectedProductFilter(e.target.value)}
-            className="select flex-1 py-2 text-xs"
-          >
-            <option value="">Select Product</option>
-            {products.map(p => (
-              <option key={p.id} value={p.id} className="bg-slate-900">{p.name}</option>
-            ))}
-          </select>
+      {saveError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold text-rose-400"
+          style={{ background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)' }}>
+          <AlertTriangle className="w-4 h-4 shrink-0" /> {saveError}
         </div>
+      )}
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search product..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="input py-2 text-xs w-36 sm:w-44 pr-8"
-            />
-            <Search className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+      {/* ── Section tabs ── */}
+      <div className="flex gap-1 p-1 rounded-xl"
+        style={{ background: 'rgba(15, 22, 33, 0.70)', border: '1px solid var(--border)' }}>
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveSection(id)}
+            className={`segment-btn flex-1${activeSection === id ? ' active' : ''}`}
+          >
+            <Icon className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ────────────── STORE PROFILE ────────────── */}
+      {activeSection === 'profile' && (
+        <div className="glass p-6 space-y-5 animate-fade-in">
+          {loadingSettings ? (
+            <div className="space-y-3">
+              {[140, 200, 160, 180, 200].map((w, i) => (
+                <div key={i} className="skeleton h-8 rounded-xl" style={{ width: `${w + 80}px`, maxWidth: '100%' }} />
+              ))}
+            </div>
+          ) : !settings ? (
+            <p className="text-xs text-slate-500 text-center py-8">Unable to load settings.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">Store Name</label>
+                  <input className="input" value={settings.store_name || ''} onChange={e => setSetting('store_name', e.target.value)} placeholder="My E-Commerce Store" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">Logo URL</label>
+                  <input className="input font-mono text-xs" value={settings.company_logo || ''} onChange={e => setSetting('company_logo', e.target.value)} placeholder="/logo.png" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">Country</label>
+                  <input className="input" value={settings.store_country || ''} onChange={e => setSetting('store_country', e.target.value)} placeholder="Nigeria" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">Office State</label>
+                  <input className="input" value={settings.office_state || ''} onChange={e => setSetting('office_state', e.target.value)} placeholder="Lagos" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">Warehouse State</label>
+                  <input className="input" value={settings.warehouse_state || ''} onChange={e => setSetting('warehouse_state', e.target.value)} placeholder="Lagos" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">Store Address</label>
+                  <input className="input" value={settings.store_address || ''} onChange={e => setSetting('store_address', e.target.value)} placeholder="Full business address" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">Phone Number</label>
+                  <input className="input" value={settings.phone_number || ''} onChange={e => setSetting('phone_number', e.target.value)} placeholder="+234..." />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">WhatsApp Number</label>
+                  <input className="input" value={settings.whatsapp_number || ''} onChange={e => setSetting('whatsapp_number', e.target.value)} placeholder="+234..." />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1.5">Business Email</label>
+                  <input type="email" className="input" value={settings.email || ''} onChange={e => setSetting('email', e.target.value)} placeholder="support@store.com" />
+                </div>
+              </div>
+              <div>
+                <label className="text-label text-slate-400 block mb-1.5">Invoice Footer Message</label>
+                <textarea rows={2} className="input resize-none" value={settings.invoice_footer_message || ''} onChange={e => setSetting('invoice_footer_message', e.target.value)} placeholder="e.g. All prices include VAT" />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ────────────── PIPELINE SETTINGS ────────────── */}
+      {activeSection === 'pipeline' && (
+        <div className="glass p-6 space-y-4 animate-fade-in">
+          <div>
+            <h3 className="text-sm font-bold text-slate-200 mb-1">Order Pipeline Stage Visibility</h3>
+            <p className="text-xs text-slate-400 mb-4">Control which status columns are shown on the Orders Pipeline.</p>
+          </div>
+          {loadingSettings ? (
+            <div className="space-y-3">
+              {[1,2,3,4,5].map(i => <div key={i} className="skeleton h-12 rounded-xl" />)}
+            </div>
+          ) : !settings ? null : (
+            <div className="space-y-2">
+              {[
+                { key: 'tab_confirmed',  label: 'Confirmed',   desc: 'Show Confirmed status column' },
+                { key: 'tab_shipped',    label: 'Shipped',     desc: 'Show Shipped status column' },
+                { key: 'tab_returned',   label: 'Returned',    desc: 'Show Returned status column' },
+                { key: 'tab_after_sale', label: 'After-Sale',  desc: 'Show After-Sale Call column' },
+                { key: 'tab_failed',     label: 'Failed',      desc: 'Show Failed Delivery column' },
+              ].map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between px-4 py-3 rounded-xl"
+                  style={{ background: 'rgba(15, 22, 33, 0.60)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-200">{label}</p>
+                    <p className="text-xs text-slate-400">{desc}</p>
+                  </div>
+                  <Toggle checked={!!settings[key]} onChange={v => setSetting(key, v)} id={key} />
+                </div>
+              ))}
+              {[
+                { key: 'prevent_duplicate_orders', label: 'Block Duplicate Orders', desc: 'Reject orders from the same phone within 24h' },
+                { key: 'manage_inventory',         label: 'Track Inventory',        desc: 'Deduct stock when orders are Scheduled' },
+                { key: 'whatsapp_notify_agents',   label: 'Notify Agents via WhatsApp', desc: 'Send dispatch assignment messages to riders' },
+                { key: 'show_performance_bar',     label: 'Show Performance Bar',   desc: 'Display team close rate progress bar' },
+              ].map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between px-4 py-3 rounded-xl"
+                  style={{ background: 'rgba(15, 22, 33, 0.60)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-200">{label}</p>
+                    <p className="text-xs text-slate-400">{desc}</p>
+                  </div>
+                  <Toggle checked={!!settings[key]} onChange={v => setSetting(key, v)} id={key} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ────────────── NOTIFICATIONS ────────────── */}
+      {activeSection === 'notifications' && (
+        <div className="glass p-6 space-y-4 animate-fade-in">
+          <div>
+            <h3 className="text-sm font-bold text-slate-200 mb-1">Notification Preferences</h3>
+            <p className="text-xs text-slate-400 mb-4">Choose which automated messages are sent to customers and staff.</p>
+          </div>
+          {loadingSettings ? (
+            <div className="space-y-3">
+              {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton h-12 rounded-xl" />)}
+            </div>
+          ) : !settings ? null : (
+            <div className="space-y-2">
+              {[
+                { key: 'email_on_login',      label: 'Login Alert Email',       desc: 'Email staff when their account signs in' },
+                { key: 'low_stock_email',     label: 'Low Stock: Email',        desc: 'Alert when product stock falls to ≤10 units' },
+                { key: 'low_stock_sms',       label: 'Low Stock: SMS',          desc: 'SMS alert for critical stock thresholds' },
+                { key: 'low_stock_whatsapp',  label: 'Low Stock: WhatsApp',     desc: 'WhatsApp alert for critical stock' },
+                { key: 'reminder_email',      label: 'Draft Reminder: Email',   desc: 'Send resume link to abandoned form customers' },
+                { key: 'reminder_whatsapp',   label: 'Draft Reminder: WhatsApp',desc: 'WhatsApp reminder for abandoned checkouts' },
+                { key: 'invoice_via_email',   label: 'Invoice: Email',          desc: 'Send delivery receipt via email on delivery' },
+                { key: 'invoice_via_whatsapp',label: 'Invoice: WhatsApp',       desc: 'Send delivery receipt via WhatsApp on delivery' },
+              ].map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between px-4 py-3 rounded-xl"
+                  style={{ background: 'rgba(15, 22, 33, 0.60)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-200">{label}</p>
+                    <p className="text-xs text-slate-400">{desc}</p>
+                  </div>
+                  <Toggle checked={!!settings[key]} onChange={v => setSetting(key, v)} id={key} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ────────────── TEAM & STAFF ────────────── */}
+      {activeSection === 'team' && (
+        <div className="space-y-4 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-200">Team Members</h3>
+              <p className="text-xs text-slate-400">Manage staff access, roles, and account status.</p>
+            </div>
+            <button onClick={() => { setShowAddForm(v => !v); setTeamMsg({ type: '', text: '' }); }} className="btn-primary text-xs">
+              <UserPlus className="w-3.5 h-3.5" /> Add Staff
+            </button>
           </div>
 
-          {['owner', 'admin'].includes(user?.role) && (
-            <button
-              onClick={openAddModal}
-              className="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30"
-            >
-              + Add Product
-            </button>
+          {teamMsg.text && (
+            <div className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+              teamMsg.type === 'success'
+                ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/25'
+                : 'text-rose-400 bg-rose-500/10 border border-rose-500/25'
+            }`}>
+              {teamMsg.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              {teamMsg.text}
+            </div>
           )}
 
-          <button
-            onClick={() => setShowDeliveryFeeModal(true)}
-            className="btn-ghost py-2 px-3.5 text-xs text-indigo-300 border-indigo-500/30"
-          >
-            State Delivery Fee
-          </button>
+          {showAddForm && (
+            <form onSubmit={handleAddMember} className="glass p-5 space-y-4 animate-fade-in">
+              <h4 className="text-sm font-bold text-slate-200">New Staff Account</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-label text-slate-400 block mb-1">Full Name *</label>
+                  <input required className="input text-xs" value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Chidi Okafor" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1">Email *</label>
+                  <input required type="email" className="input text-xs" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="staff@store.com" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1">Password *</label>
+                  <input required type="password" className="input text-xs" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 8 characters" />
+                </div>
+                <div>
+                  <label className="text-label text-slate-400 block mb-1">Phone</label>
+                  <input type="tel" className="input text-xs" value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="+234..." />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-label text-slate-400 block mb-1">Role *</label>
+                  <select className="select w-full text-sm py-2.5" value={newRole} onChange={e => setNewRole(e.target.value)}>
+                    <option value="sales_agent">Confirmation Staff</option>
+                    <option value="logistics">Logistics Rider</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowAddForm(false)} className="btn-ghost text-xs">Cancel</button>
+                <button type="submit" disabled={addingMember} className="btn-primary text-xs">
+                  {addingMember ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating…</> : <><UserPlus className="w-3.5 h-3.5" /> Create Account</>}
+                </button>
+              </div>
+            </form>
+          )}
 
-          <button
-            onClick={() => alert('Custom States Configuration active for ' + selectedCountry)}
-            className="btn-ghost py-2 px-3.5 text-xs text-slate-300"
-          >
-            Custom States
-          </button>
-        </div>
-      </div>
-
-      {/* ── Olistores-Style Products Data Table ── */}
-      <div className="glass rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
-        {/* Table Bulk Action Bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 bg-slate-950/60">
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedAction}
-              onChange={e => {
-                const action = e.target.value;
-                if (action === 'delete') handleBulkDelete();
-                setSelectedAction('');
-              }}
-              className="select text-xs py-1.5 px-3"
-            >
-              <option value="">Select Action</option>
-              <option value="delete">Delete Selected ({selectedProductIds.length})</option>
-              <option value="archive">Archive Selected</option>
-            </select>
-          </div>
-          <span className="text-xs text-slate-400">
-            Showing {filteredProducts.length} of {products.length} products
-          </span>
-        </div>
-
-        {/* Main Table */}
-        <div className="overflow-x-auto">
-          <table className="data-table w-full text-xs">
-            <thead>
-              <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
-                <th className="w-10 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedProductIds.length === filteredProducts.length && filteredProducts.length > 0}
-                    onChange={toggleSelectAll}
-                    className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
-                  />
-                </th>
-                <th className="px-4 py-3">PRODUCT NAME/CATEGORY/COUNTRY</th>
-                <th className="px-4 py-3">VARIATION 1</th>
-                <th className="px-4 py-3">VARIATION 2</th>
-                <th className="px-4 py-3">COST PRICE</th>
-                <th className="px-4 py-3">SELLING PRICE</th>
-                <th className="px-4 py-3">STOCK LEFT</th>
-                <th className="w-16 px-4 py-3 text-right">ACTION</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filteredProducts.length === 0 ? (
+          <div className="glass overflow-hidden">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-slate-500 italic text-xs">
-                    No products found. Click "+ Add Product" above to create your first product.
-                  </td>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Action</th>
                 </tr>
-              ) : (
-                filteredProducts.map(p => {
-                  const isSelected = selectedProductIds.includes(p.id);
-                  const isMenuOpen = activeMenuProductId === p.id;
-
-                  return (
-                    <tr
-                      key={p.id}
-                      className={`hover:bg-slate-800/40 transition-colors ${isSelected ? 'bg-indigo-950/20' : ''}`}
-                    >
-                      {/* Checkbox */}
-                      <td className="px-4 py-3.5">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectProduct(p.id)}
-                          className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
-                        />
-                      </td>
-
-                      {/* Product Name / Category / Country */}
-                      <td className="px-4 py-3.5">
-                        <div className="space-y-0.5">
-                          <p className="font-extrabold text-slate-100 text-xs tracking-wide uppercase">
-                            {p.name}
-                          </p>
-                          <p className="text-[11px] text-slate-400">
-                            /{p.category_name || 'general'} ({p.country || selectedCountry})
-                          </p>
-                        </div>
-                      </td>
-
-                      {/* Variation 1 */}
-                      <td className="px-4 py-3.5 text-slate-400 italic text-[11px]">
-                        {p.variation_1 || '—'}
-                      </td>
-
-                      {/* Variation 2 */}
-                      <td className="px-4 py-3.5 text-slate-400 italic text-[11px]">
-                        {p.variation_2 || '—'}
-                      </td>
-
-                      {/* Cost Price */}
-                      <td className="px-4 py-3.5 font-bold text-slate-300 font-mono">
-                        {curr}{(p.cost_price || 0).toLocaleString()}
-                      </td>
-
-                      {/* Selling Price Bundles */}
-                      <td className="px-4 py-3.5">
-                        <div className="space-y-1 font-mono text-[11px] text-slate-300">
-                          {p.price_bundles && p.price_bundles.length > 0 ? (
-                            p.price_bundles.map((b, i) => (
-                              <div key={i} className="whitespace-nowrap">
-                                <span className="text-slate-400 font-sans">{b.label || `${b.qty} ${p.name}`}</span>
-                                <span className="text-slate-500 mx-1.5">-</span>
-                                <span className="font-bold text-emerald-400">{curr}{Number(b.price).toLocaleString()}</span>
-                              </div>
-                            ))
-                          ) : (
-                            <span className="font-bold text-emerald-400">{curr}{(p.base_price || 0).toLocaleString()}</span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Stock Left */}
-                      <td className="px-4 py-3.5">
-                        <span className={`font-extrabold font-mono text-xs ${
-                          (p.available_stock || 0) > 0 ? 'text-slate-200' : 'text-rose-400'
-                        }`}>
-                          {p.available_stock || 0}
-                        </span>
-                      </td>
-
-                      {/* Action Menu (3 Dots Popup) */}
-                      <td className="px-4 py-3.5 text-right relative">
+              </thead>
+              <tbody>
+                {loadingTeam ? (
+                  Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+                ) : teamMembers.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-10 text-xs text-slate-500 italic">
+                    No staff accounts yet.
+                  </td></tr>
+                ) : teamMembers.map(m => (
+                  <tr key={m.id}>
+                    <td className="font-semibold text-slate-200">{m.full_name}</td>
+                    <td className="text-slate-400 font-mono text-[11px]">{m.email}</td>
+                    <td><span className="badge badge-scheduled">{roleLabel[m.role] || m.role}</span></td>
+                    <td>
+                      <span className={`badge ${m.is_active !== false ? 'badge-delivered' : 'badge-cancelled'}`}>
+                        {m.is_active !== false ? 'Active' : 'Disabled'}
+                      </span>
+                    </td>
+                    <td>
+                      {m.role !== 'owner' && (
                         <button
-                          onClick={() => setActiveMenuProductId(isMenuOpen ? null : p.id)}
-                          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                          onClick={() => handleToggleStatus(m)}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
+                            m.is_active !== false
+                              ? 'text-rose-400 hover:bg-rose-500/15'
+                              : 'text-emerald-400 hover:bg-emerald-500/15'
+                          }`}
                         >
-                          <MoreVertical className="w-4 h-4" />
+                          {m.is_active !== false ? 'Disable' : 'Enable'}
                         </button>
-
-                        {/* Dropdown Menu matching Olistores screenshot */}
-                        {isMenuOpen && (
-                          <div className="absolute right-4 top-10 z-40 w-48 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl py-1 text-left animate-fade-in space-y-0.5">
-                            <button
-                              onClick={() => { setShowPriceVariationsModal(p); setActiveMenuProductId(null); }}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <Tag className="w-3.5 h-3.5 text-indigo-400" /> PRICE VARIATIONS
-                            </button>
-
-                            <button
-                              onClick={() => { alert(`Country Pricing active for ${p.name} (${selectedCountry})`); setActiveMenuProductId(null); }}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <Globe className="w-3.5 h-3.5 text-cyan-400" /> COUNTRY PRICES
-                            </button>
-
-                            <button
-                              onClick={() => { setShowStockHistoryModal(p); setActiveMenuProductId(null); }}
-                              className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                            >
-                              <History className="w-3.5 h-3.5 text-amber-400" /> STOCK HISTORY
-                            </button>
-
-                            {['owner', 'admin'].includes(user?.role) && (
-                              <>
-                                <button
-                                  onClick={() => openEditModal(p)}
-                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                                >
-                                  <Edit className="w-3.5 h-3.5 text-blue-400" /> EDIT
-                                </button>
-
-                                <button
-                                  onClick={() => {
-                                    handleCreateProduct({
-                                      preventDefault: () => {},
-                                    });
-                                    alert(`Product "${p.name}" duplicated!`);
-                                    setActiveMenuProductId(null);
-                                  }}
-                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                                >
-                                  <Copy className="w-3.5 h-3.5 text-emerald-400" /> DUPLICATE
-                                </button>
-
-                                <button
-                                  onClick={() => { alert(`Archived ${p.name}`); setActiveMenuProductId(null); }}
-                                  className="w-full px-3 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
-                                >
-                                  <EyeOff className="w-3.5 h-3.5 text-slate-400" /> ARCHIVE
-                                </button>
-
-                                <div className="border-t border-slate-800 my-1"></div>
-
-                                {/* DELETE BUTTON */}
-                                <button
-                                  onClick={() => { setShowDeleteConfirmModal(p); setActiveMenuProductId(null); }}
-                                  className="w-full px-3 py-2 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20 flex items-center gap-2"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-rose-400" /> DELETE
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── ADD PRODUCT MODAL ── */}
-      {showAddProductModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-xl p-6 rounded-2xl border-slate-700 space-y-4 animate-fade-in max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <Package className="w-5 h-5 text-indigo-400" /> + Add New Product
-              </h3>
-              <button onClick={() => setShowAddProductModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateProduct} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. POT LID HOLDER"
-                  value={formProdName}
-                  onChange={e => setFormProdName(e.target.value)}
-                  className="input text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Category</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. kitchen wares"
-                    value={formCategory}
-                    onChange={e => setFormCategory(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Country</label>
-                  <select
-                    value={formCountry}
-                    onChange={e => setFormCountry(e.target.value)}
-                    className="select w-full text-xs py-2.5"
-                  >
-                    {AFRICAN_LOCATIONS.map(loc => (
-                      <option key={loc.code} value={loc.country} className="bg-slate-900">{loc.country}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Cost Price ({curr})</label>
-                  <input
-                    type="number"
-                    placeholder="3000"
-                    value={formCostPrice}
-                    onChange={e => setFormCostPrice(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Base Selling Price *</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="18500"
-                    value={formBasePrice}
-                    onChange={e => setFormBasePrice(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Stock Left</label>
-                  <input
-                    type="number"
-                    value={formStock}
-                    onChange={e => setFormStock(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Description</label>
-                <textarea
-                  rows={2}
-                  placeholder="Detailed product features, specifications, and details..."
-                  value={formDescription}
-                  onChange={e => setFormDescription(e.target.value)}
-                  className="input text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Image URL</label>
-                <input
-                  type="text"
-                  placeholder="https://images.unsplash.com/..."
-                  value={formImage}
-                  onChange={e => setFormImage(e.target.value)}
-                  className="input text-xs font-mono"
-                />
-              </div>
-
-              {/* Selling Price Variations / Quantity Bundles */}
-              <div className="space-y-2 border-t border-slate-800 pt-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5" /> Selling Price Bundles (Quantity Discounts)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addBundleRow}
-                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
-                  >
-                    + Add Bundle Tier
-                  </button>
-                </div>
-
-                {bundles.map((b, idx) => (
-                  <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      value={b.qty}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, qty: val } : item));
-                      }}
-                      className="w-14 input text-xs py-1"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Bundle Label (e.g. 1 Item + Free Delivery)"
-                      value={b.label}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, label: val } : item));
-                      }}
-                      className="flex-1 input text-xs py-1"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Price"
-                      value={b.price}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, price: val } : item));
-                      }}
-                      className="w-24 input text-xs py-1"
-                    />
-                    {bundles.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeBundleRow(idx)}
-                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                        title="Remove bundle tier"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                      )}
+                    </td>
+                  </tr>
                 ))}
-              </div>
-
-              {/* Dynamic Custom Product Attributes / Fields */}
-              <div className="space-y-2 border-t border-slate-800 pt-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                    <Settings className="w-3.5 h-3.5" /> Custom Attributes / Specifications
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addCustomFieldRow}
-                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
-                  >
-                    + Add Field
-                  </button>
-                </div>
-
-                {customFields.length === 0 ? (
-                  <p className="text-[11px] text-slate-500 italic">No custom fields added yet. Click "+ Add Field" to specify attributes like Material, Warranty, Color, etc.</p>
-                ) : (
-                  customFields.map((field, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                      <input
-                        type="text"
-                        placeholder="Field Name (e.g. Material)"
-                        value={field.key}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, key: val } : item));
-                        }}
-                        className="w-1/3 input text-xs py-1 font-semibold"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Field Value (e.g. Stainless Steel)"
-                        value={field.value}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, value: val } : item));
-                        }}
-                        className="flex-1 input text-xs py-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCustomFieldRow(idx)}
-                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                        title="Remove custom field"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="flex gap-2 pt-3">
-                <button type="button" onClick={() => setShowAddProductModal(false)} className="w-1/2 btn-ghost py-2.5 text-xs">
-                  Cancel
-                </button>
-                <button type="submit" className="w-1/2 btn-primary py-2.5 text-xs">
-                  Save & Publish Product
-                </button>
-              </div>
-            </form>
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* ── EDIT PRODUCT MODAL ── */}
-      {showEditProductModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-xl p-6 rounded-2xl border-slate-700 space-y-4 animate-fade-in max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <Edit className="w-5 h-5 text-blue-400" /> Edit Product: {showEditProductModal.name}
-              </h3>
-              <button onClick={() => setShowEditProductModal(null)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateProduct} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Product Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formProdName}
-                    onChange={e => setFormProdName(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">SKU</label>
-                  <input
-                    type="text"
-                    value={formSku}
-                    onChange={e => setFormSku(e.target.value)}
-                    className="input text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Category</label>
-                  <input
-                    type="text"
-                    value={formCategory}
-                    onChange={e => setFormCategory(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Country</label>
-                  <select
-                    value={formCountry}
-                    onChange={e => setFormCountry(e.target.value)}
-                    className="select w-full text-xs py-2.5"
-                  >
-                    {AFRICAN_LOCATIONS.map(loc => (
-                      <option key={loc.code} value={loc.country} className="bg-slate-900">{loc.country}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Stock Left</label>
-                  <input
-                    type="number"
-                    value={formStock}
-                    onChange={e => setFormStock(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Cost Price ({curr})</label>
-                  <input
-                    type="number"
-                    value={formCostPrice}
-                    onChange={e => setFormCostPrice(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Base Selling Price ({curr}) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={formBasePrice}
-                    onChange={e => setFormBasePrice(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Product Description</label>
-                <textarea
-                  rows={2}
-                  value={formDescription}
-                  onChange={e => setFormDescription(e.target.value)}
-                  className="input text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Image URL</label>
-                <input
-                  type="text"
-                  value={formImage}
-                  onChange={e => setFormImage(e.target.value)}
-                  className="input text-xs font-mono"
-                />
-              </div>
-
-              {/* Selling Price Variations / Quantity Bundles */}
-              <div className="space-y-2 border-t border-slate-800 pt-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5" /> Selling Price Bundles (Quantity Discounts)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addBundleRow}
-                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
-                  >
-                    + Add Bundle Tier
-                  </button>
-                </div>
-
-                {bundles.map((b, idx) => (
-                  <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      value={b.qty}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, qty: val } : item));
-                      }}
-                      className="w-14 input text-xs py-1"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Bundle Label (e.g. 1 Item + Free Delivery)"
-                      value={b.label}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, label: val } : item));
-                      }}
-                      className="flex-1 input text-xs py-1"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Price"
-                      value={b.price}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setBundles(prev => prev.map((item, i) => i === idx ? { ...item, price: val } : item));
-                      }}
-                      className="w-24 input text-xs py-1"
-                    />
-                    {bundles.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeBundleRow(idx)}
-                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                        title="Remove bundle tier"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+      {/* ────────────── AUDIT TRAIL ────────────── */}
+      {activeSection === 'audit' && (
+        <div className="space-y-4 animate-fade-in">
+          <div>
+            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4" style={{ color: 'var(--brand)' }} />
+              Audit Trail
+            </h3>
+            <p className="text-xs text-slate-400">A tamper-evident log of order deletions and system configuration changes.</p>
+          </div>
+          <div className="glass overflow-hidden">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Reference</th>
+                  <th>Performed By</th>
+                  <th>Timestamp</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingAudit ? (
+                  Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+                ) : auditLogs.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-10 text-xs text-slate-500 italic">
+                    No audit events recorded yet.
+                  </td></tr>
+                ) : auditLogs.map(log => (
+                  <tr key={log.id}>
+                    <td>
+                      <span className={`badge ${log.action === 'ORDER_DELETED' ? 'badge-cancelled' : 'badge-scheduled'}`}>
+                        {log.action?.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="font-mono text-xs font-bold" style={{ color: '#a5b4fc' }}>
+                      {log.order_number || 'SYSTEM'}
+                    </td>
+                    <td className="text-slate-300 text-xs">{log.performed_by}</td>
+                    <td className="text-slate-400 text-[11px] whitespace-nowrap">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </td>
+                    <td className="text-slate-300 text-xs">{log.details}</td>
+                  </tr>
                 ))}
-              </div>
-
-              {/* Dynamic Custom Product Attributes / Fields */}
-              <div className="space-y-2 border-t border-slate-800 pt-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                    <Settings className="w-3.5 h-3.5" /> Custom Attributes / Specifications
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addCustomFieldRow}
-                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
-                  >
-                    + Add Field
-                  </button>
-                </div>
-
-                {customFields.length === 0 ? (
-                  <p className="text-[11px] text-slate-500 italic">No custom fields added yet. Click "+ Add Field" to specify attributes like Material, Warranty, Color, etc.</p>
-                ) : (
-                  customFields.map((field, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                      <input
-                        type="text"
-                        placeholder="Field Name (e.g. Material)"
-                        value={field.key}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, key: val } : item));
-                        }}
-                        className="w-1/3 input text-xs py-1 font-semibold"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Field Value (e.g. Stainless Steel)"
-                        value={field.value}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setCustomFields(prev => prev.map((item, i) => i === idx ? { ...item, value: val } : item));
-                        }}
-                        className="flex-1 input text-xs py-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCustomFieldRow(idx)}
-                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                        title="Remove custom field"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="flex gap-2 pt-3">
-                <button type="button" onClick={() => setShowEditProductModal(null)} className="w-1/2 btn-ghost py-2.5 text-xs">
-                  Cancel
-                </button>
-                <button type="submit" className="w-1/2 btn-primary py-2.5 text-xs bg-blue-600 hover:bg-blue-500">
-                  Update Product
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── DELETE CONFIRMATION MODAL ── */}
-      {showDeleteConfirmModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-md p-6 rounded-2xl border-rose-500/40 space-y-4 animate-fade-in">
-            <div className="flex items-center gap-3 text-rose-400">
-              <div className="p-3 bg-rose-500/10 rounded-xl border border-rose-500/20">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-slate-100">Delete Product</h3>
-                <p className="text-xs text-rose-300">This action cannot be undone.</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300">
-              Are you sure you want to permanently delete <strong className="text-white">"{showDeleteConfirmModal.name}"</strong>?
-            </p>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setShowDeleteConfirmModal(null)}
-                className="w-1/2 btn-ghost py-2.5 text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteProduct(showDeleteConfirmModal.id)}
-                className="w-1/2 btn-danger py-2.5 text-xs bg-rose-600 text-white font-bold"
-              >
-                Yes, Delete Product
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── PRICE VARIATIONS MODAL ── */}
-      {showPriceVariationsModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-4">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <Tag className="w-4 h-4 text-indigo-400" /> Price Variations: {showPriceVariationsModal.name}
-            </h3>
-            <div className="space-y-2">
-              {showPriceVariationsModal.price_bundles?.map((b, i) => (
-                <div key={i} className="flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs">
-                  <span className="text-slate-300">{b.label}</span>
-                  <span className="font-bold font-mono text-emerald-400">{curr}{Number(b.price).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setShowPriceVariationsModal(null)} className="w-full btn-primary py-2 text-xs">
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── STOCK HISTORY MODAL ── */}
-      {showStockHistoryModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-lg p-6 rounded-2xl border-slate-700 space-y-4">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <History className="w-4 h-4 text-amber-400" /> Stock Audit History: {showStockHistoryModal.name}
-            </h3>
-            <div className="space-y-2 text-xs">
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between">
-                <span>Initial Restock</span>
-                <span className="text-emerald-400 font-mono font-bold">+150 units</span>
-              </div>
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between">
-                <span>Order #OLI-10001 Dispatch</span>
-                <span className="text-rose-400 font-mono font-bold">-1 unit</span>
-              </div>
-            </div>
-            <button onClick={() => setShowStockHistoryModal(null)} className="w-full btn-primary py-2 text-xs">
-              Close History
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── STATE DELIVERY FEE MODAL ── */}
-      {showDeliveryFeeModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-4">
-            <h3 className="text-base font-bold text-slate-100">State Delivery Fee Configuration</h3>
-            <p className="text-xs text-slate-400">Set default COD delivery fees for each state in {selectedCountry}.</p>
-            <div className="space-y-2">
-              {['Lagos', 'Abuja (FCT)', 'Rivers', 'Kano', 'Oyo'].map(st => (
-                <div key={st} className="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800 text-xs">
-                  <span>{st}</span>
-                  <input type="number" defaultValue="2000" className="w-24 input py-1 text-right text-xs" />
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setShowDeliveryFeeModal(false)} className="w-full btn-primary py-2 text-xs">
-              Save Delivery Fees
-            </button>
+              </tbody>
+            </table>
           </div>
         </div>
       )}

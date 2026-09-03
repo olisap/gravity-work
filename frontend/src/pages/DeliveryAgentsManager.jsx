@@ -14,6 +14,8 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
 
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modals State
@@ -98,6 +100,7 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!name) return;
+    setIsSubmitting(true);
 
     const statesArr = coverageStates.split(',').map(s => s.trim()).filter(Boolean);
 
@@ -126,12 +129,15 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
       }
     } catch (err) {
       console.error('Error creating delivery agent:', err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!showEditModal) return;
+    setIsSubmitting(true);
 
     const statesArr = coverageStates.split(',').map(s => s.trim()).filter(Boolean);
 
@@ -157,12 +163,15 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
       }
     } catch (err) {
       console.error('Error updating delivery agent:', err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleAssignStockSubmit = async (e) => {
     e.preventDefault();
     if (!showAssignStockModal || !selectedProductId || !assignQty) return;
+    setIsAssigning(true);
 
     const targetProd = products.find(p => p.id === selectedProductId);
     const prodName = targetProd ? targetProd.name : 'Product Item';
@@ -187,6 +196,8 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
       }
     } catch (err) {
       console.error('Error assigning stock to agent:', err);
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -276,7 +287,9 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
 
         <div className="overflow-x-auto">
           {loading ? (
-            <div className="p-8 text-center text-xs text-slate-400 animate-pulse">Loading courier agents...</div>
+            <div className="space-y-3 p-4">
+              {[1, 2, 3].map(i => <div key={i} className="skeleton h-12 w-full rounded-xl" />)}
+            </div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500 italic bg-slate-950/40 rounded-xl">No delivery agents registered. Click "+ Register Dispatch Agent" above.</div>
           ) : (
@@ -424,8 +437,12 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
                 <button type="button" onClick={() => { setShowAddModal(false); setShowEditModal(null); }} className="w-1/2 btn-ghost py-2.5 text-xs">
                   Cancel
                 </button>
-                <button type="submit" className="w-1/2 btn-primary py-2.5 text-xs">
-                  {showEditModal ? 'Update Agent' : 'Save Agent'}
+                <button type="submit" disabled={isSubmitting} className="w-1/2 btn-primary py-2.5 text-xs">
+                  {isSubmitting ? (
+                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
+                  ) : (
+                    showEditModal ? 'Update Agent' : 'Save Agent'
+                  )}
                 </button>
               </div>
             </form>
@@ -465,8 +482,12 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
                 <button type="button" onClick={() => setShowAssignStockModal(null)} className="w-1/2 btn-ghost py-2.5 text-xs">
                   Cancel
                 </button>
-                <button type="submit" className="w-1/2 btn-primary py-2.5 text-xs">
-                  Confirm Handover to Agent
+                <button type="submit" disabled={isAssigning} className="w-1/2 btn-primary py-2.5 text-xs">
+                  {isAssigning ? (
+                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Assigning...</>
+                  ) : (
+                    'Confirm Handover to Agent'
+                  )}
                 </button>
               </div>
             </form>

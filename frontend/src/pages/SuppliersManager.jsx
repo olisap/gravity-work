@@ -7,6 +7,7 @@ export default function SuppliersManager() {
   const { user } = useAuth();
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modals State
@@ -65,6 +66,7 @@ export default function SuppliersManager() {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!name) return;
+    setIsSubmitting(true);
 
     try {
       const token = localStorage.getItem('gravity_crm_token');
@@ -91,12 +93,15 @@ export default function SuppliersManager() {
       }
     } catch (err) {
       console.error('Error creating supplier:', err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!showEditModal) return;
+    setIsSubmitting(true);
 
     try {
       const token = localStorage.getItem('gravity_crm_token');
@@ -115,11 +120,14 @@ export default function SuppliersManager() {
       });
 
       if (res.ok) {
-        fetchSuppliers();
+        const updatedSupplier = await res.json();
+        setSuppliers(prev => prev.map(s => s.id === showEditModal.id ? updatedSupplier : s));
         setShowEditModal(null);
       }
     } catch (err) {
       console.error('Error updating supplier:', err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -179,7 +187,9 @@ export default function SuppliersManager() {
 
         <div className="overflow-x-auto">
           {loading ? (
-            <div className="p-8 text-center text-xs text-slate-400 animate-pulse">Loading supplier directory...</div>
+            <div className="space-y-3 p-4">
+              {[1, 2, 3].map(i => <div key={i} className="skeleton h-12 w-full rounded-xl" />)}
+            </div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500 italic bg-slate-950/40 rounded-xl">No suppliers registered. Click "+ Register Supplier" above.</div>
           ) : (
@@ -275,8 +285,12 @@ export default function SuppliersManager() {
                 <button type="button" onClick={() => { setShowAddModal(false); setShowEditModal(null); }} className="w-1/2 btn-ghost py-2.5 text-xs">
                   Cancel
                 </button>
-                <button type="submit" className="w-1/2 btn-primary py-2.5 text-xs">
-                  {showEditModal ? 'Update Supplier' : 'Save Supplier'}
+                <button type="submit" disabled={isSubmitting} className="w-1/2 btn-primary py-2.5 text-xs">
+                  {isSubmitting ? (
+                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
+                  ) : (
+                    showEditModal ? 'Update Supplier' : 'Save Supplier'
+                  )}
                 </button>
               </div>
             </form>
