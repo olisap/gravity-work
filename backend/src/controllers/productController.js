@@ -178,12 +178,27 @@ export async function createCategory(req, res) {
 }
 
 export async function getStockMovements(req, res) {
-  const storeId = req.user?.store_id || req.query.store_id;
+  const storeId = req.storeId || req.user?.store_id;
 
   if (supabase) {
-    let query = supabase.from('stock_movements').select('*').order('created_at', { ascending: false }).limit(50);
+    const { data: storeProducts, error: productError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('store_id', storeId);
+    if (productError) return res.status(502).json({ error: 'Inventory could not be loaded', details: productError.message });
+
+    const productIds = (storeProducts || []).map(product => product.id);
+    if (productIds.length === 0) return res.json([]);
+
+    const query = supabase
+      .from('stock_movements')
+      .select('*')
+      .in('product_id', productIds)
+      .order('created_at', { ascending: false })
+      .limit(50);
     const { data, error } = await query;
     if (!error && data) return res.json(data);
+    if (error) return res.status(502).json({ error: 'Inventory could not be loaded', details: error.message });
   }
 
   res.json([]);
