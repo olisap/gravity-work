@@ -96,7 +96,7 @@ export default function FormBuilder({
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
 
-  const [notificationEmail, setNotificationEmail] = useState('merchant@gmail.com');
+  const [notificationEmail, setNotificationEmail] = useState('');
   const [termsText, setTermsText] = useState('');
 
   const [selectedFormForEmbed, setSelectedFormForEmbed] = useState(forms[0] || { embed_key: 'EMBED-LUNCHBOX-2026' });
@@ -119,7 +119,7 @@ export default function FormBuilder({
     setSubmitBgColor(f.button_bg_color || '#4f46e5');
     setFormBgColor(f.form_bg_color || '#0f172a');
     setPayCod(f.payment_cod_enabled !== undefined ? f.payment_cod_enabled : true);
-    setNotificationEmail(f.notification_email || 'merchant@gmail.com');
+    setNotificationEmail(f.notification_email || '');
     setThankYouUrl(f.thank_you_url || '');
     setUpsellEnabled(f.upsell_enabled !== false);
     setUpsellProductId(f.upsell_product_id || products[0]?.id || '');

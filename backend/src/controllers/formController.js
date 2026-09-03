@@ -30,7 +30,7 @@ function prepareSupabasePayload(body, existingFieldsConfig = {}) {
     'button_text_color', 'form_bg_color', 'show_country_code',
     'payment_cod_enabled', 'payment_paystack_enabled',
     'payment_flutterwave_enabled', 'payment_bank_enabled',
-    'notification_email', 'thank_you_url', 'is_active', 'created_at', 'updated_at'
+    'notification_email', 'is_active', 'created_at', 'updated_at'
   ];
 
   const payload = {};
