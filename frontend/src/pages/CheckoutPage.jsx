@@ -34,19 +34,13 @@ export default function CheckoutPage() {
         }
         setForm(formData);
 
-        // Fetch products to find the linked product
-        const storedToken = localStorage.getItem('gravity_crm_token');
-        const headers = storedToken ? { 'Authorization': `Bearer ${storedToken}` } : {};
-
+        // Fetch only products exposed by this public form, never the whole store catalog.
         let productsData = [];
         try {
-          const productsQuery = formData.store_id ? `?store_id=${encodeURIComponent(formData.store_id)}` : '';
-          const productsRes = await fetch(apiUrl(`/api/products${productsQuery}`), { headers });
+          const productsRes = await fetch(apiUrl(`/api/forms/embed/${encodeURIComponent(embedKey)}/product`));
           if (productsRes.ok) {
             const resData = await productsRes.json();
-            if (Array.isArray(resData)) {
-              productsData = resData;
-            }
+            productsData = Array.isArray(resData.products) ? resData.products : [];
           }
         } catch (e) {
           console.warn('Failed to fetch products API, using fallback product');

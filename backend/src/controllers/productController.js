@@ -10,10 +10,7 @@ function sanitizeUuid(val) {
 }
 
 export async function getProducts(req, res) {
-  const effectiveStoreId = req.user?.store_id || req.query.store_id;
-  if (!effectiveStoreId) {
-    return res.status(400).json({ error: 'store_id is required for public product access' });
-  }
+  const effectiveStoreId = req.storeId;
   if (supabase) {
     const { data: allProds, error } = await supabase.from('products').select('*').eq('store_id', effectiveStoreId).order('created_at', { ascending: false });
     if (!error && allProds) {
@@ -23,6 +20,34 @@ export async function getProducts(req, res) {
 
   let list = [...mockProducts];
   res.json(list);
+}
+
+export async function getProductForPublicForm(req, res) {
+  const { embedKey } = req.params;
+  if (!supabase) return res.status(503).json({ error: 'Public checkout is unavailable' });
+
+  const { data: form, error: formError } = await supabase
+    .from('forms')
+    .select('linked_product_id, fields_config, store_id')
+    .eq('embed_key', embedKey)
+    .maybeSingle();
+  if (formError) return res.status(502).json({ error: 'Checkout form could not be loaded' });
+  if (!form?.linked_product_id || !form.store_id) return res.status(404).json({ error: 'Checkout product not found' });
+
+  const productIds = [form.linked_product_id];
+  const upsellProductId = form.fields_config?.upsell_product_id;
+  if (upsellProductId) productIds.push(upsellProductId);
+
+  const { data: products, error: productError } = await supabase
+    .from('products')
+    .select('*')
+    .eq('store_id', form.store_id)
+    .in('id', productIds);
+  if (productError) return res.status(502).json({ error: 'Checkout product could not be loaded' });
+
+  const product = products?.find(item => item.id === form.linked_product_id);
+  if (!product) return res.status(404).json({ error: 'Checkout product not found' });
+  res.json({ product, products });
 }
 
 export async function getCategories(req, res) {

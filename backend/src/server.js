@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { login, signup, getMe, getTeamMembers, createTeamMember, updateTeamMemberStatus } from './controllers/authController.js';
 import { requireAuth, requireStoreContext, requireRole } from './middleware/authMiddleware.js';
 import { getOrders, createOrUpdateDraftOrder, updateOrderStatus, addUpsellToOrder } from './controllers/orderController.js';
-import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory, getStockMovements, recordStockAdjustment } from './controllers/productController.js';
+import { getProducts, getProductForPublicForm, getCategories, createProduct, updateProduct, deleteProduct, createCategory, getStockMovements, recordStockAdjustment } from './controllers/productController.js';
 import { getForms, getFormByEmbedKey, createForm, updateForm, deleteForm } from './controllers/formController.js';
 import { getDashboardStats } from './controllers/dashboardController.js';
 import { getUpsellOffers, getUpsellOfferForProduct } from './controllers/upsellController.js';
@@ -47,11 +47,11 @@ app.patch('/api/orders/:id/status', requireAuth, requireStoreContext, requireRol
 app.post('/api/orders/:id/upsell', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), addUpsellToOrder);
 
 // Products & Stock Inventory Routes
-app.get('/api/products', getProducts);
+app.get('/api/products', requireAuth, requireStoreContext, getProducts);
 app.post('/api/products', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createProduct);
 app.patch('/api/products/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), updateProduct);
 app.delete('/api/products/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), deleteProduct);
-app.get('/api/categories', getCategories);
+app.get('/api/categories', requireAuth, requireStoreContext, getCategories);
 app.post('/api/categories', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createCategory);
 app.get('/api/stock-movements', requireAuth, requireStoreContext, getStockMovements);
 app.post('/api/stock-movements', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), recordStockAdjustment);
@@ -75,6 +75,7 @@ app.post('/api/forms', requireAuth, requireStoreContext, requireRole(['owner', '
 app.patch('/api/forms/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), updateForm);
 app.delete('/api/forms/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), deleteForm);
 app.get('/api/forms/embed/:embedKey', getFormByEmbedKey);
+app.get('/api/forms/embed/:embedKey/product', getProductForPublicForm);
 
 // Dashboard Analytics Routes
 app.get('/api/dashboard', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), getDashboardStats);
