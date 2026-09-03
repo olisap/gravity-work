@@ -91,13 +91,29 @@ export async function getFormByEmbedKey(req, res) {
 
 export async function createForm(req, res) {
   const body = req.body;
+  const linkedProductId = sanitizeUuid(body.linked_product_id);
+  if (!linkedProductId) {
+    return res.status(400).json({ error: 'Select a product before saving the form.' });
+  }
+
+  if (supabase) {
+    const { data: linkedProduct, error: productError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('id', linkedProductId)
+      .eq('store_id', req.storeId)
+      .maybeSingle();
+    if (productError) return res.status(502).json({ error: 'The linked product could not be verified', details: productError.message });
+    if (!linkedProduct) return res.status(400).json({ error: 'The selected product does not belong to this store.' });
+  }
+
   const embed_key = body.embed_key || `EMBED-${(body.name || 'PRODUCT').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10)}-${Date.now().toString().slice(-4)}`;
 
   const newForm = {
     id: `33000000-0000-0000-0000-${Date.now().toString().padStart(12, '0').slice(-12)}`,
     store_id: sanitizeUuid(req.storeId),
     name: body.name || 'Product Order Form',
-    linked_product_id: sanitizeUuid(body.linked_product_id),
+    linked_product_id: linkedProductId,
     embed_key,
     header_text: body.header_text || 'Please Fill The Form Below To Place Your Order',
     subheader_text: body.subheader_text || 'Only Serious Buyers Should Fill The Form Below',

@@ -187,7 +187,7 @@ export default function FormBuilder({
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Server error ${res.status}`);
+          throw new Error(errData.details ? `${errData.error}: ${errData.details}` : (errData.error || `Server error ${res.status}`));
         }
         const updated = await res.json();
         if (thankYouUrl) {
@@ -210,7 +210,7 @@ export default function FormBuilder({
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Server error ${res.status}`);
+          throw new Error(errData.details ? `${errData.error}: ${errData.details}` : (errData.error || `Server error ${res.status}`));
         }
         const created = await res.json();
         if (thankYouUrl) {
