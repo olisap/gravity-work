@@ -28,6 +28,7 @@
   iframe.style.overflow = 'hidden';
   iframe.scrolling = 'no';
   iframe.setAttribute('frameborder', '0');
+  iframe.setAttribute('allow', 'top-navigation top-navigation-by-user-activation');
 
   container.appendChild(iframe);
   currentScript.parentNode.insertBefore(container, currentScript);

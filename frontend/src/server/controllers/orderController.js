@@ -29,12 +29,15 @@ async function resolveMerchantNotificationEmail({ explicitEmail, storeId }) {
     try {
       const { data: storeForm } = await supabase
         .from('forms')
-        .select('notification_email')
+        .select('notification_email, fields_config')
         .eq('store_id', storeId)
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (storeForm && !isPlaceholder(storeForm.notification_email)) {
-        return storeForm.notification_email.trim();
+      const cfgEmail = storeForm?.fields_config?.notification_email;
+      const candidate = storeForm?.notification_email || cfgEmail;
+      if (candidate && !isPlaceholder(candidate)) {
+        return candidate.trim();
       }
     } catch (e) {
       console.error('resolveMerchantNotificationEmail: failed to read forms.notification_email', e);

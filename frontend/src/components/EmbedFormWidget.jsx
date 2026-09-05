@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, CheckCircle, ArrowRight, ArrowLeft, ShieldCheck, Zap } from 'lucide-react';
+import { ShoppingBag, CheckCircle, ArrowRight, ArrowLeft, ShieldCheck, Zap, AlertTriangle } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { apiUrl } from '../utils/apiUrl';
 
@@ -13,6 +13,10 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const [selectedCountry, setSelectedCountry] = useState('Nigeria');
   const [selectedState, setSelectedState] = useState('Lagos');
   
+  // Validation state
+  const [errors, setErrors] = useState({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
   // Upsell Bump State
   const [addUpsellBump, setAddUpsellBump] = useState(false);
   const [draftId, setDraftId] = useState(null);
@@ -106,9 +110,40 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     divider: lightMode ? "flex items-center gap-2 border-b border-slate-200 pb-2 mb-2" : "flex items-center gap-2 border-b border-slate-800/80 pb-2 mb-2"
   };
 
+  const validateFields = (fields = { name: customerName, phone: customerPhone, address: deliveryAddress, email: customerEmail }) => {
+    const errs = {};
+    if (!fields.name || !fields.name.trim()) {
+      errs.customerName = 'Please enter your Full Name';
+    } else if (fields.name.trim().length < 2) {
+      errs.customerName = 'Please enter a valid full name';
+    }
+
+    const cleanPhone = (fields.phone || '').replace(/\s+/g, '').replace(/-/g, '');
+    if (!cleanPhone) {
+      errs.customerPhone = 'Please enter your Phone Number';
+    } else if (cleanPhone.replace('+', '').length < 10) {
+      errs.customerPhone = 'Please enter a valid phone number (at least 10 digits)';
+    }
+
+    if (!fields.address || !fields.address.trim()) {
+      errs.deliveryAddress = 'Please enter your Detailed Delivery Address';
+    } else if (fields.address.trim().length < 5) {
+      errs.deliveryAddress = 'Please provide a more detailed street address';
+    }
+
+    if (fields.email && fields.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(fields.email.trim())) {
+        errs.customerEmail = 'Please enter a valid email address';
+      }
+    }
+
+    return errs;
+  };
+
   // Persist draft to backend
   const saveDraft = async (isFinal = false) => {
-    if (!customerPhone) return;
+    if (!customerPhone && !isFinal) return;
     setIsSubmitting(isFinal);
     try {
       // Determine step reached based on fields filled
@@ -128,7 +163,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         form_step_reached: stepReached,
         is_final_submit: isFinal,
         delivery_fee: deliveryFee,
-        notification_email: formConfig?.notification_email || 'olisapaul1@gmail.com',
+        notification_email: formConfig?.notification_email || '',
         thank_you_url: formConfig?.thank_you_url || '',
         store_id: formConfig?.store_id || null,
         items: [
@@ -202,17 +237,15 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             } catch (pe) {}
           }
 
-          // Direct location assignment (bypasses browser async popup blocker restrictions)
+          // Direct location assignment to parent/top window
           try {
             if (window.top && window.self !== window.top) {
               window.top.location.href = targetUrl;
+            } else if (window.parent && window.parent !== window) {
+              window.parent.location.href = targetUrl;
             }
           } catch (topErr) {
-            try {
-              if (window.parent && window.parent !== window) {
-                window.parent.location.href = targetUrl;
-              }
-            } catch (parentErr) {}
+            console.warn('Direct top navigation restricted by browser cross-origin policy:', topErr);
           }
 
           // Show high-converting success state with direct redirect button (guarantees top navigation even if sandboxed)
@@ -227,11 +260,18 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             redirect_target_url: targetUrl
           });
 
+          // Delayed fallback redirection
           setTimeout(() => {
             try {
-              window.location.href = targetUrl;
-            } catch (locErr) {}
-          }, 1200);
+              if (window.top && window.self !== window.top) {
+                window.top.location.href = targetUrl;
+              } else {
+                window.location.href = targetUrl;
+              }
+            } catch (locErr) {
+              try { window.location.href = targetUrl; } catch(e) {}
+            }
+          }, 1500);
 
           return;
         } else {
@@ -262,6 +302,28 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
 
   const handleFieldBlur = () => {
     saveDraft(false);
+  };
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    setSubmitAttempted(true);
+    const errs = validateFields();
+    setErrors(errs);
+
+    if (Object.keys(errs).length > 0) {
+      if (errs.customerName) {
+        document.getElementById('embed-input-name')?.focus();
+      } else if (errs.customerPhone) {
+        document.getElementById('embed-input-phone')?.focus();
+      } else if (errs.deliveryAddress) {
+        document.getElementById('embed-input-address')?.focus();
+      } else if (errs.customerEmail) {
+        document.getElementById('embed-input-email')?.focus();
+      }
+      return;
+    }
+
+    saveDraft(true);
   };
 
   if (submittedOrder) {
@@ -316,7 +378,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         </span>
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); saveDraft(true); }} className="space-y-5">
+      <form onSubmit={handleFormSubmit} noValidate className="space-y-5">
         {/* SECTION 1: Customer Contact */}
         <div className="space-y-3">
           <div className={theme.divider}>
@@ -327,39 +389,76 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           <div>
             <label className={theme.label}>Full Name <span className="text-rose-500">*</span></label>
             <input
+              id="embed-input-name"
               type="text"
               required
               placeholder="e.g. Amina Adeleke"
               value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
+              onChange={(e) => {
+                setCustomerName(e.target.value);
+                if (submitAttempted) {
+                  setErrors(prev => ({ ...prev, customerName: e.target.value.trim() ? undefined : 'Please enter your Full Name' }));
+                }
+              }}
               onBlur={handleFieldBlur}
-              className={theme.input}
+              className={`${theme.input} ${errors.customerName ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
             />
+            {errors.customerName && (
+              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1 animate-fade-in">
+                <span>⚠️</span> {errors.customerName}
+              </p>
+            )}
           </div>
 
           <div>
             <label className={theme.label}>Phone Number <span className="text-rose-500">*</span> <span className="text-[10px] text-slate-400">(Required for verification)</span></label>
             <input
+              id="embed-input-phone"
               type="tel"
               required
               placeholder="e.g. 08031234567"
               value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
+              onChange={(e) => {
+                setCustomerPhone(e.target.value);
+                if (submitAttempted) {
+                  const clean = e.target.value.replace(/\s+/g, '').replace(/-/g, '').replace('+', '');
+                  setErrors(prev => ({ ...prev, customerPhone: clean.length >= 10 ? undefined : 'Please enter a valid Phone Number (at least 10 digits)' }));
+                }
+              }}
               onBlur={handleFieldBlur}
-              className={theme.input}
+              className={`${theme.input} ${errors.customerPhone ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
             />
+            {errors.customerPhone && (
+              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1 animate-fade-in">
+                <span>⚠️</span> {errors.customerPhone}
+              </p>
+            )}
           </div>
 
           <div>
             <label className={theme.label}>Email Address <span className="text-[10px] text-slate-400">(Optional)</span></label>
             <input
+              id="embed-input-email"
               type="email"
               placeholder="e.g. customer@gmail.com"
               value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
+              onChange={(e) => {
+                setCustomerEmail(e.target.value);
+                if (submitAttempted && e.target.value.trim()) {
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  setErrors(prev => ({ ...prev, customerEmail: emailRegex.test(e.target.value.trim()) ? undefined : 'Please enter a valid email address' }));
+                } else if (submitAttempted && !e.target.value.trim()) {
+                  setErrors(prev => ({ ...prev, customerEmail: undefined }));
+                }
+              }}
               onBlur={handleFieldBlur}
-              className={theme.input}
+              className={`${theme.input} ${errors.customerEmail ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
             />
+            {errors.customerEmail && (
+              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1 animate-fade-in">
+                <span>⚠️</span> {errors.customerEmail}
+              </p>
+            )}
           </div>
         </div>
 
@@ -389,14 +488,25 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           <div>
             <label className={theme.label}>Detailed Street Address <span className="text-rose-500">*</span></label>
             <textarea
+              id="embed-input-address"
               rows="2"
               required
               placeholder="e.g. House 14, Admiralty Way, Lekki Phase 1"
               value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
+              onChange={(e) => {
+                setDeliveryAddress(e.target.value);
+                if (submitAttempted) {
+                  setErrors(prev => ({ ...prev, deliveryAddress: e.target.value.trim().length >= 5 ? undefined : 'Please enter your Detailed Delivery Address' }));
+                }
+              }}
               onBlur={handleFieldBlur}
-              className={theme.input}
+              className={`${theme.input} ${errors.deliveryAddress ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
             ></textarea>
+            {errors.deliveryAddress && (
+              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1 animate-fade-in">
+                <span>⚠️</span> {errors.deliveryAddress}
+              </p>
+            )}
           </div>
         </div>
 
@@ -510,10 +620,17 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             </div>
           </div>
 
+          {submitAttempted && (errors.customerName || errors.customerPhone || errors.deliveryAddress || errors.customerEmail) && (
+            <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2.5 animate-shake">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-rose-500" />
+              <span>Please fill in all required fields marked with * above to complete your order.</span>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={!customerPhone || !customerName || !deliveryAddress || isSubmitting}
-            className="w-full py-4 rounded-xl bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-500 text-white font-black text-base md:text-lg tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 active:scale-[0.98] transition-all uppercase"
+            disabled={isSubmitting}
+            className="w-full py-4 rounded-xl bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed hover:bg-emerald-500 text-white font-black text-base md:text-lg tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 active:scale-[0.98] transition-all uppercase cursor-pointer"
           >
             {isSubmitting ? (
               <span className="flex items-center gap-2 font-black">

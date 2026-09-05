@@ -101,6 +101,14 @@ export default function FormBuilder({
 
   const [selectedFormForEmbed, setSelectedFormForEmbed] = useState(forms[0] || { embed_key: 'EMBED-LUNCHBOX-2026' });
 
+  useEffect(() => {
+    if (forms && forms.length > 0) {
+      if (!selectedFormForEmbed || selectedFormForEmbed.embed_key === 'EMBED-LUNCHBOX-2026' || !forms.some(f => f.embed_key === selectedFormForEmbed.embed_key)) {
+        setSelectedFormForEmbed(forms[0]);
+      }
+    }
+  }, [forms]);
+
   // Copy code helper
   const copyToClipboard = (text, key) => {
     navigator.clipboard.writeText(text);
@@ -111,6 +119,7 @@ export default function FormBuilder({
   // Populate Editor for Editing Existing Form
   const loadFormIntoEditor = (f) => {
     setEditingFormId(f.id);
+    setSelectedFormForEmbed(f);
     setFormName(f.name || 'Order Form');
     setSelectedProductId(f.linked_product_id || products[0]?.id || '');
     setHeaderText(f.header_text || 'Please Fill The Form Below To Place Your Order');
@@ -254,7 +263,7 @@ export default function FormBuilder({
   const scriptCode = `<script src="https://olinwa.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
   const iframeId = `olinwa-iframe-${selectedFormForEmbed.embed_key}`;
   const iframeCode = `<div class="olinwa-iframe-wrapper">
-  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}${embedThankYouQuery}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;"></iframe>
+  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}${embedThankYouQuery}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;" allow="top-navigation top-navigation-by-user-activation"></iframe>
   <script>
     window.addEventListener('message', function(e) {
       if (!e.data) return;

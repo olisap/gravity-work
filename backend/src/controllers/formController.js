@@ -7,6 +7,11 @@ function sanitizeUuid(val) {
   return val.trim();
 }
 
+function isValidUUID(str) {
+  if (!str || typeof str !== 'string') return false;
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str.trim());
+}
+
 function formatForm(form) {
   if (!form) return null;
   const cfg = (typeof form.fields_config === 'object' && form.fields_config && !Array.isArray(form.fields_config))
@@ -14,6 +19,7 @@ function formatForm(form) {
     : {};
   return {
     ...form,
+    notification_email: form.notification_email || cfg.notification_email || '',
     thank_you_url: form.thank_you_url || cfg.thank_you_url || '',
     upsell_enabled: form.upsell_enabled !== undefined ? form.upsell_enabled : (cfg.upsell_enabled !== undefined ? cfg.upsell_enabled : true),
     upsell_product_id: form.upsell_product_id || cfg.upsell_product_id || '',
@@ -30,7 +36,7 @@ function prepareSupabasePayload(body, existingFieldsConfig = {}) {
     'button_text_color', 'form_bg_color', 'show_country_code',
     'payment_cod_enabled', 'payment_paystack_enabled',
     'payment_flutterwave_enabled', 'payment_bank_enabled',
-    'notification_email', 'is_active', 'created_at', 'updated_at'
+    'notification_email', 'thank_you_url', 'is_active', 'created_at', 'updated_at'
   ];
 
   const payload = {};
@@ -80,9 +86,24 @@ export async function getForms(req, res) {
 
 export async function getFormByEmbedKey(req, res) {
   const { embedKey } = req.params;
+  if (!embedKey) return res.status(400).json({ error: 'Embed key required' });
+
   if (supabase) {
-    const { data, error } = await supabase.from('forms').select('*').or(`embed_key.eq.${embedKey},id.eq.${embedKey}`).maybeSingle();
-    if (!error && data) return res.json(formatForm(data));
+    try {
+      let query = supabase.from('forms').select('*');
+      if (isValidUUID(embedKey)) {
+        query = query.or(`embed_key.eq.${embedKey},id.eq.${embedKey}`);
+      } else {
+        query = query.eq('embed_key', embedKey);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (!error && data) return res.json(formatForm(data));
+      if (error) {
+        console.error('getFormByEmbedKey supabase error:', error);
+      }
+    } catch (e) {
+      console.error('getFormByEmbedKey query exception:', e);
+    }
   }
   const form = mockForms.find(f => f.embed_key === embedKey || f.id === embedKey) || mockForms[0];
   if (!form) return res.status(404).json({ error: 'Embeddable form not found' });
