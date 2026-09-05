@@ -66,6 +66,33 @@ async function resolveMerchantNotificationEmail({ explicitEmail, storeId }) {
   return null;
 }
 
+/**
+ * Resolve the store's display name for use in emails.
+ */
+async function resolveStoreName(storeId) {
+  if (storeId && supabase) {
+    try {
+      const { data: store } = await supabase
+        .from('stores')
+        .select('name')
+        .eq('id', storeId)
+        .single();
+      if (store?.name) return store.name;
+    } catch (e) { /* ignore */ }
+    try {
+      const { data: owner } = await supabase
+        .from('users')
+        .select('store_name')
+        .eq('store_id', storeId)
+        .eq('role', 'owner')
+        .limit(1)
+        .maybeSingle();
+      if (owner?.store_name) return owner.store_name;
+    } catch (e) { /* ignore */ }
+  }
+  return process.env.SENDER_NAME || 'Our Store';
+}
+
 function prepareOrderPayloadForSupabase(order) {
   const { items, thank_you_url, notification_email, ...rest } = order;
   return {
@@ -288,20 +315,19 @@ export async function createOrUpdateDraftOrder(req, res) {
 
   // Trigger Notifications on Final Order Submit
   if (is_final_submit) {
-    const targetNotificationEmail = await resolveMerchantNotificationEmail({
-      explicitEmail: notification_email,
-      storeId: store_id
-    });
+    const [targetNotificationEmail, storeName] = await Promise.all([
+      resolveMerchantNotificationEmail({ explicitEmail: notification_email, storeId: store_id }),
+      resolveStoreName(store_id)
+    ]);
 
-    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Merchant Target: ${targetNotificationEmail || 'NONE - skipped'}, Customer: ${finalOrder.customer_email || 'None'})`);
+    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Store: ${storeName}, Merchant: ${targetNotificationEmail || 'NONE'}, Customer: ${finalOrder.customer_email || 'None'})`);
     if (targetNotificationEmail) {
-      NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail).catch(err => {
+      NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail, storeName).catch(err => {
         console.error('Failed to send order finalized notifications:', err);
       });
     } else {
-      console.warn(`⚠️ No merchant notification email resolved for store ${store_id}. Skipping merchant alert (customer receipt, if applicable, will still send).`);
-      // Still send the customer receipt even if we don't know who the merchant is.
-      NotificationService.sendOrderFinalizedNotifications(finalOrder, null).catch(err => {
+      console.warn(`⚠️ No merchant notification email resolved for store ${store_id}. Sending customer receipt only.`);
+      NotificationService.sendOrderFinalizedNotifications(finalOrder, null, storeName).catch(err => {
         console.error('Failed to send order finalized notifications:', err);
       });
     }

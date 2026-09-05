@@ -60,6 +60,7 @@ export default function SettingsPage({ onSettingsUpdated }) {
   const [saveSuccess, setSaveSuccess]         = useState(false);
   const [saveError, setSaveError]             = useState('');
   const fileInputRef                          = useRef(null);
+  const [logoFileName, setLogoFileName]       = useState('');
 
   // ── Team state ──
   const [teamMembers, setTeamMembers]   = useState([]);
@@ -150,12 +151,18 @@ export default function SettingsPage({ onSettingsUpdated }) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || errData.details || 'Save failed');
       }
+      const responseData = await res.json();
+      // Update local state with server's resolved settings (e.g. resolved logo URL)
+      if (responseData.settings) {
+        setSettings(responseData.settings);
+      }
       setSaveSuccess(true);
-      if (updateUser && settings.store_name) {
+      const finalSettings = responseData.settings || settings;
+      if (updateUser && finalSettings.store_name) {
         updateUser({
-          store_name: settings.store_name,
-          country: settings.store_country,
-          company_logo: settings.company_logo
+          store_name: finalSettings.store_name,
+          country: finalSettings.store_country,
+          company_logo: finalSettings.company_logo
         });
       }
       if (onSettingsUpdated) onSettingsUpdated();
@@ -167,15 +174,17 @@ export default function SettingsPage({ onSettingsUpdated }) {
     }
   };
 
+
   const handleLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      setSaveError('Image file is too large. Please select an image under 2MB.');
+    if (file.size > 5 * 1024 * 1024) {
+      setSaveError('Image file is too large. Please select an image under 5MB.');
       return;
     }
 
+    setLogoFileName(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       setSetting('company_logo', reader.result);
@@ -310,46 +319,61 @@ export default function SettingsPage({ onSettingsUpdated }) {
                 </div>
                 <div>
                   <label className="text-label text-slate-400 block mb-1.5">Store Logo</label>
-                  <div className="flex items-center gap-3">
-                    {/* Logo Preview */}
-                    <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center overflow-hidden shrink-0">
-                      {settings.company_logo ? (
-                        <img
-                          src={settings.company_logo}
-                          alt="Logo Preview"
-                          className="w-full h-full object-contain"
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
-                      ) : (
-                        <ImageIcon className="w-5 h-5 text-slate-500" />
-                      )}
-                    </div>
-                    
-                    {/* URL Input */}
-                    <input
-                      className="input font-mono text-xs flex-1"
-                      value={settings.company_logo || ''}
-                      onChange={e => setSetting('company_logo', e.target.value)}
-                      placeholder="Image URL or upload file..."
-                    />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      {/* Logo Preview */}
+                      <div className="w-14 h-14 rounded-xl bg-slate-900 border-2 border-slate-700 flex items-center justify-center overflow-hidden shrink-0" style={{ borderColor: settings.company_logo ? 'var(--brand)' : '' }}>
+                        {settings.company_logo ? (
+                          <img
+                            src={settings.company_logo}
+                            alt="Logo"
+                            className="w-full h-full object-contain p-1"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <ImageIcon className="w-6 h-6 text-slate-500" />
+                        )}
+                      </div>
 
-                    {/* File Upload Button */}
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleLogoUpload}
-                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      title="Upload image from device"
-                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
-                    >
-                      <Upload className="w-3.5 h-3.5 text-indigo-400" />
-                      <span className="hidden sm:inline">Upload</span>
-                    </button>
+                      <div className="flex-1 min-w-0">
+                        {/* URL Input */}
+                        <input
+                          className="input font-mono text-xs w-full"
+                          value={settings.company_logo?.startsWith('data:') ? '' : (settings.company_logo || '')}
+                          onChange={e => { setSetting('company_logo', e.target.value); setLogoFileName(''); }}
+                          placeholder="Paste image URL here..."
+                        />
+                        {logoFileName && (
+                          <p className="text-xs text-indigo-400 mt-1 truncate">
+                            📎 {logoFileName} — will upload when you Save Changes
+                          </p>
+                        )}
+                        {settings.company_logo?.startsWith('data:') && !logoFileName && (
+                          <p className="text-xs text-amber-400 mt-1">⚠ Image staged — click Save Changes to upload</p>
+                        )}
+                        {settings.company_logo && !settings.company_logo.startsWith('data:') && (
+                          <p className="text-xs text-emerald-400 mt-1 truncate">✅ {settings.company_logo}</p>
+                        )}
+                      </div>
+
+                      {/* File Upload Button */}
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleLogoUpload}
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Upload image from device"
+                        className="px-3 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Choose File</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div>

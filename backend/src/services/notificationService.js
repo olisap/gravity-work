@@ -86,7 +86,7 @@ export class NotificationService {
    * Universal Email Adapter supporting Standard SMTP (Gmail, SendGrid, Mailgun),
    * Resend API, Brevo API / SMTP, and sandbox fallback.
    */
-  static async sendEmail(email, subject, text, htmlBody = null) {
+  static async sendEmail(email, subject, text, htmlBody = null, storeName = null) {
     const smtpHost = process.env.SMTP_HOST;
     const smtpPort = process.env.SMTP_PORT || 587;
     const smtpUser = process.env.SMTP_USER;
@@ -96,7 +96,8 @@ export class NotificationService {
     const brevoKey = process.env.BREVO_API_KEY;
     const resendKey = process.env.RESEND_API_KEY;
     const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER;
-    const senderName = process.env.SENDER_NAME || 'Order Notifications';
+    // Use dynamic store name if provided, otherwise fall back to env config
+    const senderName = storeName || process.env.SENDER_NAME || 'Order Notifications';
 
     if (!senderEmail) {
       console.error('❌ No SENDER_EMAIL configured. Set SENDER_EMAIL (and SENDER_NAME) in your environment before sending live emails.');
@@ -297,8 +298,11 @@ export class NotificationService {
    * 2. Customer Receipt Email (if customer_email provided)
    * 3. Customer Order Confirmation SMS (to customer_phone)
    */
-  static async sendOrderFinalizedNotifications(order, merchantEmail = null) {
+  static async sendOrderFinalizedNotifications(order, merchantEmail = null, storeName = null) {
     if (!order) return;
+
+    // Resolve store display name for email branding
+    const displayStoreName = storeName || process.env.SENDER_NAME || 'Our Store';
 
     const mainProductName = (order.items && order.items[0]) ? order.items[0].name : 'Product Order';
     const totalFormatted = (order.total_amount || 0).toLocaleString();
@@ -306,7 +310,7 @@ export class NotificationService {
 
     // ── 1. Merchant Order Alert Email ──
     const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || null;
-    const merchantSubject = `🛒 NEW ORDER ALERT: #${order.order_number} - ${order.customer_name}`;
+    const merchantSubject = `🛒 NEW ORDER: #${order.order_number} — ${order.customer_name} | ${displayStoreName}`;
     const merchantHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
         <div style="background-color: #4f46e5; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
@@ -356,7 +360,8 @@ export class NotificationService {
         targetMerchantEmail,
         merchantSubject,
         `New order #${order.order_number} from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
-        merchantHtml
+        merchantHtml,
+        displayStoreName
       );
     } else {
       console.warn(`⚠️ Skipped merchant order alert for #${order.order_number}: no merchant notification email available.`);
@@ -364,7 +369,7 @@ export class NotificationService {
 
     // ── 2. Customer Receipt Email ──
     if (order.customer_email && order.customer_email.trim().includes('@')) {
-      const customerSubject = `🧾 Order Confirmation & Receipt - #${order.order_number}`;
+      const customerSubject = `🧾 Order Confirmed — #${order.order_number} | ${displayStoreName}`;
       const customerHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
           <div style="background-color: #10b981; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
@@ -373,7 +378,7 @@ export class NotificationService {
           </div>
 
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">Dear <strong>${order.customer_name}</strong>,</p>
-          <p style="font-size: 14px; color: #334155; line-height: 1.6;">We have successfully received your order. Below is a summary receipt of your order details:</p>
+          <p style="font-size: 14px; color: #334155; line-height: 1.6;">We have successfully received your order from <strong>${displayStoreName}</strong>. Below is a summary of your order:</p>
 
           <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Order Details</h3>
           <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
@@ -408,14 +413,16 @@ export class NotificationService {
           </div>
 
           <p style="font-size: 13px; color: #64748b; margin-top: 24px; text-align: center; line-height: 1.5;">Our representative will call your phone number (<strong>${order.customer_phone}</strong>) shortly to confirm delivery dispatch.</p>
+          <p style="font-size: 11px; color: #94a3b8; text-align: center; margin-top: 12px; border-top: 1px solid #f1f5f9; padding-top: 12px;">&copy; ${new Date().getFullYear()} ${displayStoreName}. All rights reserved.</p>
         </div>
       `;
 
       await this.sendEmail(
         order.customer_email.trim(),
         customerSubject,
-        `Thank you ${order.customer_name}! Your order #${order.order_number} for ₦${totalFormatted} (Pay on Delivery) has been confirmed.`,
-        customerHtml
+        `Thank you ${order.customer_name}! Your order #${order.order_number} for ₦${totalFormatted} (Pay on Delivery) from ${displayStoreName} has been confirmed.`,
+        customerHtml,
+        displayStoreName
       );
     }
 
