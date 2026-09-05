@@ -30,13 +30,17 @@ function formatForm(form) {
 }
 
 function prepareSupabasePayload(body, existingFieldsConfig = {}) {
+  // NOTE: 'thank_you_url' is intentionally excluded from knownColumns because the column
+  // does not exist in the Supabase forms table — it is stored inside fields_config instead.
+  // Including it here would cause a PGRST204 error on every update and silently block ALL
+  // form saves (including notification_email changes).
   const knownColumns = [
     'id', 'store_id', 'name', 'linked_product_id', 'embed_key',
     'header_text', 'subheader_text', 'button_text', 'button_bg_color',
     'button_text_color', 'form_bg_color', 'show_country_code',
     'payment_cod_enabled', 'payment_paystack_enabled',
     'payment_flutterwave_enabled', 'payment_bank_enabled',
-    'notification_email', 'thank_you_url', 'is_active', 'created_at', 'updated_at'
+    'notification_email', 'is_active', 'created_at', 'updated_at'
   ];
 
   const payload = {};
