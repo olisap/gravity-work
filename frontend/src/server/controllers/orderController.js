@@ -218,7 +218,9 @@ export async function createOrUpdateDraftOrder(req, res) {
     mockOrders[orderIndex] = finalOrder;
   } else {
     // Create new Order / Draft
-    const newOrderNumber = `OLI-${10000 + mockOrders.length + 1}`;
+    const tsBase = Date.now().toString().slice(-6);
+    const rndSuffix = Math.floor(Math.random() * 900 + 100);
+    const newOrderNumber = `OLI-${tsBase}${rndSuffix}`;
     finalOrder = {
       id: isValidUUID(id) ? id : crypto.randomUUID(),
       store_id: store_id || null,
@@ -253,12 +255,31 @@ export async function createOrUpdateDraftOrder(req, res) {
   if (supabase) {
     try {
       const dbPayload = prepareOrderPayloadForSupabase(finalOrder);
-      const { data: dbData, error: dbErr } = await supabase.from('orders').upsert([dbPayload]).select();
+      const { data: dbData, error: dbErr } = await supabase
+        .from('orders')
+        .upsert([dbPayload], { onConflict: 'id' })
+        .select();
       if (dbErr) {
         console.error('Failed to upsert order to Supabase:', dbErr);
+        if (dbErr.code === '23505' && dbErr.details?.includes('order_number')) {
+          const retryTs = Date.now().toString().slice(-6);
+          const retryRnd = Math.floor(Math.random() * 900 + 100);
+          finalOrder.order_number = `OLI-${retryTs}${retryRnd}`;
+          const retryPayload = prepareOrderPayloadForSupabase(finalOrder);
+          const { data: retryData, error: retryErr } = await supabase
+            .from('orders')
+            .upsert([retryPayload], { onConflict: 'id' })
+            .select();
+          if (!retryErr && retryData && retryData[0]) {
+            console.log('✅ Order saved to Supabase (retry):', retryData[0].order_number);
+            finalOrder.id = retryData[0].id;
+            finalOrder.order_number = retryData[0].order_number;
+          }
+        }
       } else if (dbData && dbData[0]) {
         console.log('✅ Order successfully persisted to Supabase:', dbData[0].order_number);
         finalOrder.id = dbData[0].id;
+        finalOrder.order_number = dbData[0].order_number;
       }
     } catch (dbErr) {
       console.error('Failed to upsert order to Supabase:', dbErr);

@@ -229,7 +229,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         console.log('🔗 Thank-You Page Redirect Check:', { rawRedirectUrl, targetUrl });
 
         if (targetUrl) {
-          // Send postMessage to parent window listeners
+          // 1. Send postMessage to parent window listeners (embed.js and iframe wrapper)
           if (window.parent && window.parent !== window) {
             try {
               window.parent.postMessage({ type: 'redirect-thank-you', url: targetUrl }, '*');
@@ -237,15 +237,20 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             } catch (pe) {}
           }
 
-          // Direct location assignment to parent/top window
+          // 2. Immediate direct navigation to targetUrl in the current/parent tab
           try {
             if (window.top && window.self !== window.top) {
               window.top.location.href = targetUrl;
             } else if (window.parent && window.parent !== window) {
               window.parent.location.href = targetUrl;
+            } else {
+              window.location.href = targetUrl;
             }
           } catch (topErr) {
-            console.warn('Direct top navigation restricted by browser cross-origin policy:', topErr);
+            console.warn('Top/parent navigation restricted by iframe sandbox:', topErr);
+            try {
+              window.location.href = targetUrl;
+            } catch (selfErr) {}
           }
 
           // Show high-converting success state with direct redirect button (guarantees top navigation even if sandboxed)
@@ -260,7 +265,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             redirect_target_url: targetUrl
           });
 
-          // Delayed fallback redirection
+          // Delayed fallback redirection check
           setTimeout(() => {
             try {
               if (window.top && window.self !== window.top) {
@@ -271,7 +276,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             } catch (locErr) {
               try { window.location.href = targetUrl; } catch(e) {}
             }
-          }, 1500);
+          }, 800);
 
           return;
         } else {
