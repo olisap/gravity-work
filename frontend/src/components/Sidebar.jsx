@@ -102,13 +102,12 @@ export default function Sidebar({ activeTab, setActiveTab, activeRole, isOpen })
       {/* ── Brand Header ── */}
       <div className="flex items-center gap-3 px-4 py-3.5 shrink-0"
         style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
-          style={{ background: 'var(--brand-dim)', border: '1px solid rgba(99,102,241,0.3)' }}>
+        <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-slate-900 border border-slate-700/80">
           <img
-            src="/logo.png"
-            alt="Gravity Commerce"
+            src={user?.company_logo || '/logo.png'}
+            alt={user?.store_name || "Gravity Commerce"}
             className="w-full h-full object-contain p-0.5"
-            onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }}
+            onError={e => { e.target.onerror = null; e.target.src = '/logo.png'; }}
           />
         </div>
         <div className="min-w-0">

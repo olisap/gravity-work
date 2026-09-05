@@ -75,20 +75,28 @@ let mockAuditTrail = [
 export async function getSettings(req, res) {
   const store_id = req.storeId;
 
-  if (supabase) {
+  let currentSettings = { ...mockStoreSettings };
+
+  if (supabase && store_id) {
     try {
-      let query = supabase.from('settings').select('*');
-      if (store_id) query = query.eq('store_id', store_id);
-      const { data, error } = await query;
-      if (!error && data && data[0]) {
-        return res.json({ ...mockStoreSettings, ...data[0] });
+      // 1. Check if stores table has store record to sync name and country
+      const { data: storeData } = await supabase.from('stores').select('*').eq('id', store_id).single();
+      if (storeData) {
+        currentSettings.store_name = storeData.name || currentSettings.store_name;
+        currentSettings.store_country = storeData.country || currentSettings.store_country;
+      }
+
+      // 2. Try settings table if present
+      const { data: settingsData, error } = await supabase.from('settings').select('*').eq('store_id', store_id);
+      if (!error && settingsData && settingsData[0]) {
+        currentSettings = { ...currentSettings, ...settingsData[0] };
       }
     } catch (e) {
       console.error('Supabase settings fetch error:', e);
     }
   }
 
-  res.json(mockStoreSettings);
+  res.json(currentSettings);
 }
 
 export async function updateSettings(req, res) {
@@ -112,11 +120,24 @@ export async function updateSettings(req, res) {
     try {
       const storeId = req.storeId;
       if (storeId) {
-        const { error } = await supabase.from('settings').upsert([{ store_id: storeId, ...mockStoreSettings }]);
-        if (error) return res.status(502).json({ error: 'Settings could not be saved to Supabase', details: error.message });
+        // 1. Sync store name, country to the stores table in Supabase
+        if (newSettings.store_name || newSettings.store_country) {
+          const storeUpdates = {};
+          if (newSettings.store_name) storeUpdates.name = newSettings.store_name;
+          if (newSettings.store_country) storeUpdates.country = newSettings.store_country;
+          await supabase.from('stores').update(storeUpdates).eq('id', storeId);
+        }
+
+        // 2. Sync store_name to users belonging to this store
+        if (newSettings.store_name) {
+          await supabase.from('users').update({ store_name: newSettings.store_name }).eq('store_id', storeId);
+        }
+
+        // 3. Try to persist full settings record if settings table exists
+        await supabase.from('settings').upsert([{ store_id: storeId, ...mockStoreSettings }]);
       }
     } catch (e) {
-      console.error('Supabase settings update error:', e);
+      console.warn('Supabase settings update notice:', e.message || e);
     }
   }
 

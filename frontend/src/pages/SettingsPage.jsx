@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings, Building, Bell, Users, History, ShieldAlert,
   Save, CheckCircle, X, Plus, UserPlus, Lock, Mail, Phone,
-  Loader2, AlertTriangle, Globe, MapPin
+  Loader2, AlertTriangle, Globe, MapPin, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/apiUrl';
@@ -50,7 +50,7 @@ const TABS = [
 ];
 
 export default function SettingsPage({ onSettingsUpdated }) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [activeSection, setActiveSection] = useState('profile');
 
   // ── Settings state ──
@@ -59,6 +59,7 @@ export default function SettingsPage({ onSettingsUpdated }) {
   const [savingSettings, setSavingSettings]   = useState(false);
   const [saveSuccess, setSaveSuccess]         = useState(false);
   const [saveError, setSaveError]             = useState('');
+  const fileInputRef                          = useRef(null);
 
   // ── Team state ──
   const [teamMembers, setTeamMembers]   = useState([]);
@@ -145,15 +146,45 @@ export default function SettingsPage({ onSettingsUpdated }) {
         headers: { 'Content-Type': 'application/json', ...authH() },
         body: JSON.stringify(settings),
       });
-      if (!res.ok) throw new Error('Save failed');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || errData.details || 'Save failed');
+      }
       setSaveSuccess(true);
+      if (updateUser && settings.store_name) {
+        updateUser({
+          store_name: settings.store_name,
+          country: settings.store_country,
+          company_logo: settings.company_logo
+        });
+      }
       if (onSettingsUpdated) onSettingsUpdated();
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
-      setSaveError('Settings could not be saved. Please try again.');
+      setSaveError(e.message || 'Settings could not be saved. Please try again.');
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setSaveError('Image file is too large. Please select an image under 2MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSetting('company_logo', reader.result);
+      setSaveError('');
+    };
+    reader.onerror = () => {
+      setSaveError('Failed to read image file.');
+    };
+    reader.readAsDataURL(file);
   };
 
   const setSetting = (key, val) => setSettings(prev => ({ ...prev, [key]: val }));
@@ -278,8 +309,48 @@ export default function SettingsPage({ onSettingsUpdated }) {
                   <input className="input" value={settings.store_name || ''} onChange={e => setSetting('store_name', e.target.value)} placeholder="My E-Commerce Store" />
                 </div>
                 <div>
-                  <label className="text-label text-slate-400 block mb-1.5">Logo URL</label>
-                  <input className="input font-mono text-xs" value={settings.company_logo || ''} onChange={e => setSetting('company_logo', e.target.value)} placeholder="/logo.png" />
+                  <label className="text-label text-slate-400 block mb-1.5">Store Logo</label>
+                  <div className="flex items-center gap-3">
+                    {/* Logo Preview */}
+                    <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+                      {settings.company_logo ? (
+                        <img
+                          src={settings.company_logo}
+                          alt="Logo Preview"
+                          className="w-full h-full object-contain"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <ImageIcon className="w-5 h-5 text-slate-500" />
+                      )}
+                    </div>
+                    
+                    {/* URL Input */}
+                    <input
+                      className="input font-mono text-xs flex-1"
+                      value={settings.company_logo || ''}
+                      onChange={e => setSetting('company_logo', e.target.value)}
+                      placeholder="Image URL or upload file..."
+                    />
+
+                    {/* File Upload Button */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleLogoUpload}
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      title="Upload image from device"
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="hidden sm:inline">Upload</span>
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="text-label text-slate-400 block mb-1.5">Country</label>

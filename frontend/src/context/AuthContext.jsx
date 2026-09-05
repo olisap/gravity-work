@@ -124,6 +124,15 @@ export function AuthProvider({ children }) {
     setUser(updated);
   };
 
+  const updateUser = (fields) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...fields };
+      localStorage.setItem('gravity_crm_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -133,6 +142,7 @@ export function AuthProvider({ children }) {
       signupUser,
       logoutUser,
       switchDemoRole,
+      updateUser,
       isAuthenticated: !!user
     }}>
       {children}
