@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileText, Code, Eye, Copy, Check, Sparkles, Plus, Trash2, Edit,
   Settings, CreditCard, ShieldCheck, HelpCircle, Palette, ToggleLeft, ToggleRight, ExternalLink
