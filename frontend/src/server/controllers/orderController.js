@@ -314,7 +314,11 @@ export async function updateOrderStatus(req, res) {
   const { id } = req.params;
   const { status, confirmation_notes, assigned_staff_id, scheduled_delivery_date, scheduled_delivery_time, reminder_notes } = req.body;
 
-  const validStatuses = ['Draft', 'Pending', 'Awaiting', 'Scheduled', 'Delivered', 'Cancelled'];
+  const validStatuses = [
+    'Draft', 'Pending', 'Audit Hold', 'Awaiting', 'Scheduled', 'Confirmed',
+    'Shipped', 'Delivered', 'Paid', 'Cash Remitted', 'Cancelled', 'Failed',
+    'After-Sale Followup', 'Returned', 'Deleted', 'Cart Abandonment', 'Banned'
+  ];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Invalid order status' });
   }
@@ -334,6 +338,8 @@ export async function updateOrderStatus(req, res) {
       if (status === 'Delivered') {
         updates.delivered_at = new Date().toISOString();
         updates.payment_status = 'Paid';
+      } else if (status === 'Failed') {
+        updates.payment_status = 'Unpaid';
       }
 
       const { data: dbData, error: dbErr } = await supabase.from('orders').update(updates).eq('id', id).select();
