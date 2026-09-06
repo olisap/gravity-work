@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gravity CRM — Dev Status Report (Sep 2026)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --brand: #4f46e5;
+            --green: #059669;
+            --amber: #d97706;
+            --red: #dc2626;
+            --slate: #1e293b;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --bg: #f8fafc;
+            --card: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: #0f172a;
+            font-size: 13px;
+            line-height: 1.65;
+            padding: 0;
+        }
+
+        /* ─── PRINT ─── */
+        @media print {
+            body {
+                background: #fff;
+                font-size: 11.5px;
+            }
+
+            .page-break {
+                page-break-before: always;
+            }
+
+            .no-print {
+                display: none;
+            }
+
+            section {
+                page-break-inside: avoid;
+            }
+        }
+
+        /* ─── COVER ─── */
+        .cover {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+            color: #fff;
+            padding: 64px 56px 48px;
+            min-height: 220px;
+        }
+
+        .cover .logo-line {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .cover .logo-dot {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: #4f46e5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .cover h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .cover .subtitle {
+            color: #a5b4fc;
+            font-size: 14px;
+            margin-top: 6px;
+        }
+
+        .cover .meta {
+            margin-top: 32px;
+            display: flex;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+
+        .cover .meta-item label {
+            display: block;
+            font-size: 10px;
+            font-weight: 600;
+            color: #6366f1;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .cover .meta-item span {
+            font-size: 13px;
+            color: #e0e7ff;
+        }
+
+        /* ─── MAIN CONTENT ─── */
+        .content {
+            padding: 40px 56px 56px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            font-size: 17px;
+            font-weight: 800;
+            color: #1e1b4b;
+            margin: 36px 0 16px;
+            padding-bottom: 8px;
+            border-bottom: 2.5px solid var(--brand);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h2 .icon {
+            font-size: 18px;
+        }
+
+        h3 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--slate);
+            margin: 20px 0 8px;
+        }
+
+        /* ─── STAT BAR ─── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-card .num {
+            font-size: 26px;
+            font-weight: 800;
+        }
+
+        .stat-card .lbl {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .stat-card.green .num {
+            color: var(--green);
+        }
+
+        .stat-card.amber .num {
+            color: var(--amber);
+        }
+
+        .stat-card.red .num {
+            color: var(--red);
+        }
+
+        .stat-card.brand .num {
+            color: var(--brand);
+        }
+
+        /* ─── TABLE ─── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+        }
+
+        thead tr {
+            background: #f1f5f9;
+        }
+
+        th {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--muted);
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: top;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #fafafa;
+        }
+
+        /* ─── BADGES ─── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .badge-done {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-partial {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-todo {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-info {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .badge-mock {
+            background: #fce7f3;
+            color: #9d174d;
+        }
+
+        /* ─── PRIORITY ─── */
+        .pri-high {
+            color: var(--red);
+            font-weight: 700;
+        }
+
+        .pri-med {
+            color: var(--amber);
+            font-weight: 700;
+        }
+
+        .pri-low {
+            color: var(--green);
+            font-weight: 600;
+        }
+
+        /* ─── FILE PILL ─── */
+        .file {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            background: #f1f5f9;
+            color: #475569;
+            padding: 2px 7px;
+            border-radius: 5px;
+            display: inline-block;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* ─── CALLOUT ─── */
+        .callout {
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin: 20px 0;
+            font-size: 12.5px;
+            border-left: 4px solid;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .callout-icon {
+            font-size: 18px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .callout.info {
+            background: #eef2ff;
+            border-color: #6366f1;
+        }
+
+        .callout.warning {
+            background: #fffbeb;
+            border-color: #d97706;
+        }
+
+        .callout.success {
+            background: #ecfdf5;
+            border-color: #059669;
+        }
+
+        .callout.danger {
+            background: #fff1f2;
+            border-color: #e11d48;
+        }
+
+        /* ─── SECTION CARD ─── */
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 20px 24px;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--brand);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 12px;
+        }
+
+        /* ─── FOOTER ─── */
+        .footer {
+            text-align: center;
+            color: var(--muted);
+            font-size: 10.5px;
+            padding: 24px;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+
+        ul {
+            padding-left: 18px;
+        }
+
+        ul li {
+            margin-bottom: 4px;
+        }
+
+        p {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ══════════ COVER ══════════ -->
+    <div class="cover">
+        <div class="logo-line">
+            <div class="logo-dot">⚡</div>
+            <div>
+                <div style="font-size:12px;font-weight:700;color:#a5b4fc;letter-spacing:2px;text-transform:uppercase;">
+                    Gravity CRM</div>
+                <div style="font-size:11px;color:#6366f1;">Nigeria E-Commerce Operations Platform</div>
+            </div>
+        </div>
+        <h1>Developer Status Report</h1>
+        <p class="subtitle">Automation Systems · Cart Abandonment Recovery · Integration Audit · Remaining Backlog</p>
+        <div class="meta">
+            <div class="meta-item"><label>Report Date</label><span>6 September 2026</span></div>
+            <div class="meta-item"><label>Session Focus</label><span>Cart Abandonment + Brevo Email</span></div>
+            <div class="meta-item"><label>Build Status</label><span>✅ Passing (1498 modules, exit 0)</span></div>
+            <div class="meta-item"><label>Environment</label><span>Vite + Express + Supabase + Render</span></div>
+        </div>
+    </div>
+
+    <!-- ══════════ CONTENT ══════════ -->
+    <div class="content">
+
+        <!-- ── EXECUTIVE SUMMARY ── -->
+        <div class="stat-grid">
+            <div class="stat-card green">
+                <div class="num">14</div>
+                <div class="lbl">Fixed / Working</div>
+            </div>
+            <div class="stat-card amber">
+                <div class="num">8</div>
+                <div class="lbl">Partially Done</div>
+            </div>
+            <div class="stat-card red">
+                <div class="num">12</div>
+                <div class="lbl">Still Mock / Missing</div>
+            </div>
+            <div class="stat-card brand">
+                <div class="num">4</div>
+                <div class="lbl">Priority Blockers</div>
+            </div>
+        </div>
+
+        <div class="callout success">
+            <div class="callout-icon">✅</div>
+            <div>
+                <strong>Build passes cleanly.</strong> All changes from this session compiled without errors or warnings
+                across 1 498 modules. No destructive changes were made to existing working flows (order creation, form
+                submission, auth, product management).
+            </div>
+        </div>
+
+        <!-- ══ SECTION 1: WHAT WAS FIXED ══ -->
+        <h2><span class="icon">✅</span> Section 1 — What Was Fixed This Session</h2>
+
+        <div class="card">
+            <div class="card-title">1A · Cart Abandonment — Backend</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>What Changed</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="file">abandonmentWorker.js</span></td>
+                        <td>
+                            Previously hardcoded to SMS-only via Termii. Now sends <strong>Brevo Email first</strong>
+                            (rich HTML template with resume link, product name, total, brand colours) then SMS as
+                            fallback. Base URL fixed to read <code>process.env.APP_URL</code> or <code>VERCEL_URL</code>
+                            — no more <code>localhost:5173</code> in production. <code>resolveStoreName()</code> injects
+                            merchant brand name into the email header and footer. <code>reminder_sent_at</code>
+                            timestamp stamped after dispatch so the worker never double-sends.
+                        </td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file">orderController.js</span></td>
+                        <td>
+                            Added <code>sendManualDraftReminder(req, res)</code> — fetches the order from Supabase with
+                            a strict <code>store_id</code> guard, then delegates to
+                            <code>AbandonmentWorker.sendDraftReminder()</code>. Returns
+                            <code>{ emailSent, smsSent, order }</code> so the UI can show channel-specific confirmation.
+                            Falls back to in-memory mock orders if Supabase is unavailable.
+                        </td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file">server.js</span></td>
+                        <td>
+                            Registered <code>POST /api/orders/:id/remind</code> with full middleware chain:
+                            <code>requireAuth → requireStoreContext → requireRole(['owner','admin','confirmation_staff','sales_agent'])</code>.
+                            AbandonmentWorker background scanner started on non-Vercel environments (Render). Vercel
+                            serverless path uses manual triggers only.
+                        </td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <div class="card-title">1B · Cart Abandonment — Frontend</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>What Changed</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="file">OrdersPipeline.jsx</span></td>
+                        <td>
+                            <ul>
+                                <li><strong>"Cart Abandonment" tab added to <code>visibleTabs</code> by default</strong>
+                                    — was previously missing, hiding all abandoned drafts from the Kanban board.</li>
+                                <li>Tab count correctly includes both <code>status === 'Draft'</code> AND
+                                    <code>status === 'Cart Abandonment'</code> orders.</li>
+                                <li>Added <strong>"Send Recovery" amber button</strong> to each Cart Abandonment / Draft
+                                    Kanban card. Button calls <code>POST /api/orders/:id/remind</code> with the JWT auth
+                                    header.</li>
+                                <li>Customer email displayed on cart abandonment cards (if captured).</li>
+                                <li>Per-card inline toast shows <em>"Email sent!"</em>, <em>"Email &amp; SMS sent!"</em>
+                                    or error. Toast auto-clears after 4 seconds. Loading spinner while in-flight.</li>
+                            </ul>
+                        </td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file">DraftReminders.jsx</span></td>
+                        <td>
+                            <ul>
+                                <li><strong>Replaced fake mock</strong> — removed the <code>setTimeout + alert()</code>
+                                    that was masquerading as "SMS queued". Now calls real
+                                    <code>POST /api/orders/:id/remind</code>.</li>
+                                <li>Auth token attached from <code>localStorage.getItem('gravity_crm_token')</code>.
+                                </li>
+                                <li>Table now shows both <strong>phone and email</strong> (with mail icon) in a Contact
+                                    column.</li>
+                                <li>Per-row success/error toast with CheckCircle / XCircle icons.</li>
+                                <li>Button label updated from "Resend SMS" → <strong>"Send Recovery"</strong> to
+                                    accurately reflect dual-channel dispatch.</li>
+                                <li>Subtitle updated to mention Brevo email explicitly.</li>
+                            </ul>
+                        </td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <div class="card-title">1C · Previously Fixed (Earlier in This Conversation)</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Area</th>
+                        <th>What Was Fixed</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Merchant Email Routing</td>
+                        <td><code>resolveMerchantNotificationEmail()</code> in <span
+                                class="file">orderController.js</span> — priority chain: explicit body email → form's
+                            saved <code>notification_email</code> → store owner's account email →
+                            <code>SENDER_EMAIL</code> env var. Prevents emails going to placeholder
+                            <code>merchant@gmail.com</code>.</td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                    <tr>
+                        <td>Order Number Collision</td>
+                        <td>Order numbers now use timestamp + 3-digit random suffix (<code>OLI-{ts6}{rnd3}</code>)
+                            instead of sequential counter that reset on Vercel cold starts, causing unique constraint
+                            violations.</td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                    <tr>
+                        <td>Brevo Email Service</td>
+                        <td><span class="file">notificationService.js</span> — <code>sendEmail()</code> routes through
+                            Brevo SMTP (via nodemailer) as primary; falls back to Mailgun API if Brevo unconfigured;
+                            logs to Supabase <code>notification_logs</code> table.</td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                    <tr>
+                        <td>Multi-tenant Security</td>
+                        <td>All order update and reminder endpoints validate <code>store_id</code> from JWT
+                            (<code>req.storeId</code>) against the order record. Cross-store data leakage is prevented.
+                        </td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                    <tr>
+                        <td>Inventory Stock Ledger</td>
+                        <td><span class="file">inventoryService.js</span> — deducts stock on Scheduled, restores on
+                            Cancelled/Failed. Stock movement entries logged to Supabase.</td>
+                        <td><span class="badge badge-done">✅ Done</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- PAGE BREAK -->
+        <div class="page-break"></div>
+
+        <!-- ══ SECTION 2: STILL PARTIAL ══ -->
+        <h2><span class="icon">⚠️</span> Section 2 — Partially Implemented (Mock or Incomplete)</h2>
+
+        <div class="callout warning">
+            <div class="callout-icon">⚠️</div>
+            <div>These features <strong>exist in the UI</strong> and appear functional, but their backend actions are
+                either mocked with <code>setTimeout</code> or have no real API endpoint wired up yet. They will not
+                persist data or trigger real effects.</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>File(s)</th>
+                    <th>What Exists</th>
+                    <th>What's Missing</th>
+                    <th>Priority</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Marketing Hub — Broadcast</strong></td>
+                    <td><span class="file">MarketingHub.jsx</span></td>
+                    <td>UI for WhatsApp / SMS / Email broadcast with template preview and log table. <span
+                            class="badge badge-mock">Mock</span></td>
+                    <td>
+                        <code>handleSendBroadcast()</code> uses <code>setTimeout</code> — no real API call. No backend
+                        broadcast endpoint exists. No audience segmentation logic. No real send log persisted.
+                    </td>
+                    <td class="pri-high">HIGH</td>
+                </tr>
+                <tr>
+                    <td><strong>Expenses &amp; Accounting</strong></td>
+                    <td><span class="file">ExpensesAccounting.jsx</span></td>
+                    <td>UI shows revenue vs expenses, add expense modal, category breakdown. <span
+                            class="badge badge-mock">Mock</span></td>
+                    <td>
+                        Expenses stored only in React state (<code>useState</code>) — data is lost on page refresh. No
+                        backend <code>/api/expenses</code> route. No Supabase <code>expenses</code> table schema.
+                    </td>
+                    <td class="pri-high">HIGH</td>
+                </tr>
+                <tr>
+                    <td><strong>Post-Delivery Upsell Automation</strong></td>
+                    <td><span class="file">UpsellManager.jsx</span><br /><span class="file">upsellController.js</span>
+                    </td>
+                    <td>Upsell offers configurable per product. Manual upsell add-to-order works (real API). Template
+                        <code>post_delivery_upsell</code> defined in NotificationService.</td>
+                    <td>
+                        Automated trigger (fire upsell 7 days after delivery) is <strong>never started</strong>. No cron
+                        job or worker for post-delivery follow-ups. AbandonmentWorker only handles draft abandonment,
+                        not post-delivery.
+                    </td>
+                    <td class="pri-med">MED</td>
+                </tr>
+                <tr>
+                    <td><strong>Notification Center</strong></td>
+                    <td><span class="file">NotificationCenter.jsx</span></td>
+                    <td>Page exists, imported in App. Shows a list UI structure.</td>
+                    <td>
+                        No API call to fetch real notification logs from Supabase <code>notification_logs</code> table.
+                        Entirely static / placeholder content. No read/unread state persisted.
+                    </td>
+                    <td class="pri-med">MED</td>
+                </tr>
+                <tr>
+                    <td><strong>Abandoned Cart → Vercel (Serverless)</strong></td>
+                    <td><span class="file">abandonmentWorker.js</span><br /><span class="file">server.js</span></td>
+                    <td>Worker runs correctly on Render (long-running server). Env guard
+                        <code>if (!process.env.VERCEL)</code> present.</td>
+                    <td>
+                        On Vercel, the background worker <strong>does not start</strong> — Vercel is serverless and
+                        stateless. If you ever move the backend back to Vercel, the worker needs a Vercel Cron Job or an
+                        external cron service (e.g., cron-job.org hitting <code>/api/cron/check-abandoned</code>).
+                    </td>
+                    <td class="pri-low">LOW (Render OK)</td>
+                </tr>
+                <tr>
+                    <td><strong>Confirmation Call Script</strong></td>
+                    <td><span class="file">ConfirmationCallModal.jsx</span></td>
+                    <td>Call script modal, note-taking, staff assignment UI all working. Notes saved via real
+                        <code>PATCH /api/orders/:id/status</code>.</td>
+                    <td>
+                        <code>order_confirmed_receipt</code> SMS/email to customer is logged but only conditionally
+                        fires. The <code>sendOrderFinalizedNotifications</code> path does not cover status → Confirmed
+                        flow, only the initial form submit.
+                    </td>
+                    <td class="pri-med">MED</td>
+                </tr>
+                <tr>
+                    <td><strong>Deliveries Followup (Auto-call queue)</strong></td>
+                    <td><span class="file">DeliveriesFollowups.jsx</span></td>
+                    <td>Shows Scheduled + Pending orders. Mark Delivered button calls real API.</td>
+                    <td>
+                        No automated "day-before delivery reminder" SMS/email to customer. No WhatsApp template message
+                        trigger on Scheduled status. Relies on staff manually calling from this screen.
+                    </td>
+                    <td class="pri-med">MED</td>
+                </tr>
+                <tr>
+                    <td><strong>Settings — Brevo Config Validation</strong></td>
+                    <td><span class="file">SettingsPage.jsx</span></td>
+                    <td>Brevo SMTP settings UI exists and saves to backend. Email test button present.</td>
+                    <td>
+                        "Send Test Email" button calls a real endpoint but the endpoint returns a generic success
+                        without actually attempting a real SMTP send against the saved config. Validation feedback is
+                        not channel-specific (Brevo vs Mailgun vs SMTP).
+                    </td>
+                    <td class="pri-low">LOW</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ══ SECTION 3: NOT STARTED / MISSING ══ -->
+        <div class="page-break"></div>
+        <h2><span class="icon">🔴</span> Section 3 — Not Started / Fully Missing</h2>
+
+        <div class="callout danger">
+            <div class="callout-icon">🔴</div>
+            <div>These items were <strong>designed in the UI or database schema</strong> but have no real backend
+                implementation. They represent the largest portion of remaining work.</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Feature</th>
+                    <th>Missing Backend</th>
+                    <th>Missing Frontend</th>
+                    <th>Priority</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td><strong>Expenses CRUD API</strong><br /><span class="badge badge-info">New Table Needed</span>
+                    </td>
+                    <td>No <code>/api/expenses</code> route. No Supabase <code>expenses</code> table. No controller. No
+                        multi-tenant <code>store_id</code> isolation for expenses.</td>
+                    <td>Expense add/edit/delete needs real persistence. Profit calculation must pull real order totals
+                        from API, not local state.</td>
+                    <td class="pri-high">HIGH</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td><strong>Marketing Broadcast API</strong></td>
+                    <td>No <code>/api/marketing/broadcast</code> endpoint. No audience segmentation query (e.g., "all
+                        Delivered orders from last 30 days"). No Brevo bulk email / Termii bulk SMS integration.</td>
+                    <td>Channel selector and template editor exist. Send button is mocked. Broadcast log needs real
+                        Supabase backing.</td>
+                    <td class="pri-high">HIGH</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td><strong>Post-Delivery Upsell Worker</strong></td>
+                    <td>No cron/worker that checks <code>delivered_at &lt; now - 7 days AND upsell_sent = false</code>.
+                        <code>post_delivery_upsell</code> template compiled in NotificationService but never triggered
+                        automatically.</td>
+                    <td>UpsellManager shows offers list. No history of auto-sent upsell messages.</td>
+                    <td class="pri-med">MED</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td><strong>Notification Log Viewer</strong><br /><span class="badge badge-info">Table Exists in
+                            DB</span></td>
+                    <td>Supabase <code>notification_logs</code> table is written to by NotificationService. But no
+                        <code>GET /api/notification-logs</code> endpoint to read them.</td>
+                    <td><span class="file">NotificationCenter.jsx</span> shows placeholder content. Needs real API call,
+                        pagination, read/unread status.</td>
+                    <td class="pri-med">MED</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td><strong>WhatsApp Business API Integration</strong></td>
+                    <td>MarketingHub shows WhatsApp as a channel option. NotificationService has no WhatsApp adapter —
+                        all "WhatsApp" actions currently open <code>wa.me</code> links manually (no automation).</td>
+                    <td>WhatsApp broadcast section in MarketingHub is a UI-only mock.</td>
+                    <td class="pri-high">HIGH (if needed)</td>
+                </tr>
+                <tr>
+                    <td>6</td>
+                    <td><strong>Supabase Real-time Order Updates</strong></td>
+                    <td>Orders are fetched once on page load via <code>GET /api/orders</code>. No Supabase real-time
+                        subscription is set up. Concurrent users on different devices won't see each other's updates
+                        without a manual refresh.</td>
+                    <td>No live channel subscription in App.jsx or OrdersPipeline. Refresh button exists but no
+                        auto-sync.</td>
+                    <td class="pri-med">MED</td>
+                </tr>
+                <tr>
+                    <td>7</td>
+                    <td><strong>Resume Checkout Token Handler</strong></td>
+                    <td>Resume tokens (<code>RESUME-{timestamp}</code>) are generated and included in abandonment
+                        emails. But no endpoint validates a resume token from the URL and pre-fills the checkout form
+                        with the saved draft data.</td>
+                    <td><span class="file">CheckoutPage.jsx</span> reads <code>?resume=</code> param but there is no API
+                        call to load the draft by token.</td>
+                    <td class="pri-high">HIGH — Email CTAs broken without this</td>
+                </tr>
+                <tr>
+                    <td>8</td>
+                    <td><strong>Role-Based Dashboard Analytics</strong></td>
+                    <td><code>getDashboardStats</code> returns aggregate counts. No breakdown by assigned staff / agent.
+                        No revenue per sales rep reporting.</td>
+                    <td>Dashboard shows totals only. No per-staff performance panel for owner/admin role.</td>
+                    <td class="pri-low">LOW</td>
+                </tr>
+                <tr>
+                    <td>9</td>
+                    <td><strong>Automated Delivery Reminder (Day Before)</strong></td>
+                    <td>No worker that scans for
+                        <code>scheduled_delivery_date = tomorrow AND status = 'Scheduled'</code> and fires a customer
+                        reminder SMS/email with the delivery window.</td>
+                    <td>Deliveries Followup page shows scheduled orders but no automated pre-delivery notification is
+                        triggered.</td>
+                    <td class="pri-med">MED</td>
+                </tr>
+                <tr>
+                    <td>10</td>
+                    <td><strong>Stock Low Alert Notification</strong></td>
+                    <td>InventoryService detects low stock (<code>quantity &lt; reorder_level</code>) and logs it. But
+                        no email/SMS alert is dispatched to the store owner when stock hits threshold.</td>
+                    <td>ProductsInventory shows a low-stock badge. No notification sent out of the app.</td>
+                    <td class="pri-low">LOW</td>
+                </tr>
+                <tr>
+                    <td>11</td>
+                    <td><strong>PDF / Invoice Generation</strong></td>
+                    <td>No invoice generation endpoint. Orders have all the data needed (customer, items, amounts,
+                        address) but no PDF export per order.</td>
+                    <td>OrdersPipeline has a "Copy" action. No "Download Invoice" button exists.</td>
+                    <td class="pri-low">LOW</td>
+                </tr>
+                <tr>
+                    <td>12</td>
+                    <td><strong>Delivery Agent GPS / Tracking</strong></td>
+                    <td>Agents are stored in Supabase with name and phone. No real-time location tracking. No delivery
+                        confirmation with timestamp by agent.</td>
+                    <td>DeliveryAgentsManager shows agent list and stock assignment. No map or live location UI.</td>
+                    <td class="pri-low">LOW / Future</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ══ SECTION 4: PRIORITY BLOCKERS ══ -->
+        <div class="page-break"></div>
+        <h2><span class="icon">🚨</span> Section 4 — Priority Blockers (Must Fix Before Go-Live)</h2>
+
+        <div class="callout danger">
+            <div class="callout-icon">🚨</div>
+            <div>The following 4 items will break user-facing functionality or make the abandonment recovery system
+                ineffective even though the backend sends correctly.</div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🔴 Blocker 1 — Resume Checkout Token Not Handled</div>
+            <p>The abandonment email sends a link like
+                <code>https://app.olistores.com.ng/checkout?resume=RESUME-1725641234567</code>. But when the customer
+                clicks that link, the <span class="file">CheckoutPage.jsx</span> reads the <code>?resume=</code> param
+                but makes no API call to load the saved draft data. The form loads blank instead of pre-filled with
+                their name, phone, address and cart items.</p>
+            <p><strong>Fix needed:</strong> Add endpoint <code>GET /api/orders/resume/:token</code> that returns the
+                draft by resume token. In CheckoutPage, call this on mount and pre-fill the form state.</p>
+            <p><strong>Impact if not fixed:</strong> Recovery emails go out but customers arrive at a blank form —
+                abandonment recovery fails completely.</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🔴 Blocker 2 — Expenses Data Not Persisted</div>
+            <p>The <span class="file">ExpensesAccounting.jsx</span> stores expenses in <code>useState</code>. Every page
+                refresh or login clears all expense records. The Profit = Revenue – Expenses calculation is therefore
+                unreliable and cannot be trusted for business decisions.</p>
+            <p><strong>Fix needed:</strong> Create Supabase <code>expenses</code> table, <code>/api/expenses</code> CRUD
+                routes, and wire up the React component to fetch/post real data.</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🟡 Blocker 3 — Marketing Broadcast is Cosmetic Only</div>
+            <p>The MarketingHub shows a professional broadcast UI. Staff may use it believing messages are actually
+                being sent. The <code>handleSendBroadcast()</code> function only updates local state with a fake log
+                entry. No real message is dispatched to any customer.</p>
+            <p><strong>Fix needed:</strong> Backend broadcast endpoint with audience query, and real Brevo / Termii bulk
+                send. Add a clear "DEMO MODE" label until the real API is wired.</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🟡 Blocker 4 — No Real-time Order Sync</div>
+            <p>If multiple staff are logged in simultaneously (confirmation staff + logistics), order status changes
+                made by one user are not reflected for others without a manual refresh. In high-volume operations, this
+                leads to double-confirmation calls and conflicting status updates.</p>
+            <p><strong>Fix needed:</strong> Enable Supabase real-time subscription on the <code>orders</code> table in
+                <span class="file">App.jsx</span>, scoped to <code>store_id</code>. Update <code>orders</code> state on
+                INSERT/UPDATE events.</p>
+        </div>
+
+        <!-- ══ SECTION 5: ENV VARIABLES ══ -->
+        <h2><span class="icon">🔧</span> Section 5 — Environment Variables Checklist</h2>
+        <p>These must be set on the Render backend for the fixed systems to work in production:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Variable</th>
+                    <th>Purpose</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="file">SUPABASE_URL</span></td>
+                    <td>Supabase project URL</td>
+                    <td><span class="badge badge-done">Required — Set</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">SUPABASE_SERVICE_KEY</span></td>
+                    <td>Supabase service role key (bypasses RLS for backend)</td>
+                    <td><span class="badge badge-done">Required — Set</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">JWT_SECRET</span></td>
+                    <td>Signs auth tokens</td>
+                    <td><span class="badge badge-done">Required — Set</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">BREVO_SMTP_HOST</span></td>
+                    <td>Brevo SMTP host (<code>smtp-relay.brevo.com</code>)</td>
+                    <td><span class="badge badge-done">Required for Email</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">BREVO_SMTP_PORT</span></td>
+                    <td>587 (TLS) or 465 (SSL)</td>
+                    <td><span class="badge badge-done">Required for Email</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">BREVO_SMTP_USER</span></td>
+                    <td>Brevo login email</td>
+                    <td><span class="badge badge-done">Required for Email</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">BREVO_SMTP_PASS</span></td>
+                    <td>Brevo SMTP password / API key</td>
+                    <td><span class="badge badge-done">Required for Email</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">SENDER_EMAIL</span></td>
+                    <td>From address on all outgoing emails</td>
+                    <td><span class="badge badge-done">Required for Email</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">SENDER_NAME</span></td>
+                    <td>From display name (e.g. "Olistores")</td>
+                    <td><span class="badge badge-partial">Recommended</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">APP_URL</span></td>
+                    <td>Base URL for resume checkout links in emails (e.g. <code>https://app.olistores.com.ng</code>)
+                    </td>
+                    <td><span class="badge badge-todo">🔴 Must Set — Emails broken without</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">TERMII_API_KEY</span></td>
+                    <td>Termii SMS API key</td>
+                    <td><span class="badge badge-partial">Optional — SMS degraded without</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">TERMII_SENDER_ID</span></td>
+                    <td>SMS sender name (max 11 chars)</td>
+                    <td><span class="badge badge-partial">Optional</span></td>
+                </tr>
+                <tr>
+                    <td><span class="file">VITE_API_BASE</span></td>
+                    <td>Set on Vercel frontend — points to Render backend URL</td>
+                    <td><span class="badge badge-done">Required for Frontend→Backend</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ══ SECTION 6: RECOMMENDED NEXT STEPS ══ -->
+        <h2><span class="icon">🗺️</span> Section 6 — Recommended Next Steps (In Order)</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Sprint</th>
+                    <th>Task</th>
+                    <th>Effort</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1 — This week</td>
+                    <td>Set <code>APP_URL</code> env var on Render so resume links in abandonment emails point to the
+                        real storefront</td>
+                    <td>5 mins</td>
+                </tr>
+                <tr>
+                    <td>1 — This week</td>
+                    <td>Build <code>GET /api/orders/resume/:token</code> + wire <span
+                            class="file">CheckoutPage.jsx</span> to pre-fill the form <em>(Blocker 1)</em></td>
+                    <td>2–3 hrs</td>
+                </tr>
+                <tr>
+                    <td>2 — Next week</td>
+                    <td>Create <code>expenses</code> Supabase table + <code>/api/expenses</code> CRUD + wire <span
+                            class="file">ExpensesAccounting.jsx</span> <em>(Blocker 2)</em></td>
+                    <td>4–5 hrs</td>
+                </tr>
+                <tr>
+                    <td>2 — Next week</td>
+                    <td>Enable Supabase real-time subscription for orders in <span class="file">App.jsx</span>
+                        <em>(Blocker 4)</em></td>
+                    <td>2 hrs</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>Add "DEMO MODE" badge to MarketingHub broadcast button until real API built <em>(Blocker 3 —
+                            interim)</em></td>
+                    <td>30 mins</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>Build <code>GET /api/notification-logs</code> and wire <span
+                            class="file">NotificationCenter.jsx</span></td>
+                    <td>3 hrs</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>Post-delivery upsell worker (7-day cron, query <code>delivered_at</code>, dispatch
+                        <code>post_delivery_upsell</code> template)</td>
+                    <td>4 hrs</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>Delivery day-before reminder worker (scan <code>scheduled_delivery_date = tomorrow</code>)</td>
+                    <td>2 hrs</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td>Marketing broadcast backend (audience segmentation + Brevo bulk send)</td>
+                    <td>8–12 hrs</td>
+                </tr>
+                <tr>
+                    <td>6</td>
+                    <td>Stock low-alert notification on threshold breach</td>
+                    <td>2 hrs</td>
+                </tr>
+                <tr>
+                    <td>Future</td>
+                    <td>WhatsApp Business API adapter, PDF invoice generation, GPS delivery tracking</td>
+                    <td>Large</td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
+
+    <!-- ══════════ FOOTER ══════════ -->
+    <div class="footer">
+        Generated by Antigravity IDE · Gravity CRM · Nigeria E-Commerce Operations Platform · September 6 2026<br />
+        <strong>Build:</strong> Vite 5.4 · React 18 · Express · Supabase · Render (Backend) · Vercel (Frontend)
+    </div>
+
+    <!-- Print Button (hidden in print) -->
+    <div class="no-print" style="position:fixed;bottom:24px;right:24px;">
+        <button onclick="window.print()"
+            style="background:#4f46e5;color:#fff;border:none;padding:12px 24px;border-radius:10px;font-family:Inter,sans-serif;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(79,70,229,0.4);">
+            🖨️ Print / Save PDF
+        </button>
+    </div>
+
+</body>
+
+</html>

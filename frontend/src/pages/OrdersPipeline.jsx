@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   LayoutGrid, List, Phone, CheckCircle, XCircle, ArrowRight, AlertTriangle, Truck, Filter,
-  Copy, MessageCircle, Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight, UserCheck, Plus, Search, RotateCcw
+  Copy, MessageCircle, Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight, UserCheck, Plus, Search, RotateCcw,
+  Send, Mail, Loader2
 } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { copyOrderToClipboard } from '../utils/copyOrder';
@@ -11,6 +12,7 @@ import { apiUrl } from '../utils/apiUrl';
 
 const ALL_SYSTEM_TABS = [
   { id: 'Pending', label: 'Pending' },
+  { id: 'Cart Abandonment', label: 'Cart Abandonment' },
   { id: 'Audit Hold', label: 'Audit Hold' },
   { id: 'Awaiting', label: 'Awaiting' },
   { id: 'Scheduled', label: 'Scheduled' },
@@ -24,13 +26,12 @@ const ALL_SYSTEM_TABS = [
   { id: 'After-Sale Followup', label: 'After-Sale Followup' },
   { id: 'Returned', label: 'Returned' },
   { id: 'Deleted', label: 'Deleted' },
-  { id: 'Cart Abandonment', label: 'Cart Abandonment' },
   { id: 'Banned', label: 'Banned' }
 ];
 
 const BADGE_CLASS = {
   Draft: 'badge-draft',
-  'Cart Abandonment': 'badge-draft',
+  'Cart Abandonment': 'badge-pending',
   Pending: 'badge-pending',
   'Audit Hold': 'badge-awaiting',
   Awaiting: 'badge-awaiting',
@@ -62,10 +63,39 @@ export default function OrdersPipeline({
   const [schedulingOrder, setSchedulingOrder] = useState(null);
   const [deliveryModalOrder, setDeliveryModalOrder] = useState(null);
   const [deliveryModalMode, setDeliveryModalMode] = useState('delivered'); // 'delivered' or 'failed'
+  const [sendingReminderId, setSendingReminderId] = useState(null);
+  const [reminderToastMap, setReminderToastMap] = useState({}); // { [orderId]: { type, msg } }
 
-  // Dynamic tabs state (user can toggle / add tabs)
+  const handleSendRecovery = async (order) => {
+    setSendingReminderId(order.id);
+    setReminderToastMap(prev => ({ ...prev, [order.id]: null }));
+    try {
+      const token = localStorage.getItem('gravity_crm_token');
+      const res = await fetch(apiUrl(`/api/orders/${order.id}/remind`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const channels = [data.emailSent && 'Email', data.smsSent && 'SMS'].filter(Boolean).join(' & ') || 'Recovery';
+        setReminderToastMap(prev => ({ ...prev, [order.id]: { type: 'success', msg: `${channels} sent!` } }));
+      } else {
+        setReminderToastMap(prev => ({ ...prev, [order.id]: { type: 'error', msg: data.error || 'Send failed' } }));
+      }
+    } catch {
+      setReminderToastMap(prev => ({ ...prev, [order.id]: { type: 'error', msg: 'Network error' } }));
+    } finally {
+      setSendingReminderId(null);
+      setTimeout(() => setReminderToastMap(prev => ({ ...prev, [order.id]: null })), 4000);
+    }
+  };
+
+  // Dynamic tabs state (user can toggle / add tabs - Cart Abandonment included by default)
   const [visibleTabs, setVisibleTabs] = useState([
-    'Pending', 'Audit Hold', 'Awaiting', 'Scheduled', 'Confirmed', 'Shipped',
+    'Pending', 'Cart Abandonment', 'Audit Hold', 'Awaiting', 'Scheduled', 'Confirmed', 'Shipped',
     'Delivered', 'Paid', 'Cash Remitted', 'Cancelled', 'Failed', 'After-Sale Followup', 'Returned'
   ]);
   const [showAddTabMenu, setShowAddTabMenu] = useState(false);
@@ -536,6 +566,38 @@ export default function OrdersPipeline({
                                 <MessageCircle className="w-3 h-3 text-emerald-400" /> WhatsApp
                               </a>
                             </div>
+
+                            {/* Cart Abandonment Recovery – Email & SMS */}
+                            {(order.status === 'Draft' || order.status === 'Cart Abandonment') && (
+                              <div className="pt-1 space-y-1.5">
+                                {order.customer_email && (
+                                  <p className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
+                                    <Mail className="w-3 h-3 text-amber-400 shrink-0" />
+                                    <span className="truncate">{order.customer_email}</span>
+                                  </p>
+                                )}
+                                {reminderToastMap[order.id] && (
+                                  <p className={`text-[10px] font-bold flex items-center gap-1 ${
+                                    reminderToastMap[order.id].type === 'success' ? 'text-emerald-400' : 'text-rose-400'
+                                  }`}>
+                                    {reminderToastMap[order.id].type === 'success'
+                                      ? <CheckCircle className="w-3 h-3" />
+                                      : <XCircle className="w-3 h-3" />}
+                                    {reminderToastMap[order.id].msg}
+                                  </p>
+                                )}
+                                <button
+                                  onClick={() => handleSendRecovery(order)}
+                                  disabled={sendingReminderId === order.id}
+                                  className="w-full py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 border border-amber-500/40 text-amber-300 hover:text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all disabled:opacity-60"
+                                >
+                                  {sendingReminderId === order.id
+                                    ? <><Loader2 className="w-3 h-3 animate-spin" /> Sending...</>
+                                    : <><Send className="w-3 h-3" /> Send Recovery</>
+                                  }
+                                </button>
+                              </div>
+                            )}
 
                             {/* Stage Selector Dropdown */}
                             <div className="pt-1">

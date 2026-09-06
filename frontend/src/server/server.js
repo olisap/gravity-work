@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 import { login, signup, getMe, getTeamMembers, createTeamMember } from './controllers/authController.js';
 import { requireAuth, requireRole } from './middleware/authMiddleware.js';
-import { getOrders, createOrUpdateDraftOrder, updateOrderStatus, addUpsellToOrder } from './controllers/orderController.js';
+import { getOrders, createOrUpdateDraftOrder, updateOrderStatus, addUpsellToOrder, sendManualDraftReminder } from './controllers/orderController.js';
 import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory, getStockMovements, recordStockAdjustment } from './controllers/productController.js';
 import { getForms, getFormByEmbedKey, createForm, updateForm, deleteForm } from './controllers/formController.js';
 import { getDashboardStats } from './controllers/dashboardController.js';
@@ -45,6 +45,7 @@ app.get('/api/orders', requireAuth, getOrders);
 app.post('/api/orders/draft', createOrUpdateDraftOrder);
 app.patch('/api/orders/:id/status', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent', 'logistics']), updateOrderStatus);
 app.post('/api/orders/:id/upsell', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), addUpsellToOrder);
+app.post('/api/orders/:id/remind', requireAuth, requireRole(['owner', 'admin', 'confirmation_staff', 'sales_agent']), sendManualDraftReminder);
 
 // Products & Stock Inventory Routes
 app.get('/api/products', getProducts);

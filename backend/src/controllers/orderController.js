@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
 import { InventoryService } from '../services/inventoryService.js';
 import { NotificationService } from '../services/notificationService.js';
+import { AbandonmentWorker } from '../services/abandonmentWorker.js';
 
 function isValidUUID(str) {
   if (!str) return false;
@@ -452,3 +453,43 @@ export async function addUpsellToOrder(req, res) {
 
   res.json(order);
 }
+
+export async function sendManualDraftReminder(req, res) {
+  const { id } = req.params;
+  const storeId = req.storeId;
+
+  let draft = null;
+
+  if (supabase) {
+    try {
+      let query = supabase.from('orders').select('*').eq('id', id);
+      if (storeId) query = query.eq('store_id', storeId);
+      const { data, error } = await query.maybeSingle();
+      if (!error && data) {
+        draft = formatOrderFromSupabase(data);
+      }
+    } catch (e) {
+      console.error('Error fetching draft for manual reminder:', e);
+    }
+  }
+
+  if (!draft) {
+    draft = mockOrders.find(o => o.id === id && (!storeId || o.store_id === storeId));
+  }
+
+  if (!draft) {
+    return res.status(404).json({ error: 'Order or draft not found' });
+  }
+
+  const result = await AbandonmentWorker.sendDraftReminder(draft);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error || 'Failed to dispatch draft recovery reminder' });
+  }
+
+  res.json({
+    message: 'Draft recovery reminder dispatched successfully',
+    emailSent: result.emailSent,
+    smsSent: result.smsSent,
+    order: draft
+  });
+}
