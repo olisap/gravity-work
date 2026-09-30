@@ -193,19 +193,48 @@ export async function createOrUpdateDraftOrder(req, res) {
 
   const normalizedPhone = normalizePhone(customer_phone);
 
-  // Check duplicate submission anti-spam
+  // Check duplicate submission anti-spam (only on final submit against other completed orders)
   let isDuplicate = false;
   let duplicateReason = '';
-  if (normalizedPhone) {
-    const recentDuplicate = mockOrders.find(o =>
-      o.customer_phone === normalizedPhone &&
-      o.id !== id &&
-      o.status !== 'Cancelled' &&
-      (Date.now() - new Date(o.created_at).getTime()) < 3600000
-    );
-    if (recentDuplicate) {
-      isDuplicate = true;
-      duplicateReason = `Duplicate submission detected for phone ${normalizedPhone} within 1 hour (Order #${recentDuplicate.order_number})`;
+  if (normalizedPhone && is_final_submit) {
+    if (supabase) {
+      try {
+        const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+        let dupQuery = supabase
+          .from('orders')
+          .select('id, order_number, created_at')
+          .eq('customer_phone', normalizedPhone)
+          .neq('status', 'Cancelled')
+          .neq('status', 'Draft')
+          .gt('created_at', oneHourAgo)
+          .limit(1);
+
+        if (id) {
+          dupQuery = dupQuery.neq('id', id);
+        }
+
+        const { data: dbDups } = await dupQuery;
+        if (dbDups && dbDups.length > 0) {
+          isDuplicate = true;
+          duplicateReason = `Duplicate submission detected for phone ${normalizedPhone} within 1 hour (Order #${dbDups[0].order_number})`;
+        }
+      } catch (e) {
+        console.error('Error checking duplicate in Supabase:', e);
+      }
+    }
+
+    if (!isDuplicate) {
+      const recentDuplicate = mockOrders.find(o =>
+        o.customer_phone === normalizedPhone &&
+        o.id !== id &&
+        o.status !== 'Cancelled' &&
+        o.status !== 'Draft' &&
+        (Date.now() - new Date(o.created_at).getTime()) < 3600000
+      );
+      if (recentDuplicate) {
+        isDuplicate = true;
+        duplicateReason = `Duplicate submission detected for phone ${normalizedPhone} within 1 hour (Order #${recentDuplicate.order_number})`;
+      }
     }
   }
 
