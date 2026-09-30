@@ -22,6 +22,7 @@ export default function FormBuilder({
 
   // Active form being edited
   const [editingFormId, setEditingFormId] = useState(null);
+  const [duplicatingId, setDuplicatingId] = useState(null);
 
   // ── Form State matching Olistores Screenshots 1, 2, 3 ──
   const [formName, setFormName] = useState('Lunchbox Landing Page Form');
@@ -259,6 +260,73 @@ export default function FormBuilder({
     }
   };
 
+  // Duplicate Form Handler
+  const handleDuplicateForm = async (f) => {
+    if (!f) return;
+    try {
+      setDuplicatingId(f.id);
+      const token = localStorage.getItem('gravity_crm_token');
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const baseName = f.name || 'Order Form';
+      const copyName = `${baseName} (Copy)`;
+      const sanitizedPrefix = (baseName || 'FORM')
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .toUpperCase()
+        .slice(0, 8);
+      const newEmbedKey = `EMBED-${sanitizedPrefix || 'FORM'}-COPY-${Date.now().toString().slice(-4)}`;
+
+      const payload = {
+        store_id: storeId || f.store_id || null,
+        name: copyName,
+        linked_product_id: f.linked_product_id || products[0]?.id || null,
+        embed_key: newEmbedKey,
+        header_text: f.header_text || 'Please Fill The Form Below To Place Your Order',
+        subheader_text: f.subheader_text || 'Only Serious Buyers Should Fill The Form Below',
+        button_text: f.button_text || 'ORDER NOW',
+        button_bg_color: f.button_bg_color || '#4f46e5',
+        button_text_color: f.button_text_color || '#ffffff',
+        form_bg_color: f.form_bg_color || '#0f172a',
+        show_country_code: f.show_country_code || 'Yes',
+        payment_cod_enabled: f.payment_cod_enabled !== undefined ? f.payment_cod_enabled : true,
+        payment_paystack_enabled: f.payment_paystack_enabled || false,
+        payment_flutterwave_enabled: f.payment_flutterwave_enabled || false,
+        payment_bank_enabled: f.payment_bank_enabled || false,
+        notification_email: f.notification_email || '',
+        thank_you_url: f.thank_you_url || '',
+        upsell_enabled: f.upsell_enabled !== false,
+        upsell_product_id: f.upsell_product_id || null,
+        upsell_title: f.upsell_title || 'Special 1-Click Offer!',
+        upsell_description: f.upsell_description || 'Add an extra item to your order for a special price!',
+        upsell_price: f.upsell_price ? Number(f.upsell_price) : 7000
+      };
+
+      const res = await fetch(apiUrl('/api/forms'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.details ? `${errData.error}: ${errData.details}` : (errData.error || `Server error ${res.status}`));
+      }
+
+      const created = await res.json();
+      if (onFormCreated) onFormCreated(created);
+
+      const wantToEdit = window.confirm(`✅ Form duplicated successfully as "${created.name}"!\nEmbed Key: ${created.embed_key}\n\nWould you like to open it in the Form Builder to customize it now?`);
+      if (wantToEdit) {
+        loadFormIntoEditor(created);
+      }
+    } catch (err) {
+      console.error('Error duplicating form:', err);
+      alert(`❌ Failed to duplicate form: ${err.message}`);
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
   const embedThankYouQuery = selectedFormForEmbed.thank_you_url ? `&thank_you_url=${encodeURIComponent(selectedFormForEmbed.thank_you_url)}` : '';
   const scriptCode = `<script src="https://olinwa.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
   const iframeId = `olinwa-iframe-${selectedFormForEmbed.embed_key}`;
@@ -397,6 +465,15 @@ export default function FormBuilder({
                             </button>
                             {['owner', 'admin'].includes(user?.role) && (
                               <>
+                                <button
+                                  onClick={() => handleDuplicateForm(f)}
+                                  disabled={duplicatingId === f.id}
+                                  className="btn-ghost py-1 px-2.5 text-[11px] border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/20 flex items-center gap-1"
+                                  title="Duplicate this form"
+                                >
+                                  <Copy className="w-3 h-3 text-emerald-400" />
+                                  {duplicatingId === f.id ? 'Cloning...' : 'Duplicate'}
+                                </button>
                                 <button
                                   onClick={() => loadFormIntoEditor(f)}
                                   className="btn-ghost py-1 px-2.5 text-[11px]"
@@ -860,12 +937,49 @@ export default function FormBuilder({
             </div>
           </div>
 
-          {/* Save Button */}
-          <div className="flex gap-3">
-            <button type="button" onClick={() => setActiveTab('list')} className="w-1/3 btn-ghost py-3 text-xs">
+          {/* Save & Duplicate Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button type="button" onClick={() => setActiveTab('list')} className="sm:w-1/4 btn-ghost py-3 text-xs">
               Cancel
             </button>
-            <button type="submit" className="w-2/3 btn-primary py-3 text-sm font-bold shadow-lg shadow-indigo-600/30">
+            {editingFormId && (
+              <button
+                type="button"
+                onClick={() => {
+                  const currentForm = forms.find(f => f.id === editingFormId) || {
+                    id: editingFormId,
+                    name: formName,
+                    linked_product_id: selectedProductId,
+                    header_text: headerText,
+                    subheader_text: subHeaderText,
+                    button_text: submitBtnText,
+                    button_bg_color: submitBgColor,
+                    button_text_color: submitTextColor,
+                    form_bg_color: formBgColor,
+                    show_country_code: showCountryCode,
+                    payment_cod_enabled: payCod,
+                    payment_paystack_enabled: payPaystack,
+                    payment_flutterwave_enabled: payFlutterwave,
+                    payment_bank_enabled: payBank,
+                    notification_email: notificationEmail,
+                    thank_you_url: thankYouUrl,
+                    upsell_enabled: upsellEnabled,
+                    upsell_product_id: upsellProductId,
+                    upsell_title: upsellTitle,
+                    upsell_description: upsellDescription,
+                    upsell_price: upsellPrice
+                  };
+                  handleDuplicateForm(currentForm);
+                }}
+                disabled={duplicatingId === editingFormId}
+                className="sm:w-1/3 btn-ghost py-3 text-xs font-bold border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/20 flex items-center justify-center gap-1.5"
+                title="Duplicate this form as a new copy"
+              >
+                <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                {duplicatingId === editingFormId ? 'Duplicating...' : 'Duplicate as New'}
+              </button>
+            )}
+            <button type="submit" className={`${editingFormId ? 'sm:w-5/12' : 'sm:w-3/4'} btn-primary py-3 text-sm font-bold shadow-lg shadow-indigo-600/30`}>
               {editingFormId ? 'Update & Save Form Configuration' : 'Create & Publish Order Form'}
             </button>
           </div>

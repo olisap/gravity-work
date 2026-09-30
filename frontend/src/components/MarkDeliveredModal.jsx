@@ -101,7 +101,13 @@ export default function MarkDeliveredModal({
     try {
       await onSubmit(order.id, targetStatus, JSON.stringify(meta), {
         scheduled_delivery_date: deliveryDate,
-        assigned_staff_id: salesRepId || null
+        assigned_staff_id: salesRepId || null,
+        assigned_to_name: rep?.full_name || rep?.name || null,
+        delivery_agent_id: selectedAgentId || null,
+        delivery_agent_name: ag?.name || null,
+        delivery_fee: Number(deliveryFee) || 0,
+        amount_remitted: isDelivered ? (Number(amountPaid) || 0) : 0,
+        processed_by: rep?.full_name || rep?.name || 'Logistics Staff'
       });
       onClose();
     } catch (err) {

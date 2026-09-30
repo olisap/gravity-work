@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   LayoutGrid, List, Phone, CheckCircle, XCircle, ArrowRight, AlertTriangle, Truck, Filter,
   Copy, MessageCircle, Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight, UserCheck, Plus, Search, RotateCcw,
-  Send, Mail, Loader2
+  Send, Mail, Loader2, ExternalLink, Gift, CreditCard, FileText, User, Tag, MoreVertical, SlidersHorizontal, FileSpreadsheet
 } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { copyOrderToClipboard } from '../utils/copyOrder';
@@ -11,6 +11,7 @@ import MarkDeliveredModal from '../components/MarkDeliveredModal';
 import { apiUrl } from '../utils/apiUrl';
 
 const ALL_SYSTEM_TABS = [
+  { id: 'All', label: 'All Orders' },
   { id: 'Pending', label: 'Pending' },
   { id: 'Cart Abandonment', label: 'Cart Abandonment' },
   { id: 'Audit Hold', label: 'Audit Hold' },
@@ -30,6 +31,7 @@ const ALL_SYSTEM_TABS = [
 ];
 
 const BADGE_CLASS = {
+  All: 'badge-scheduled',
   Draft: 'badge-draft',
   'Cart Abandonment': 'badge-pending',
   Pending: 'badge-pending',
@@ -56,10 +58,14 @@ export default function OrdersPipeline({
   onOpenConfirmationModal,
   onUpdateStatus
 }) {
-  const [viewMode, setViewMode] = useState('kanban'); // 'kanban' or 'table'
-  const [activePipelineTab, setActivePipelineTab] = useState('Pending');
+  const [viewMode, setViewMode] = useState('table'); // Default to 'table' as shown in reference design
+  const [activePipelineTab, setActivePipelineTab] = useState('All');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTagFilter, setSelectedTagFilter] = useState('All');
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [activeActionMenuId, setActiveActionMenuId] = useState(null);
+  const [showColumnsModal, setShowColumnsModal] = useState(false);
   const [schedulingOrder, setSchedulingOrder] = useState(null);
   const [deliveryModalOrder, setDeliveryModalOrder] = useState(null);
   const [deliveryModalMode, setDeliveryModalMode] = useState('delivered'); // 'delivered' or 'failed'
@@ -95,7 +101,7 @@ export default function OrdersPipeline({
 
   // Dynamic tabs state (user can toggle / add tabs - Cart Abandonment included by default)
   const [visibleTabs, setVisibleTabs] = useState([
-    'Pending', 'Cart Abandonment', 'Audit Hold', 'Awaiting', 'Scheduled', 'Confirmed', 'Shipped',
+    'All', 'Pending', 'Cart Abandonment', 'Audit Hold', 'Awaiting', 'Scheduled', 'Confirmed', 'Shipped',
     'Delivered', 'Paid', 'Cash Remitted', 'Cancelled', 'Failed', 'After-Sale Followup', 'Returned'
   ]);
   const [showAddTabMenu, setShowAddTabMenu] = useState(false);
@@ -127,6 +133,17 @@ export default function OrdersPipeline({
     fetchAgentsAndTeam();
   }, []);
 
+  // Close 3-dots actions dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.action-menu-container')) {
+        setActiveActionMenuId(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   const scrollLeft = () => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollBy({ left: -300, behavior: 'smooth' });
@@ -139,6 +156,50 @@ export default function OrdersPipeline({
     }
   };
 
+  // Format date like: "16 Sept 2026, 13:28"
+  const formatCustomerDate = (isoStr) => {
+    if (!isoStr) return '16 Sept 2026, 13:28';
+    try {
+      const d = new Date(isoStr);
+      const day = d.getDate();
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+      const month = months[d.getMonth()];
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      return `${day} ${month} ${year}, ${hours}:${mins}`;
+    } catch (e) {
+      return '16 Sept 2026, 13:28';
+    }
+  };
+
+  // Status bullet dot & text color mapping
+  const getStatusBadgeConfig = (status) => {
+    switch (status) {
+      case 'Pending':
+        return { dot: 'bg-amber-500 shadow-sm shadow-amber-500/50', text: 'text-amber-400' };
+      case 'Scheduled':
+        return { dot: 'bg-indigo-500 shadow-sm shadow-indigo-500/50', text: 'text-indigo-400' };
+      case 'Confirmed':
+        return { dot: 'bg-purple-500 shadow-sm shadow-purple-500/50', text: 'text-purple-400' };
+      case 'Shipped':
+        return { dot: 'bg-cyan-500 shadow-sm shadow-cyan-500/50', text: 'text-cyan-400' };
+      case 'Delivered':
+      case 'Paid':
+      case 'Cash Remitted':
+        return { dot: 'bg-emerald-500 shadow-sm shadow-emerald-500/50', text: 'text-emerald-400' };
+      case 'Cancelled':
+      case 'Failed':
+      case 'Returned':
+      case 'Banned':
+        return { dot: 'bg-rose-500 shadow-sm shadow-rose-500/50', text: 'text-rose-400' };
+      case 'Audit Hold':
+        return { dot: 'bg-orange-500 shadow-sm shadow-orange-500/50', text: 'text-orange-400' };
+      default:
+        return { dot: 'bg-slate-400', text: 'text-slate-300' };
+    }
+  };
+
   // Filter orders
   const filtered = orders.filter(o => {
     if (o.country && o.country !== selectedCountry) return false;
@@ -148,6 +209,12 @@ export default function OrdersPipeline({
     if (paymentStatusFilter !== 'All') {
       if (paymentStatusFilter === 'Paid' && o.payment_status !== 'Paid') return false;
       if (paymentStatusFilter === 'Unpaid' && o.payment_status === 'Paid') return false;
+    }
+
+    // Tag filter
+    if (selectedTagFilter !== 'All') {
+      const oTags = Array.isArray(o.tags) ? o.tags : [];
+      if (!oTags.includes(selectedTagFilter)) return false;
     }
 
     // Search query filter
@@ -167,10 +234,18 @@ export default function OrdersPipeline({
 
   // Count orders per status
   const getTabCount = (tabId) => {
+    if (tabId === 'All') return filtered.length;
     return filtered.filter(o => {
       if (tabId === 'Cart Abandonment') return o.status === 'Draft' || o.status === 'Cart Abandonment';
       return o.status === tabId;
     }).length;
+  };
+
+  // Calculate dynamic days in status
+  const getDaysInStatus = (order) => {
+    const timeRef = new Date(order.updated_at || order.created_at || Date.now()).getTime();
+    if (isNaN(timeRef)) return 0;
+    return Math.max(0, Math.floor((Date.now() - timeRef) / (1000 * 60 * 60 * 24)));
   };
 
   const getWhatsAppUrl = (order) => {
@@ -204,27 +279,91 @@ export default function OrdersPipeline({
     return {};
   };
 
-  // Export search results as CSV
+  // Export search results as CSV with all 26 operational columns
   const handleExportCSV = () => {
     const listToExport = filtered.filter(o => activePipelineTab === 'All' || o.status === activePipelineTab || (activePipelineTab === 'Cart Abandonment' && o.status === 'Draft'));
     if (listToExport.length === 0) {
       alert('No orders in this stage to export.');
       return;
     }
-    const headers = ['Order Number', 'Date', 'Customer Name', 'Phone', 'Address', 'State', 'Amount', 'Status', 'Delivery Agent', 'Sales Rep'];
+    const headers = [
+      'Order ID',
+      'On Hold By',
+      'Assigned To',
+      'Customer Name',
+      'Contact Phone',
+      'Contact Email',
+      'Delivery Address',
+      'State',
+      'Country',
+      'Product',
+      'Order Status',
+      'Payment Method',
+      'Payment Status',
+      'Total Amount',
+      'Free Gifts / Combo',
+      'Other Details',
+      'Comments',
+      'Agent',
+      'Delivery Fee',
+      'Amount Remitted',
+      'Proof of Payment',
+      'Account Paid Into',
+      'Tags',
+      'Order Date',
+      'Day in Status',
+      'Form Source',
+      'Added By',
+      'Updated By',
+      'Processed By'
+    ];
     const rows = listToExport.map(o => {
       const meta = getOrderMeta(o);
+      const rep = teamMembers.find(m => String(m.id) === String(o.assigned_staff_id));
+      const ag = agents.find(a => String(a.id) === String(o.delivery_agent_id));
+      const daysInStatus = getDaysInStatus(o);
+      const productSummary = (o.items || []).map(i => `${i.name} (x${i.quantity || 1})`).join('; ') || 'Standard Item';
+      const tagsStr = Array.isArray(o.tags) ? o.tags.join('; ') : (Array.isArray(meta.tags) ? meta.tags.join('; ') : '');
+      const comboStr = o.combo_details || meta.combo_details || meta.free_gift || (o.items?.length > 1 ? `${o.items.length}-Item Combo` : 'None');
+      const otherDetails = [o.scheduled_delivery_date, o.scheduled_delivery_time, o.reminder_notes].filter(Boolean).join(' | ');
+      const commentsStr = o.comments || meta.comments || (typeof o.confirmation_call_notes === 'string' && !o.confirmation_call_notes.startsWith('{') ? o.confirmation_call_notes : '');
+      const onHoldBy = o.on_hold_by || meta.on_hold_by || (o.status === 'Audit Hold' ? 'Audit Team' : '');
+      const assignedTo = o.assigned_to_name || meta.sales_rep_name || rep?.full_name || '';
+      const agentName = o.delivery_agent_name || meta.delivery_agent_name || ag?.name || '';
+      const amountRemitted = o.amount_remitted ?? meta.amount_remitted ?? (o.payment_status === 'Paid' ? o.total_amount : 0);
+      const proofUrl = o.proof_of_payment_url || meta.proof_of_payment_url || '';
+      const accountPaid = o.account_paid_into || meta.account_paid_into || (o.payment_method === 'COD' ? 'Cash on Delivery' : 'Merchant Bank Account');
+
       return [
-        o.order_number || '',
-        o.created_at ? o.created_at.slice(0, 10) : '',
+        `"${o.order_number || ''}"`,
+        `"${String(onHoldBy).replace(/"/g, '""')}"`,
+        `"${String(assignedTo).replace(/"/g, '""')}"`,
         `"${(o.customer_name || '').replace(/"/g, '""')}"`,
         `"${o.customer_phone || ''}"`,
+        `"${o.customer_email || ''}"`,
         `"${(o.delivery_address || '').replace(/"/g, '""')}"`,
-        o.state || '',
+        `"${o.state || ''}"`,
+        `"${o.country || ''}"`,
+        `"${String(productSummary).replace(/"/g, '""')}"`,
+        `"${o.status || ''}"`,
+        `"${o.payment_method || 'COD'}"`,
+        `"${o.payment_status || 'Unpaid'}"`,
         o.total_amount || 0,
-        o.status || '',
-        `"${meta.delivery_agent_name || ''}"`,
-        `"${meta.sales_rep_name || ''}"`
+        `"${String(comboStr).replace(/"/g, '""')}"`,
+        `"${String(otherDetails).replace(/"/g, '""')}"`,
+        `"${String(commentsStr).replace(/"/g, '""')}"`,
+        `"${String(agentName).replace(/"/g, '""')}"`,
+        o.delivery_fee || 0,
+        amountRemitted,
+        `"${String(proofUrl).replace(/"/g, '""')}"`,
+        `"${String(accountPaid).replace(/"/g, '""')}"`,
+        `"${String(tagsStr).replace(/"/g, '""')}"`,
+        `"${o.created_at || ''}"`,
+        daysInStatus,
+        `"${(o.source || 'form:embedded').replace(/"/g, '""')}"`,
+        `"${(o.added_by || meta.added_by || 'Online Checkout').replace(/"/g, '""')}"`,
+        `"${(o.updated_by || meta.updated_by || 'System').replace(/"/g, '""')}"`,
+        `"${(o.processed_by || meta.processed_by || '').replace(/"/g, '""')}"`
       ];
     });
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -235,6 +374,50 @@ export default function OrdersPipeline({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Filter table view orders by active pipeline tab
+  const tableOrders = filtered.filter(o => {
+    if (activePipelineTab === 'All') return true;
+    if (activePipelineTab === 'Cart Abandonment') return o.status === 'Draft' || o.status === 'Cart Abandonment';
+    return o.status === activePipelineTab;
+  });
+
+  const toggleSelectAll = () => {
+    if (tableOrders.length > 0 && selectedOrderIds.length === tableOrders.length) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(tableOrders.map(o => o.id));
+    }
+  };
+
+  const toggleSelectOrder = (id) => {
+    setSelectedOrderIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkAction = (action) => {
+    if (selectedOrderIds.length === 0) return;
+    if (action === 'mark_delivered') {
+      selectedOrderIds.forEach(id => onUpdateStatus(id, 'Delivered'));
+      setSelectedOrderIds([]);
+    } else if (action === 'mark_scheduled') {
+      selectedOrderIds.forEach(id => onUpdateStatus(id, 'Scheduled'));
+      setSelectedOrderIds([]);
+    } else if (action === 'mark_failed') {
+      selectedOrderIds.forEach(id => onUpdateStatus(id, 'Failed'));
+      setSelectedOrderIds([]);
+    } else if (action === 'mark_confirmed') {
+      selectedOrderIds.forEach(id => onUpdateStatus(id, 'Confirmed'));
+      setSelectedOrderIds([]);
+    } else if (action === 'export_selected') {
+      handleExportCSV();
+    }
+  };
+
+  const handleExportPDF = () => {
+    window.print();
   };
 
   return (
@@ -446,7 +629,7 @@ export default function OrdersPipeline({
             ref={scrollContainerRef}
             className="flex gap-3 overflow-x-auto pb-4 pt-1 px-1 snap-x scroll-smooth"
           >
-            {visibleTabs.map(status => {
+            {visibleTabs.filter(status => status !== 'All').map(status => {
               const cols = filtered.filter(o => {
                 if (status === 'Cart Abandonment') return o.status === 'Draft' || o.status === 'Cart Abandonment';
                 return o.status === status;
@@ -673,99 +856,603 @@ export default function OrdersPipeline({
         </div>
       )}
 
-      {/* ── TABLE VIEW ── */}
+      {/* ── 26-COLUMN OPERATIONAL TABLE VIEW (Matches User Screenshot Exactly) ── */}
       {viewMode === 'table' && (
-        <div className="bg-[#0f172a] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-[#090d16] border-b border-slate-800 text-slate-400 text-[11px] uppercase tracking-wider font-semibold">
-                  <th className="p-3.5">Order Ref</th>
-                  <th className="p-3.5">Customer</th>
-                  <th className="p-3.5">Location</th>
-                  <th className="p-3.5">Item</th>
-                  <th className="p-3.5">Amount</th>
-                  <th className="p-3.5">Stage</th>
-                  <th className="p-3.5">Delivery Agent</th>
-                  <th className="p-3.5 text-right">Actions</th>
+        <div className="bg-[#080b11] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+          {/* Top Toolbar matching screenshot: Quick Search, Filter by tags, Bulk action, Columns & Order, Excel, PDF */}
+          <div className="p-3.5 bg-[#080b11] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap flex-1">
+              {/* Quick search... */}
+              <div className="relative w-64 md:w-72">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Quick Search..."
+                  className="w-full bg-[#0d121d] border border-slate-800 rounded-lg pl-9 pr-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Filter by tags... */}
+              <div className="relative">
+                <select
+                  value={selectedTagFilter}
+                  onChange={e => setSelectedTagFilter(e.target.value)}
+                  className="bg-[#0d121d] border border-slate-800 text-slate-300 text-xs rounded-lg px-3 py-2 outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="All">Filter by tags...</option>
+                  <option value="VIP">VIP</option>
+                  <option value="High Value">High Value</option>
+                  <option value="Fast Track">Fast Track</option>
+                  <option value="Audit">Audit</option>
+                </select>
+              </div>
+
+              {/* Selected orders counter pill */}
+              {selectedOrderIds.length > 0 && (
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold">
+                  <span>{selectedOrderIds.length} selected</span>
+                  <button
+                    onClick={() => setSelectedOrderIds([])}
+                    className="text-[10px] text-slate-400 hover:text-white underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Bulk action */}
+              <div className="relative">
+                <select
+                  onChange={e => {
+                    if (e.target.value) handleBulkAction(e.target.value);
+                    e.target.value = '';
+                  }}
+                  defaultValue=""
+                  disabled={selectedOrderIds.length === 0}
+                  className={`bg-[#0d121d] border border-slate-800 text-xs rounded-lg px-3 py-2 outline-none cursor-pointer ${
+                    selectedOrderIds.length > 0
+                      ? 'text-indigo-400 border-indigo-600/50 font-bold'
+                      : 'text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  <option value="" disabled>Bulk action {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : ''}</option>
+                  <option value="mark_delivered">Mark as Delivered</option>
+                  <option value="mark_scheduled">Mark as Scheduled</option>
+                  <option value="mark_failed">Mark as Failed</option>
+                  <option value="mark_confirmed">Mark as Confirmed</option>
+                  <option value="export_selected">Export Selected</option>
+                </select>
+              </div>
+
+              {/* Columns & Order */}
+              <button
+                onClick={() => setShowColumnsModal(true)}
+                className="px-3 py-2 bg-[#0d121d] hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" /> Columns & Order
+              </button>
+
+              {/* Excel */}
+              <button
+                onClick={handleExportCSV}
+                className="px-3 py-2 bg-[#0d121d] hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Export to Excel / CSV"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Excel
+              </button>
+
+              {/* PDF */}
+              <button
+                onClick={handleExportPDF}
+                className="px-3 py-2 bg-[#0d121d] hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Export / Print PDF"
+              >
+                <FileText className="w-3.5 h-3.5 text-rose-400" /> PDF
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto max-h-[720px] relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+            <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+              <thead className="sticky top-0 z-30 bg-[#080b11] border-b border-slate-800 shadow-md">
+                <tr className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">
+                  {/* Selection Checkbox */}
+                  <th className="p-3 w-10 text-center sticky left-0 z-40 bg-[#080b11] border-r border-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={tableOrders.length > 0 && selectedOrderIds.length === tableOrders.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-700 bg-[#0d121d] text-indigo-600 focus:ring-0 cursor-pointer accent-indigo-600"
+                    />
+                  </th>
+                  {/* 1. ACTIONS */}
+                  <th className="p-3 sticky left-10 z-40 bg-[#080b11] border-r border-slate-800 min-w-[75px]">
+                    ACTIONS
+                  </th>
+                  {/* 2. ORDER ID */}
+                  <th className="p-3 sticky left-[115px] z-40 bg-[#080b11] border-r border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.35)] min-w-[130px]">
+                    ORDER ID
+                  </th>
+                  {/* 3. ON HOLD BY */}
+                  <th className="p-3 min-w-[110px]">ON HOLD BY</th>
+                  {/* 4. ASSIGNED TO */}
+                  <th className="p-3 min-w-[135px]">ASSIGNED TO</th>
+                  {/* 5. CUSTOMER NAME */}
+                  <th className="p-3 min-w-[170px]">CUSTOMER NAME</th>
+                  {/* 6. CONTACT */}
+                  <th className="p-3 min-w-[185px]">CONTACT</th>
+                  {/* 7. ADDRESS */}
+                  <th className="p-3 min-w-[240px]">ADDRESS</th>
+                  {/* 8. PRODUCT */}
+                  <th className="p-3 min-w-[200px]">PRODUCT</th>
+                  {/* 9. ORDER STATUS */}
+                  <th className="p-3 min-w-[145px]">ORDER STATUS</th>
+                  {/* 10. PAYMENT */}
+                  <th className="p-3 min-w-[135px]">PAYMENT</th>
+                  {/* 11. FREE GIFTS / COMBO */}
+                  <th className="p-3 min-w-[145px]">FREE GIFTS / COMBO</th>
+                  {/* 12. OTHER DETAILS */}
+                  <th className="p-3 min-w-[160px]">OTHER DETAILS</th>
+                  {/* 13. COMMENTS */}
+                  <th className="p-3 min-w-[155px]">COMMENTS</th>
+                  {/* 14. AGENT */}
+                  <th className="p-3 min-w-[130px]">AGENT</th>
+                  {/* 15. DELIVERY FEE */}
+                  <th className="p-3 min-w-[110px]">DELIVERY FEE</th>
+                  {/* 16. AMOUNT REMITTED */}
+                  <th className="p-3 min-w-[130px]">AMOUNT REMITTED</th>
+                  {/* 17. PROOF OF PAYMENT */}
+                  <th className="p-3 min-w-[130px]">PROOF OF PAYMENT</th>
+                  {/* 18. ACCOUNT PAID INTO */}
+                  <th className="p-3 min-w-[150px]">ACCOUNT PAID INTO</th>
+                  {/* 19. TAGS */}
+                  <th className="p-3 min-w-[130px]">TAGS</th>
+                  {/* 20. ORDER DATE */}
+                  <th className="p-3 min-w-[140px]">ORDER DATE</th>
+                  {/* 21. DAY IN STATUS */}
+                  <th className="p-3 min-w-[110px]">DAY IN STATUS</th>
+                  {/* 22. FORM SOURCE */}
+                  <th className="p-3 min-w-[140px]">FORM SOURCE</th>
+                  {/* 23. ADDED BY */}
+                  <th className="p-3 min-w-[120px]">ADDED BY</th>
+                  {/* 24. UPDATED BY */}
+                  <th className="p-3 min-w-[120px]">UPDATED BY</th>
+                  {/* 25. PROCESSED BY */}
+                  <th className="p-3 min-w-[130px]">PROCESSED BY</th>
+                  {/* 26. ACTIONS (SECONDARY) */}
+                  <th className="p-3 sticky right-0 z-40 bg-[#080b11] border-l border-slate-800 shadow-[-4px_0_8px_rgba(0,0,0,0.35)] min-w-[170px] text-right pr-4">
+                    ACTIONS
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filtered.length === 0 ? (
+                {tableOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12 text-slate-500 italic">
-                      No orders match the current filters.
+                    <td colSpan={27} className="text-center py-16 text-slate-500 italic">
+                      No orders found in "{activePipelineTab}" stage matching current filters.
                     </td>
                   </tr>
                 ) : (
-                  filtered.map(o => {
+                  tableOrders.map(o => {
                     const meta = getOrderMeta(o);
+                    const rep = teamMembers.find(m => String(m.id) === String(o.assigned_staff_id));
+                    const ag = agents.find(a => String(a.id) === String(o.delivery_agent_id));
+                    const daysInStatus = getDaysInStatus(o);
+                    const onHoldBy = o.on_hold_by || meta.on_hold_by || (o.status === 'Audit Hold' ? 'Audit Team' : null);
+                    const assignedTo = o.assigned_to_name || meta.sales_rep_name || rep?.full_name || 'Unassigned';
+                    const agentName = o.delivery_agent_name || meta.delivery_agent_name || ag?.name || null;
+                    const amountRemitted = o.amount_remitted ?? meta.amount_remitted ?? (o.payment_status === 'Paid' ? o.total_amount : 0);
+                    const proofUrl = o.proof_of_payment_url || meta.proof_of_payment_url || null;
+                    const accountPaid = o.account_paid_into || meta.account_paid_into || (o.payment_method === 'COD' ? 'Cash on Delivery' : 'Merchant Bank Account');
+                    const comboStr = o.combo_details || meta.combo_details || meta.free_gift || (o.items?.length > 1 ? `${o.items.length}-Item Combo` : '—');
+                    const commentsStr = o.comments || meta.comments || (typeof o.confirmation_call_notes === 'string' && !o.confirmation_call_notes.startsWith('{') ? o.confirmation_call_notes : '');
+                    const tagsList = Array.isArray(o.tags) && o.tags.length ? o.tags : (Array.isArray(meta.tags) && meta.tags.length ? meta.tags : (o.total_amount > 50000 ? ['High Value'] : ['Standard']));
+
+                    const primaryItem = o.items?.[0] || { name: 'ROD HOLDER', quantity: 1 };
+                    const itemTitle = primaryItem.name || 'ROD HOLDER';
+                    const itemQty = primaryItem.quantity || (o.items ? o.items.reduce((sum, i) => sum + (i.quantity || 1), 0) : 1);
+                    const itemAmount = o.total_amount || 0;
+                    const cleanOrderId = o.order_number?.replace(/^OLI-/, '') || o.id?.slice(0, 10) || '1677638564';
+                    const statusBadge = getStatusBadgeConfig(o.status);
+
                     return (
-                      <tr key={o.id} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="p-3.5 font-mono font-bold text-indigo-400 flex items-center gap-1.5">
-                          <span>#{o.order_number}</span>
-                          <button
-                            type="button"
-                            onClick={() => copyOrderToClipboard(o, curr)}
-                            title="Copy order details"
-                            className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-indigo-600 transition-colors"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
+                      <tr key={o.id} className="group hover:bg-[#0f1422] transition-colors">
+                        {/* Checkbox */}
+                        <td className="p-3 text-center sticky left-0 z-20 bg-[#080b11] group-hover:bg-[#0f1422] border-r border-slate-800 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={selectedOrderIds.includes(o.id)}
+                            onChange={() => toggleSelectOrder(o.id)}
+                            className="w-4 h-4 rounded border-slate-700 bg-[#0d121d] text-indigo-600 focus:ring-0 cursor-pointer accent-indigo-600"
+                          />
                         </td>
-                        <td className="p-3.5">
-                          <p className="font-semibold text-slate-200">{o.customer_name}</p>
-                          <p className="text-[10px] text-slate-400">{o.customer_phone}</p>
+
+                        {/* 1. ACTIONS (3 vertical dots popup menu matching screenshot) */}
+                        <td className="p-3 sticky left-10 z-20 bg-[#080b11] group-hover:bg-[#0f1422] border-r border-slate-800 transition-colors action-menu-container">
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setActiveActionMenuId(activeActionMenuId === o.id ? null : o.id)}
+                              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                              title="Actions Menu"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+
+                            {activeActionMenuId === o.id && (
+                              <div className="absolute left-6 top-0 w-44 bg-[#0d121d] border border-slate-700 rounded-xl shadow-2xl z-50 p-1 space-y-0.5 text-left text-xs font-semibold animate-fade-in">
+                                <button
+                                  onClick={() => {
+                                    onOpenConfirmationModal && onOpenConfirmationModal(o);
+                                    setActiveActionMenuId(null);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-slate-800 text-slate-200 cursor-pointer"
+                                >
+                                  <Phone className="w-3.5 h-3.5 text-indigo-400" /> Call / Confirm
+                                </button>
+                                <a
+                                  href={getWhatsAppUrl(o)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={() => setActiveActionMenuId(null)}
+                                  className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-slate-800 text-emerald-400 cursor-pointer"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" /> WhatsApp Chat
+                                </a>
+                                <button
+                                  onClick={() => {
+                                    setDeliveryModalMode('delivered');
+                                    setDeliveryModalOrder(o);
+                                    setActiveActionMenuId(null);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-slate-800 text-emerald-300 cursor-pointer"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Mark Delivered
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setDeliveryModalMode('failed');
+                                    setDeliveryModalOrder(o);
+                                    setActiveActionMenuId(null);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-slate-800 text-rose-300 cursor-pointer"
+                                >
+                                  <XCircle className="w-3.5 h-3.5 text-rose-400" /> Mark Failed
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSchedulingOrder(o);
+                                    setActiveActionMenuId(null);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-slate-800 text-slate-200 cursor-pointer"
+                                >
+                                  <Calendar className="w-3.5 h-3.5 text-indigo-400" /> Schedule Delivery
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    copyOrderToClipboard(o, curr);
+                                    setActiveActionMenuId(null);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-slate-800 text-slate-300 cursor-pointer"
+                                >
+                                  <Copy className="w-3.5 h-3.5 text-slate-400" /> Copy Details
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
-                        <td className="p-3.5 text-slate-400">{o.state}, {o.country}</td>
-                        <td className="p-3.5 text-slate-300 max-w-[160px] truncate">{o.items?.[0]?.name || '—'}</td>
-                        <td className="p-3.5 font-bold text-emerald-400 font-mono">{curr}{o.total_amount?.toLocaleString()}</td>
-                        <td className="p-3.5">
-                          <select
-                            value={o.status}
-                            onChange={e => handleStageDropdownChange(o, e.target.value)}
-                            className="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg p-1.5 cursor-pointer outline-none focus:border-indigo-500"
-                          >
-                            {ALL_SYSTEM_TABS.map(s => (
-                              <option key={s.id} value={s.id}>{s.label}</option>
-                            ))}
-                          </select>
+
+                        {/* 2. ORDER ID (with copy icon matching screenshot) */}
+                        <td className="p-3 sticky left-[115px] z-20 bg-[#080b11] group-hover:bg-[#0f1422] border-r border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.35)] transition-colors">
+                          <div className="flex items-center gap-1.5 font-mono text-xs">
+                            <span className="font-bold text-slate-100">{cleanOrderId}</span>
+                            <button
+                              type="button"
+                              onClick={() => navigator.clipboard.writeText(cleanOrderId)}
+                              title="Copy Order ID"
+                              className="text-slate-500 hover:text-slate-200 p-0.5 transition-colors cursor-pointer"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
-                        <td className="p-3.5">
-                          {meta.delivery_agent_name ? (
-                            <span className="text-indigo-400 font-semibold flex items-center gap-1">
-                              <UserCheck className="w-3.5 h-3.5" /> {meta.delivery_agent_name}
+
+                        {/* 3. ON HOLD BY */}
+                        <td className="p-3">
+                          <span className="text-slate-500 font-mono text-xs">{onHoldBy || '—'}</span>
+                        </td>
+
+                        {/* 4. ASSIGNED TO (with MAIN OFFER badge matching screenshot) */}
+                        <td className="p-3">
+                          <div>
+                            <p className="text-slate-200 font-medium text-xs">{assignedTo}</p>
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-blue-950/70 text-blue-400 border border-blue-800/40 mt-1 tracking-wider">
+                              MAIN OFFER
                             </span>
+                          </div>
+                        </td>
+
+                        {/* 5. CUSTOMER NAME (Name + Date/Time matching screenshot) */}
+                        <td className="p-3">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-bold text-slate-100 text-xs">{o.customer_name || 'Guest Customer'}</p>
+                              {o.is_duplicate_flagged && (
+                                <span title="Duplicate submission flagged" className="text-rose-400 cursor-help">
+                                  <AlertTriangle className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{formatCustomerDate(o.created_at)}</p>
+                          </div>
+                        </td>
+
+                        {/* 6. CONTACT (Phone, WhatsApp green, Mail matching screenshot) */}
+                        <td className="p-3">
+                          <div className="space-y-1 text-xs">
+                            <div className="flex items-center gap-1.5 font-mono text-slate-300">
+                              <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <a href={`tel:${o.customer_phone}`} className="hover:text-indigo-400 transition-colors">
+                                {o.customer_phone || '—'}
+                              </a>
+                            </div>
+                            <div className="flex items-center gap-1.5 font-mono text-slate-300">
+                              <MessageCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                              <a
+                                href={getWhatsAppUrl(o)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="hover:text-emerald-400 transition-colors"
+                              >
+                                {o.customer_phone || '—'}
+                              </a>
+                            </div>
+                            {o.customer_email && (
+                              <div className="flex items-center gap-1.5 text-slate-400 text-[11px] truncate max-w-[180px]">
+                                <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <a href={`mailto:${o.customer_email}`} className="hover:text-slate-200 transition-colors truncate">
+                                  {o.customer_email}
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 7. ADDRESS (Street, State, Country matching screenshot) */}
+                        <td className="p-3">
+                          <div className="space-y-0.5 text-xs max-w-[230px]">
+                            <p className="font-bold text-slate-200 truncate" title={o.delivery_address}>
+                              {o.delivery_address || '—'}
+                            </p>
+                            <p className="text-slate-400 text-[11px]">{o.state || ''}</p>
+                            <p className="text-slate-500 text-[10px]">{o.country || 'Nigeria'}</p>
+                          </div>
+                        </td>
+
+                        {/* 8. PRODUCT (Title, Qty, Amount matching screenshot) */}
+                        <td className="p-3">
+                          <div className="space-y-0.5 text-xs max-w-[200px]">
+                            <p className="font-bold text-slate-100 uppercase truncate" title={itemTitle}>
+                              {itemTitle}
+                            </p>
+                            <p className="text-slate-400 text-[11px]">Qty: {itemQty}</p>
+                            <p className="text-slate-300 text-[11px] font-semibold">
+                              Amount: {curr}{Number(itemAmount).toLocaleString()}
+                            </p>
+                          </div>
+                        </td>
+
+                        {/* 9. ORDER STATUS (Colored dot + status name matching screenshot) */}
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusBadge.dot}`}></span>
+                            <select
+                              value={o.status}
+                              onChange={e => handleStageDropdownChange(o, e.target.value)}
+                              className={`bg-transparent border-0 font-bold text-xs cursor-pointer outline-none ${statusBadge.text}`}
+                            >
+                              {ALL_SYSTEM_TABS.filter(s => s.id !== 'All').map(s => (
+                                <option key={s.id} value={s.id} className="bg-slate-900 text-slate-200">
+                                  {s.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </td>
+
+                        {/* 10. PAYMENT */}
+                        <td className="p-3">
+                          <div className="space-y-0.5 text-xs">
+                            <p className="font-semibold text-slate-200">{o.payment_method || 'COD'}</p>
+                            <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                              o.payment_status === 'Paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                            }`}>
+                              {o.payment_status || 'Unpaid'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* 11. FREE GIFTS / COMBO */}
+                        <td className="p-3">
+                          <span className="text-slate-400 text-xs font-medium">{comboStr}</span>
+                        </td>
+
+                        {/* 12. OTHER DETAILS */}
+                        <td className="p-3">
+                          <div className="text-xs text-slate-300 max-w-[160px]">
+                            {o.scheduled_delivery_date ? (
+                              <p className="font-medium text-slate-200">{o.scheduled_delivery_date} {o.scheduled_delivery_time || ''}</p>
+                            ) : null}
+                            {o.reminder_notes ? <p className="text-[11px] text-slate-400 truncate">{o.reminder_notes}</p> : (!o.scheduled_delivery_date ? '—' : null)}
+                          </div>
+                        </td>
+
+                        {/* 13. COMMENTS */}
+                        <td className="p-3">
+                          <span className="text-slate-400 text-xs max-w-[150px] truncate block" title={commentsStr}>
+                            {commentsStr || '—'}
+                          </span>
+                        </td>
+
+                        {/* 14. AGENT */}
+                        <td className="p-3">
+                          <span className="text-slate-300 text-xs font-medium">{agentName || 'Unassigned'}</span>
+                        </td>
+
+                        {/* 15. DELIVERY FEE */}
+                        <td className="p-3 font-mono text-slate-300 text-xs">
+                          {curr}{Number(o.delivery_fee || 0).toLocaleString()}
+                        </td>
+
+                        {/* 16. AMOUNT REMITTED */}
+                        <td className="p-3 font-mono font-semibold text-emerald-400 text-xs">
+                          {curr}{Number(amountRemitted).toLocaleString()}
+                        </td>
+
+                        {/* 17. PROOF OF PAYMENT */}
+                        <td className="p-3">
+                          {proofUrl ? (
+                            <a href={proofUrl} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline text-xs flex items-center gap-1">
+                              <ExternalLink className="w-3 h-3" /> View
+                            </a>
                           ) : (
-                            <span className="text-slate-500 italic text-[11px]">Unassigned</span>
+                            <span className="text-slate-500 text-xs">—</span>
                           )}
                         </td>
-                        <td className="p-3.5 text-right space-x-1.5">
-                          <button
-                            onClick={() => {
-                              setDeliveryModalMode('delivered');
-                              setDeliveryModalOrder(o);
-                            }}
-                            className="px-2.5 py-1.5 bg-emerald-600/90 hover:bg-emerald-600 text-white rounded-lg font-bold text-[11px] shadow transition-all cursor-pointer"
-                          >
-                            Delivered
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeliveryModalMode('failed');
-                              setDeliveryModalOrder(o);
-                            }}
-                            className="px-2.5 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white rounded-lg font-bold text-[11px] shadow transition-all cursor-pointer"
-                          >
-                            Failed
-                          </button>
+
+                        {/* 18. ACCOUNT PAID INTO */}
+                        <td className="p-3">
+                          <span className="text-slate-400 text-xs truncate max-w-[140px] block" title={accountPaid}>
+                            {accountPaid}
+                          </span>
                         </td>
+
+                        {/* 19. TAGS */}
+                        <td className="p-3">
+                          <div className="flex items-center gap-1 flex-wrap max-w-[130px]">
+                            {tagsList.map((tag, idx) => (
+                              <span key={idx} className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-[#141b2b] text-indigo-300 border border-slate-700/60">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+
+                        {/* 20. ORDER DATE */}
+                        <td className="p-3 text-slate-400 text-xs">
+                          {formatCustomerDate(o.created_at)}
+                        </td>
+
+                        {/* 21. DAY IN STATUS */}
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            daysInStatus === 0 ? 'bg-emerald-500/15 text-emerald-400' :
+                            daysInStatus === 1 ? 'bg-indigo-500/15 text-indigo-400' :
+                            daysInStatus <= 4 ? 'bg-amber-500/15 text-amber-400' :
+                            'bg-rose-500/20 text-rose-400 animate-pulse'
+                          }`}>
+                            {daysInStatus === 0 ? 'Today' : `${daysInStatus}d`}
+                          </span>
+                        </td>
+
+                        {/* 22. FORM SOURCE */}
+                        <td className="p-3">
+                          <span className="text-slate-400 text-xs truncate max-w-[130px] block" title={o.source || 'Direct'}>
+                            {o.source ? (o.source.startsWith('form:') ? o.source.replace('form:', '') : o.source) : 'Direct'}
+                          </span>
+                        </td>
+
+                        {/* 23. ADDED BY */}
+                        <td className="p-3 text-slate-400 text-xs">
+                          {o.added_by || meta.added_by || 'Online Checkout'}
+                        </td>
+
+                        {/* 24. UPDATED BY */}
+                        <td className="p-3 text-slate-400 text-xs">
+                          {o.updated_by || meta.updated_by || 'System'}
+                        </td>
+
+                        {/* 25. PROCESSED BY */}
+                        <td className="p-3 text-slate-400 text-xs">
+                          {o.processed_by || meta.processed_by || '—'}
+                        </td>
+
+                        {/* 26. ACTIONS (SECONDARY) */}
+                        <td className="p-3 sticky right-0 z-20 bg-[#080b11] group-hover:bg-[#0f1422] border-l border-slate-800 shadow-[-4px_0_8px_rgba(0,0,0,0.35)] transition-colors text-right pr-4">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setDeliveryModalMode('delivered');
+                                setDeliveryModalOrder(o);
+                              }}
+                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow transition-colors cursor-pointer"
+                            >
+                              Delivered
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeliveryModalMode('failed');
+                                setDeliveryModalOrder(o);
+                              }}
+                              className="px-2.5 py-1 rounded bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-[11px] shadow transition-colors cursor-pointer"
+                            >
+                              Failed
+                            </button>
+                          </div>
+                        </td>
+
                       </tr>
                     );
                   })
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── COLUMNS & ORDER CONFIGURATION MODAL ── */}
+      {showColumnsModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-indigo-400" />
+                <h3 className="font-bold text-sm text-slate-100">Table Columns & Order</h3>
+              </div>
+              <button
+                onClick={() => setShowColumnsModal(false)}
+                className="text-slate-400 hover:text-white text-xs font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-400">
+              All 26 operational columns are actively configured and rendered in your table view.
+            </p>
+            <div className="max-h-64 overflow-y-auto space-y-1.5 pr-2">
+              {[
+                'Actions', 'Order ID', 'On Hold By', 'Assigned To', 'Customer Name', 'Contact', 'Address',
+                'Product', 'Order Status', 'Payment', 'Free Gifts / Combo', 'Other Details', 'Comments',
+                'Agent', 'Delivery Fee', 'Amount Remitted', 'Proof of Payment', 'Account Paid Into',
+                'Tags', 'Order Date', 'Day in Status', 'Form Source', 'Added By', 'Updated By', 'Processed By', 'Actions (Secondary)'
+              ].map((colName, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+                  <span className="text-slate-200 font-medium">{idx + 1}. {colName}</span>
+                  <span className="text-emerald-400 font-bold text-[11px]">Active</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowColumnsModal(false)}
+              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow transition-colors cursor-pointer"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

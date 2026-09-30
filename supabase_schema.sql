@@ -196,6 +196,34 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS scheduled_delivery_date DATE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS scheduled_delivery_time VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS reminder_notes TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS on_hold_by VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_to_name VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_agent_id UUID;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_agent_name VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_remitted NUMERIC(12, 2) DEFAULT 0.00;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS proof_of_payment_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS account_paid_into VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS comments TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS combo_details TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS added_by VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS processed_by VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- Safely allow extended status values on orders table
+DO $$ 
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'orders' AND column_name = 'status' AND data_type = 'USER-DEFINED'
+    ) THEN
+        ALTER TABLE orders ALTER COLUMN status TYPE VARCHAR(50) USING status::text;
+    END IF;
+END $$;
 
 -- Order Items
 CREATE TABLE IF NOT EXISTS order_items (
