@@ -17,9 +17,17 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const [errors, setErrors] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  // Upsell Bump State
+  // Helper to generate stable UUID for draft order tracking
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return '00000000-0000-4000-8000-' + Math.floor(Math.random() * 1000000000000).toString(16).padStart(12, '0');
+  };
+
+  // Upsell Bump State & Stable Order ID Tracking
   const [addUpsellBump, setAddUpsellBump] = useState(false);
-  const [draftId, setDraftId] = useState(null);
+  const [draftId, setDraftId] = useState(generateUUID);
   const [resumeToken, setResumeToken] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState(null);
