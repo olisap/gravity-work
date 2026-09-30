@@ -267,7 +267,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-    CREATE POLICY "Allow all operations for stores" ON stores FOR ALL USING (true);
+    CREATE POLICY "Allow authenticated insert stores" ON stores FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    CREATE POLICY "Allow authenticated update stores" ON stores FOR UPDATE USING (auth.uid() IS NOT NULL);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 
