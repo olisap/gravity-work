@@ -259,22 +259,48 @@ CREATE TABLE IF NOT EXISTS delivery_fees (
 );
 
 
--- 3. VIEWS FOR DASHBOARD & REVENUE ANALYTICS
+-- Enable RLS on public tables
+ALTER TABLE stores ENABLE ROW LEVEL SECURITY;
 
+DO $$ BEGIN
+    CREATE POLICY "Allow read access to stores" ON stores FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    CREATE POLICY "Allow all operations for stores" ON stores FOR ALL USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+
+-- 3. VIEWS FOR DASHBOARD & REVENUE ANALYTICS (Security Invoker enabled)
+
+DROP VIEW IF EXISTS view_product_stock CASCADE;
 DROP VIEW IF EXISTS view_stock_summary CASCADE;
 DROP VIEW IF EXISTS view_dashboard_summary CASCADE;
 
--- Stock Summary View
-CREATE VIEW view_stock_summary AS
+-- Product Stock View
+CREATE VIEW view_product_stock WITH (security_invoker = true) AS
 SELECT 
     p.id AS product_id,
+    p.store_id,
+    p.name AS product_name,
+    p.sku,
+    p.available_stock,
+    p.cost_price,
+    p.base_price
+FROM products p;
+
+-- Stock Summary View
+CREATE VIEW view_stock_summary WITH (security_invoker = true) AS
+SELECT 
+    p.id AS product_id,
+    p.store_id,
     p.name AS product_name,
     p.sku,
     p.available_stock
 FROM products p;
 
 -- Revenue vs Order Summary View
-CREATE VIEW view_dashboard_summary AS
+CREATE VIEW view_dashboard_summary WITH (security_invoker = true) AS
 SELECT 
     COUNT(CASE WHEN status != 'Draft' AND status != 'Cancelled' THEN 1 END) AS total_orders_count,
     COALESCE(SUM(CASE WHEN status != 'Draft' AND status != 'Cancelled' THEN total_amount ELSE 0 END), 0) AS total_order_amount,
