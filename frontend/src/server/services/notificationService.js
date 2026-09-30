@@ -300,7 +300,7 @@ export class NotificationService {
 
     // ── 1. Merchant Order Alert Email ──
     const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || null;
-    const merchantSubject = `🛒 NEW ORDER: #${order.order_number} — ${order.customer_name} | ${displayStoreName}`;
+    const merchantSubject = mainProductName;
     const merchantHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
         <div style="background-color: #4f46e5; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
@@ -359,7 +359,7 @@ export class NotificationService {
 
     // ── 2. Customer Receipt Email ──
     if (order.customer_email && order.customer_email.trim().includes('@')) {
-      const customerSubject = `🧾 Order Confirmed — #${order.order_number} | ${displayStoreName}`;
+      const customerSubject = mainProductName;
       const customerHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
           <div style="background-color: #10b981; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">

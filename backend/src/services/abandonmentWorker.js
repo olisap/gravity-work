@@ -81,7 +81,7 @@ export class AbandonmentWorker {
 
     // ── 1. Brevo Email Recovery ──
     if (draft.customer_email && draft.customer_email.trim().includes('@')) {
-      const emailSubject = `🛒 Incomplete Order: Complete your purchase at ${resolvedStore}`;
+      const emailSubject = productName;
       const emailText = `Hi ${customerName}, you left your order for ${productName} incomplete! Complete your order here: ${resumeLink}`;
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
