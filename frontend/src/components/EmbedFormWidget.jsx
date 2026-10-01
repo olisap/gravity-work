@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, CheckCircle, ArrowRight, ArrowLeft, ShieldCheck, Zap, AlertTriangle } from 'lucide-react';
+import { ShoppingBag, CheckCircle, ArrowRight, ShieldCheck, Zap, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { apiUrl } from '../utils/apiUrl';
 
@@ -12,7 +12,10 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('Nigeria');
   const [selectedState, setSelectedState] = useState('Lagos');
-  
+
+  // Custom Fields Responses State (key: field_id => value)
+  const [customFieldValues, setCustomFieldValues] = useState({});
+
   // Validation state
   const [errors, setErrors] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -78,17 +81,34 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const bumpPrice = formConfig?.upsell_price ? Number(formConfig.upsell_price) : (upsellProduct?.base_price || 7000);
   const bumpTitle = formConfig?.upsell_title || 'Special 1-Click Offer!';
   const bumpDesc = formConfig?.upsell_description || (upsellProduct ? `Add ${upsellProduct.name} for only ${currentCountryObj.currency}${bumpPrice.toLocaleString()} extra!` : `Add a Portable USB Juicer Cup for only ${currentCountryObj.currency}7,000 extra!`);
+
+  // Advanced Visual Styling Config from formConfig
+  const customBgColor = formConfig?.form_bg_color || (lightMode ? '#ffffff' : '#0f172a');
+  const customBtnBg = formConfig?.button_bg_color || '#4f46e5';
+  const customBtnText = formConfig?.button_text_color || '#ffffff';
+  const customFont = formConfig?.font_family || 'Inter, sans-serif';
+  const customBtnRadius = formConfig?.button_border_radius !== undefined ? `${formConfig.button_border_radius}px` : '12px';
+  const customBtnAnimation = formConfig?.button_animation || 'none'; // 'none', 'pulse', 'bounce', 'glow'
+  const textBeforeSubmit = formConfig?.text_before_submit || 'DO NOT CLICK THE ORDER BUTTON IF YOU ARE NOT READY TO RECEIVE THE PRODUCT IN 2-4 DAYS';
+  const bannerImageUrl = formConfig?.banner_image_url || '';
+  const customFields = Array.isArray(formConfig?.custom_fields) ? formConfig.custom_fields : [];
   
+  // Custom Section Order (defaults to standard flow)
+  const defaultSectionOrder = ['banner', 'packages', 'contact', 'delivery', 'custom_fields', 'upsell', 'summary'];
+  const sectionOrder = (Array.isArray(formConfig?.section_order) && formConfig.section_order.length > 0)
+    ? formConfig.section_order
+    : defaultSectionOrder;
+
   const subtotal = bundlePrice + (addUpsellBump && isUpsellEnabled ? bumpPrice : 0);
   const totalAmount = subtotal + deliveryFee;
 
   const theme = {
-    panel: lightMode 
-      ? "bg-white p-6 max-w-lg mx-auto my-2 border border-slate-200 rounded-2xl relative w-full shadow-md text-slate-800" 
+    panel: lightMode
+      ? "bg-white p-6 max-w-lg mx-auto my-2 border border-slate-200 rounded-2xl relative w-full shadow-md text-slate-800"
       : "glass-panel p-5 max-w-lg mx-auto my-2 border border-indigo-500/30 rounded-2xl relative w-full text-slate-100",
     headerTitle: lightMode ? "text-slate-800 font-bold text-xs uppercase tracking-wider" : "font-bold text-slate-200 text-xs uppercase tracking-wider",
     headerSub: lightMode ? "text-[10px] text-slate-500" : "text-[10px] text-slate-400",
-    badge: lightMode 
+    badge: lightMode
       ? "text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1"
       : "text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1",
     sectionTitle: lightMode ? "font-bold text-slate-700 text-xs uppercase tracking-wider" : "font-bold text-slate-300 text-xs uppercase tracking-wider",
@@ -99,17 +119,6 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     select: lightMode
       ? "w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:border-indigo-500 focus:bg-white outline-none transition-all cursor-pointer"
       : "w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 focus:border-indigo-500 outline-none transition-all",
-    quantityContainer: lightMode 
-      ? "flex items-center justify-between bg-slate-50 border border-slate-200 p-3 rounded-xl"
-      : "flex items-center justify-between bg-slate-950 border border-slate-800 p-3 rounded-xl",
-    quantityBtn: lightMode
-      ? "w-8 h-8 rounded-lg bg-slate-200 border border-slate-300 text-slate-700 font-bold hover:bg-slate-300 flex items-center justify-center text-base active:scale-95 transition-all"
-      : "w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-bold hover:bg-slate-700 flex items-center justify-center text-base active:scale-95 transition-all",
-    orderBump: lightMode
-      ? "p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl text-slate-800"
-      : "p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl",
-    orderBumpTitle: lightMode ? "text-xs font-bold text-indigo-700 flex items-center gap-1 select-none" : "text-xs font-bold text-amber-300 flex items-center gap-1 select-none",
-    orderBumpText: lightMode ? "text-[11px] text-slate-600 mt-0.5 select-none leading-relaxed" : "text-[11px] text-slate-300 mt-0.5 select-none leading-relaxed",
     summaryContainer: lightMode
       ? "p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5 text-slate-600"
       : "p-3.5 bg-slate-950/60 rounded-xl border border-slate-800 text-xs space-y-1.5",
@@ -146,6 +155,13 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
       }
     }
 
+    // Custom fields validation
+    customFields.forEach(cf => {
+      if (cf.required && !customFieldValues[cf.id]) {
+        errs[cf.id] = `Please fill in ${cf.label || 'this field'}`;
+      }
+    });
+
     return errs;
   };
 
@@ -154,7 +170,6 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     if (!customerPhone && !isFinal) return;
     setIsSubmitting(isFinal);
     try {
-      // Determine step reached based on fields filled
       let stepReached = 1;
       if (customerPhone && customerName) stepReached = 2;
       if (deliveryAddress) stepReached = 3;
@@ -174,6 +189,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         notification_email: formConfig?.notification_email || '',
         thank_you_url: formConfig?.thank_you_url || '',
         store_id: formConfig?.store_id || null,
+        custom_field_responses: customFieldValues,
         items: [
           {
             product_id: selectedProduct?.id || 'p1',
@@ -197,55 +213,36 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      
+
       if (data.id) setDraftId(data.id);
       if (data.resume_token) setResumeToken(data.resume_token);
 
       if (isFinal) {
         if (onOrderSubmitted) onOrderSubmitted(data);
 
-        // Normalize and redirect to Thank You Page
         const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
         const storedThankYou = typeof localStorage !== 'undefined' ? (localStorage.getItem('form_thank_you_' + formConfig?.id) || localStorage.getItem('last_thank_you_url')) : null;
         const rawRedirectUrl = formConfig?.thank_you_url || data?.thank_you_url || (urlParams ? (urlParams.get('thank_you_url') || urlParams.get('redirect_url')) : null) || storedThankYou;
-        
+
         const normalizeRedirectUrl = (url) => {
           if (!url || typeof url !== 'string') return null;
           let trimmed = url.trim();
           if (!trimmed) return null;
-
-          if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('//')) {
-            return trimmed;
-          }
-          if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+/.test(trimmed)) {
-            return 'https://' + trimmed;
-          }
-          try {
-            if (document.referrer) {
-              return new URL(trimmed, document.referrer).href;
-            }
-          } catch (e) {}
-
-          if (trimmed.startsWith('/')) {
-            return trimmed;
-          }
-          return '/' + trimmed;
+          if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('//')) return trimmed;
+          if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+/.test(trimmed)) return 'https://' + trimmed;
+          try { if (document.referrer) return new URL(trimmed, document.referrer).href; } catch (e) {}
+          return trimmed.startsWith('/') ? trimmed : '/' + trimmed;
         };
 
         const targetUrl = normalizeRedirectUrl(rawRedirectUrl);
 
-        console.log('🔗 Thank-You Page Redirect Check:', { rawRedirectUrl, targetUrl });
-
         if (targetUrl) {
-          // 1. Send postMessage to parent window listeners (embed.js and iframe wrapper)
           if (window.parent && window.parent !== window) {
             try {
               window.parent.postMessage({ type: 'redirect-thank-you', url: targetUrl }, '*');
               window.parent.postMessage({ type: 'redirect', url: targetUrl }, '*');
             } catch (pe) {}
           }
-
-          // 2. Immediate direct navigation to targetUrl in the current/parent tab
           try {
             if (window.top && window.self !== window.top) {
               window.top.location.href = targetUrl;
@@ -255,13 +252,9 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
               window.location.href = targetUrl;
             }
           } catch (topErr) {
-            console.warn('Top/parent navigation restricted by iframe sandbox:', topErr);
-            try {
-              window.location.href = targetUrl;
-            } catch (selfErr) {}
+            try { window.location.href = targetUrl; } catch (selfErr) {}
           }
 
-          // Show high-converting success state with direct redirect button (guarantees top navigation even if sandboxed)
           setSubmittedOrder({
             ...(data || {}),
             order_number: data?.order_number || 'OLI-CONFIRMED',
@@ -272,42 +265,13 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
             total_amount: totalAmount,
             redirect_target_url: targetUrl
           });
-
-          // Delayed fallback redirection check
-          setTimeout(() => {
-            try {
-              if (window.top && window.self !== window.top) {
-                window.top.location.href = targetUrl;
-              } else {
-                window.location.href = targetUrl;
-              }
-            } catch (locErr) {
-              try { window.location.href = targetUrl; } catch(e) {}
-            }
-          }, 800);
-
           return;
-        } else {
-          console.warn('⚠️ No Thank You Page URL configured for this form. Displaying inline order confirmation.');
         }
 
-        // Fallback: show inline success card ONLY if no Thank You URL is provided
         setSubmittedOrder(data);
       }
     } catch (err) {
       console.error('Failed to save form draft:', err);
-      // Even if API network call fails on final submit, perform redirect if URL exists
-      if (isFinal) {
-        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-        const storedThankYou = typeof localStorage !== 'undefined' ? (localStorage.getItem('form_thank_you_' + formConfig?.id) || localStorage.getItem('last_thank_you_url')) : null;
-        const rawUrl = formConfig?.thank_you_url || (urlParams ? (urlParams.get('thank_you_url') || urlParams.get('redirect_url')) : null) || storedThankYou;
-        if (rawUrl) {
-          let trimmed = rawUrl.trim();
-          if (!trimmed.startsWith('http') && !trimmed.startsWith('/')) trimmed = 'https://' + trimmed;
-          try { if (window.top) window.top.location.href = trimmed; } catch(e) {}
-          window.location.href = trimmed;
-        }
-      }
     } finally {
       setIsSubmitting(false);
     }
@@ -324,15 +288,9 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     setErrors(errs);
 
     if (Object.keys(errs).length > 0) {
-      if (errs.customerName) {
-        document.getElementById('embed-input-name')?.focus();
-      } else if (errs.customerPhone) {
-        document.getElementById('embed-input-phone')?.focus();
-      } else if (errs.deliveryAddress) {
-        document.getElementById('embed-input-address')?.focus();
-      } else if (errs.customerEmail) {
-        document.getElementById('embed-input-email')?.focus();
-      }
+      if (errs.customerName) document.getElementById('embed-input-name')?.focus();
+      else if (errs.customerPhone) document.getElementById('embed-input-phone')?.focus();
+      else if (errs.deliveryAddress) document.getElementById('embed-input-address')?.focus();
       return;
     }
 
@@ -342,13 +300,13 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   if (submittedOrder) {
     const targetRedirect = submittedOrder.redirect_target_url;
     return (
-      <div className={lightMode ? "bg-white p-6 text-center max-w-md mx-auto my-4 border border-slate-200 rounded-2xl shadow-md text-slate-800" : "glass-panel p-6 text-center max-w-md mx-auto my-4 border-emerald-500/30 rounded-2xl text-slate-100"}>
+      <div style={{ fontFamily: customFont }} className={lightMode ? "bg-white p-6 text-center max-w-md mx-auto my-4 border border-slate-200 rounded-2xl shadow-md text-slate-800" : "glass-panel p-6 text-center max-w-md mx-auto my-4 border-emerald-500/30 rounded-2xl text-slate-100"}>
         <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto mb-3">
           <CheckCircle className="w-6 h-6 animate-bounce" />
         </div>
         <h3 className={lightMode ? "font-bold text-slate-800 text-lg" : "font-bold text-slate-100 text-lg"}>Order Placed Successfully!</h3>
         <p className="text-xs text-slate-400 mt-1">Order Ref: <span className="font-mono text-emerald-600 font-bold">{submittedOrder.order_number}</span></p>
-        
+
         {targetRedirect ? (
           <div className="my-5 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-3">
             <p className={lightMode ? "text-xs text-slate-700 font-medium" : "text-xs text-slate-200 font-medium"}>
@@ -375,207 +333,263 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     );
   }
 
-  return (
-    <div className={theme.panel}>
-      {/* Widget Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 mb-5">
-        <div className="flex items-center gap-2">
-          <ShoppingBag className="w-5 h-5 text-indigo-500" />
-          <div>
-            <h4 className={theme.headerTitle}>Fast Checkout (COD)</h4>
-            <span className={theme.headerSub}>Fill details below • Free Delivery to All States (COD)</span>
+  // Section Renderers for Dynamic Section Ordering
+  const renderSection = (secId) => {
+    switch (secId) {
+      case 'banner':
+        if (!bannerImageUrl) return null;
+        return (
+          <div key="sec-banner" className="overflow-hidden rounded-xl mb-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <img src={bannerImageUrl} alt="Product Promo Banner" className="w-full object-cover max-h-48" />
           </div>
-        </div>
-        <span className={theme.badge}>
-          <ShieldCheck className="w-3.5 h-3.5" /> Secure Checkout
-        </span>
-      </div>
+        );
 
-      <form onSubmit={handleFormSubmit} noValidate className="space-y-5">
-        {/* SECTION 1: Customer Contact */}
-        <div className="space-y-3">
-          <div className={theme.divider}>
-            <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">1</span>
-            <h3 className={theme.sectionTitle}>Contact Details</h3>
-          </div>
+      case 'packages':
+        return (
+          <div key="sec-packages" className="space-y-3">
+            <div className={theme.divider}>
+              <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">1</span>
+              <h3 className={theme.sectionTitle}>Select Package Option</h3>
+            </div>
 
-          <div>
-            <label className={theme.label}>Full Name <span className="text-rose-500">*</span></label>
-            <input
-              id="embed-input-name"
-              type="text"
-              required
-              placeholder="e.g. Amina Adeleke"
-              value={customerName}
-              onChange={(e) => {
-                setCustomerName(e.target.value);
-                if (submitAttempted) {
-                  setErrors(prev => ({ ...prev, customerName: e.target.value.trim() ? undefined : 'Please enter your Full Name' }));
-                }
-              }}
-              onBlur={handleFieldBlur}
-              className={`${theme.input} ${errors.customerName ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
-            />
-            {errors.customerName && (
-              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1 animate-fade-in">
-                <span>⚠️</span> {errors.customerName}
-              </p>
+            {products.length > 1 && (
+              <div>
+                <label className={theme.label}>Product</label>
+                <select
+                  value={selectedProduct?.id || ''}
+                  onChange={(e) => {
+                    const prod = products.find(p => p.id === e.target.value);
+                    setSelectedProduct(prod);
+                    setSelectedBundleIndex(0);
+                    if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                  }}
+                  className={theme.select}
+                >
+                  {products.map(p => (
+                    <option key={p.id} value={p.id} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
-          </div>
 
-          <div>
-            <label className={theme.label}>Phone Number <span className="text-rose-500">*</span> <span className="text-[10px] text-slate-400">(Required for verification)</span></label>
-            <input
-              id="embed-input-phone"
-              type="tel"
-              required
-              placeholder="e.g. 08031234567"
-              value={customerPhone}
-              onChange={(e) => {
-                setCustomerPhone(e.target.value);
-                if (submitAttempted) {
-                  const clean = e.target.value.replace(/\s+/g, '').replace(/-/g, '').replace('+', '');
-                  setErrors(prev => ({ ...prev, customerPhone: clean.length >= 10 ? undefined : 'Please enter a valid Phone Number (at least 10 digits)' }));
-                }
-              }}
-              onBlur={handleFieldBlur}
-              className={`${theme.input} ${errors.customerPhone ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
-            />
-            {errors.customerPhone && (
-              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1 animate-fade-in">
-                <span>⚠️</span> {errors.customerPhone}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className={theme.label}>Email Address <span className="text-[10px] text-slate-400">(Optional)</span></label>
-            <input
-              id="embed-input-email"
-              type="email"
-              placeholder="e.g. customer@gmail.com"
-              value={customerEmail}
-              onChange={(e) => {
-                setCustomerEmail(e.target.value);
-                if (submitAttempted && e.target.value.trim()) {
-                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                  setErrors(prev => ({ ...prev, customerEmail: emailRegex.test(e.target.value.trim()) ? undefined : 'Please enter a valid email address' }));
-                } else if (submitAttempted && !e.target.value.trim()) {
-                  setErrors(prev => ({ ...prev, customerEmail: undefined }));
-                }
-              }}
-              onBlur={handleFieldBlur}
-              className={`${theme.input} ${errors.customerEmail ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
-            />
-            {errors.customerEmail && (
-              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1 animate-fade-in">
-                <span>⚠️</span> {errors.customerEmail}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* SECTION 2: Shipping / Delivery */}
-        <div className="space-y-3">
-          <div className={theme.divider}>
-            <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">2</span>
-            <h3 className={theme.sectionTitle}>Delivery Destination</h3>
-          </div>
-
-          <div>
-            <label className={theme.label}>State / Region <span className="text-rose-500">*</span></label>
-            <select
-              value={selectedState}
-              onChange={(e) => {
-                setSelectedState(e.target.value);
-                if (customerPhone) setTimeout(() => saveDraft(false), 100);
-              }}
-              className={theme.select}
-            >
-              {currentCountryObj.states.map(s => (
-                <option key={s} value={s} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={theme.label}>Detailed Street Address <span className="text-rose-500">*</span></label>
-            <textarea
-              id="embed-input-address"
-              rows="2"
-              required
-              placeholder="e.g. House 14, Admiralty Way, Lekki Phase 1"
-              value={deliveryAddress}
-              onChange={(e) => {
-                setDeliveryAddress(e.target.value);
-                if (submitAttempted) {
-                  setErrors(prev => ({ ...prev, deliveryAddress: e.target.value.trim().length >= 5 ? undefined : 'Please enter your Detailed Delivery Address' }));
-                }
-              }}
-              onBlur={handleFieldBlur}
-              className={`${theme.input} ${errors.deliveryAddress ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
-            ></textarea>
-            {errors.deliveryAddress && (
-              <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1 animate-fade-in">
-                <span>⚠️</span> {errors.deliveryAddress}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* SECTION 3: Product Package / Quantity Selection */}
-        <div className="space-y-3">
-          <div className={theme.divider}>
-            <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">3</span>
-            <h3 className={theme.sectionTitle}>Select Product Package</h3>
-          </div>
-
-          {products.length > 1 && (
             <div>
-              <label className={theme.label}>Product</label>
+              <label className={theme.label}>Select Package / Quantity</label>
               <select
-                value={selectedProduct?.id || ''}
+                value={selectedBundleIndex}
                 onChange={(e) => {
-                  const prod = products.find(p => p.id === e.target.value);
-                  setSelectedProduct(prod);
-                  setSelectedBundleIndex(0);
+                  const idx = Number(e.target.value);
+                  setSelectedBundleIndex(idx);
                   if (customerPhone) setTimeout(() => saveDraft(false), 100);
                 }}
-                className={theme.select}
+                className={theme.select + " font-bold text-xs py-3.5"}
               >
-                {products.map(p => (
-                  <option key={p.id} value={p.id} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>
-                    {p.name}
+                {bundleOptions.map((b, idx) => (
+                  <option key={idx} value={idx} className={lightMode ? "bg-white text-slate-800 font-semibold" : "bg-slate-900 font-semibold"}>
+                    {b.label} — {currentCountryObj.currency}{b.price?.toLocaleString()}
                   </option>
                 ))}
               </select>
             </div>
-          )}
-
-          <div>
-            <label className={theme.label}>Select Package / Quantity</label>
-            <select
-              value={selectedBundleIndex}
-              onChange={(e) => {
-                const idx = Number(e.target.value);
-                setSelectedBundleIndex(idx);
-                if (customerPhone) setTimeout(() => saveDraft(false), 100);
-              }}
-              className={theme.select + " font-bold text-xs py-3.5"}
-            >
-              {bundleOptions.map((b, idx) => (
-                <option key={idx} value={idx} className={lightMode ? "bg-white text-slate-800 font-semibold" : "bg-slate-900 font-semibold"}>
-                  {b.label} — {currentCountryObj.currency}{b.price?.toLocaleString()}
-                </option>
-              ))}
-            </select>
           </div>
-        </div>
+        );
 
-        {/* SECTION 4: Order Bump / Upsell Product Offer */}
-        {isUpsellEnabled && (
-          <div className={lightMode 
-            ? "p-4 bg-amber-50/80 border-2 border-amber-300 rounded-2xl text-slate-800 shadow-sm relative overflow-hidden transition-all" 
+      case 'contact':
+        return (
+          <div key="sec-contact" className="space-y-3">
+            <div className={theme.divider}>
+              <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">2</span>
+              <h3 className={theme.sectionTitle}>Contact Details</h3>
+            </div>
+
+            <div>
+              <label className={theme.label}>{formConfig?.name_label || 'Full Name'} <span className="text-rose-500">*</span></label>
+              <input
+                id="embed-input-name"
+                type="text"
+                required
+                placeholder="e.g. Amina Adeleke"
+                value={customerName}
+                onChange={(e) => {
+                  setCustomerName(e.target.value);
+                  if (submitAttempted) {
+                    setErrors(prev => ({ ...prev, customerName: e.target.value.trim() ? undefined : 'Please enter your Full Name' }));
+                  }
+                }}
+                onBlur={handleFieldBlur}
+                className={`${theme.input} ${errors.customerName ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+              />
+              {errors.customerName && (
+                <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                  <span>⚠️</span> {errors.customerName}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className={theme.label}>{formConfig?.phone_label || 'Phone Number'} <span className="text-rose-500">*</span> <span className="text-[10px] text-slate-400">(Required for verification)</span></label>
+              <input
+                id="embed-input-phone"
+                type="tel"
+                required
+                placeholder="e.g. 08031234567"
+                value={customerPhone}
+                onChange={(e) => {
+                  setCustomerPhone(e.target.value);
+                  if (submitAttempted) {
+                    const clean = e.target.value.replace(/\s+/g, '').replace(/-/g, '').replace('+', '');
+                    setErrors(prev => ({ ...prev, customerPhone: clean.length >= 10 ? undefined : 'Please enter a valid Phone Number (at least 10 digits)' }));
+                  }
+                }}
+                onBlur={handleFieldBlur}
+                className={`${theme.input} ${errors.customerPhone ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+              />
+              {errors.customerPhone && (
+                <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                  <span>⚠️</span> {errors.customerPhone}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className={theme.label}>{formConfig?.email_label || 'Email Address'} <span className="text-[10px] text-slate-400">(Optional)</span></label>
+              <input
+                id="embed-input-email"
+                type="email"
+                placeholder="e.g. customer@gmail.com"
+                value={customerEmail}
+                onChange={(e) => {
+                  setCustomerEmail(e.target.value);
+                  if (submitAttempted && e.target.value.trim()) {
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    setErrors(prev => ({ ...prev, customerEmail: emailRegex.test(e.target.value.trim()) ? undefined : 'Please enter a valid email address' }));
+                  } else if (submitAttempted && !e.target.value.trim()) {
+                    setErrors(prev => ({ ...prev, customerEmail: undefined }));
+                  }
+                }}
+                onBlur={handleFieldBlur}
+                className={`${theme.input} ${errors.customerEmail ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+              />
+              {errors.customerEmail && (
+                <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                  <span>⚠️</span> {errors.customerEmail}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'delivery':
+        return (
+          <div key="sec-delivery" className="space-y-3">
+            <div className={theme.divider}>
+              <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">3</span>
+              <h3 className={theme.sectionTitle}>Delivery Destination</h3>
+            </div>
+
+            <div>
+              <label className={theme.label}>{formConfig?.state_label || 'State / Region'} <span className="text-rose-500">*</span></label>
+              <select
+                value={selectedState}
+                onChange={(e) => {
+                  setSelectedState(e.target.value);
+                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                }}
+                className={theme.select}
+              >
+                {currentCountryObj.states.map(s => (
+                  <option key={s} value={s} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={theme.label}>{formConfig?.address_label || 'Detailed Street Address'} <span className="text-rose-500">*</span></label>
+              <textarea
+                id="embed-input-address"
+                rows="2"
+                required
+                placeholder="e.g. House 14, Admiralty Way, Lekki Phase 1"
+                value={deliveryAddress}
+                onChange={(e) => {
+                  setDeliveryAddress(e.target.value);
+                  if (submitAttempted) {
+                    setErrors(prev => ({ ...prev, deliveryAddress: e.target.value.trim().length >= 5 ? undefined : 'Please enter your Detailed Delivery Address' }));
+                  }
+                }}
+                onBlur={handleFieldBlur}
+                className={`${theme.input} ${errors.deliveryAddress ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+              ></textarea>
+              {errors.deliveryAddress && (
+                <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                  <span>⚠️</span> {errors.deliveryAddress}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'custom_fields':
+        if (customFields.length === 0) return null;
+        return (
+          <div key="sec-custom" className="space-y-3">
+            <div className={theme.divider}>
+              <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">4</span>
+              <h3 className={theme.sectionTitle}>Additional Information</h3>
+            </div>
+            {customFields.map(cf => (
+              <div key={cf.id}>
+                <label className={theme.label}>{cf.label} {cf.required && <span className="text-rose-500">*</span>}</label>
+                {cf.type === 'select' ? (
+                  <select
+                    value={customFieldValues[cf.id] || ''}
+                    onChange={e => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
+                    className={theme.select}
+                  >
+                    <option value="">Select option...</option>
+                    {(cf.options || []).map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                ) : cf.type === 'radio' ? (
+                  <div className="flex gap-3 flex-wrap pt-1">
+                    {(cf.options || []).map(opt => (
+                      <label key={opt} className="flex items-center gap-2 cursor-pointer text-xs">
+                        <input
+                          type="radio"
+                          name={`cf_${cf.id}`}
+                          value={opt}
+                          checked={customFieldValues[cf.id] === opt}
+                          onChange={e => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
+                          className="accent-indigo-600"
+                        />
+                        <span>{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder={cf.placeholder || ''}
+                    value={customFieldValues[cf.id] || ''}
+                    onChange={e => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
+                    className={theme.input}
+                  />
+                )}
+                {errors[cf.id] && (
+                  <p className="text-xs text-rose-500 font-semibold mt-1">⚠️ {errors[cf.id]}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+
+      case 'upsell':
+        if (!isUpsellEnabled) return null;
+        return (
+          <div key="sec-upsell" className={lightMode
+            ? "p-4 bg-amber-50/80 border-2 border-amber-300 rounded-2xl text-slate-800 shadow-sm relative overflow-hidden transition-all"
             : "p-4 bg-amber-950/40 border-2 border-amber-500/40 rounded-2xl text-slate-100 relative overflow-hidden transition-all"}
           >
             <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-amber-200 dark:border-amber-800/60">
@@ -607,59 +621,103 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
               </div>
             </label>
           </div>
-        )}
+        );
 
-        {/* SECTION 5: Summary & Submit */}
-        <div className="space-y-4 pt-2">
-          {/* Price Breakdown */}
-          <div className={theme.summaryContainer}>
-            <div className="flex justify-between">
-              <span className={theme.summaryItemLabel}>Package Subtotal:</span>
-              <span className={theme.summaryItemValue}>{currentCountryObj.currency}{bundlePrice.toLocaleString()}</span>
+      case 'summary':
+        const animClass = customBtnAnimation === 'pulse'
+          ? 'animate-pulse'
+          : customBtnAnimation === 'bounce'
+          ? 'animate-bounce'
+          : customBtnAnimation === 'glow'
+          ? 'shadow-lg shadow-indigo-500/50 ring-2 ring-indigo-400'
+          : '';
+
+        return (
+          <div key="sec-summary" className="space-y-4 pt-2">
+            <div className={theme.summaryContainer}>
+              <div className="flex justify-between">
+                <span className={theme.summaryItemLabel}>Package Subtotal:</span>
+                <span className={theme.summaryItemValue}>{currentCountryObj.currency}{bundlePrice.toLocaleString()}</span>
+              </div>
+              {addUpsellBump && isUpsellEnabled && (
+                <div className="flex justify-between font-bold text-amber-600 dark:text-amber-400 text-xs py-0.5">
+                  <span>Addon ({upsellProduct?.name || 'Order Bump'}):</span>
+                  <span>+ {currentCountryObj.currency}{bumpPrice.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className={theme.summaryItemLabel}>Delivery Fee (All States):</span>
+                <span className="text-emerald-600 font-extrabold uppercase">FREE</span>
+              </div>
+              <div className="flex justify-between font-bold text-emerald-600 text-sm border-t border-slate-200 dark:border-slate-800 pt-2.5 mt-2">
+                <span>Total Payable on Delivery:</span>
+                <span>{currentCountryObj.currency}{totalAmount.toLocaleString()}</span>
+              </div>
             </div>
-            {addUpsellBump && isUpsellEnabled && (
-              <div className="flex justify-between font-bold text-amber-600 dark:text-amber-400 text-xs py-0.5">
-                <span>Addon ({upsellProduct?.name || 'Order Bump'}):</span>
-                <span>+ {currentCountryObj.currency}{bumpPrice.toLocaleString()}</span>
+
+            {textBeforeSubmit && (
+              <p className="text-[10px] font-bold text-center text-rose-500 uppercase tracking-tight bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">
+                {textBeforeSubmit}
+              </p>
+            )}
+
+            {submitAttempted && (errors.customerName || errors.customerPhone || errors.deliveryAddress || errors.customerEmail) && (
+              <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2.5 animate-shake">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-rose-500" />
+                <span>Please fill in all required fields marked with * above to complete your order.</span>
               </div>
             )}
-            <div className="flex justify-between">
-              <span className={theme.summaryItemLabel}>Delivery Fee (All States):</span>
-              <span className="text-emerald-600 font-extrabold uppercase">FREE</span>
-            </div>
-            <div className="flex justify-between font-bold text-emerald-600 text-sm border-t border-slate-200 dark:border-slate-800 pt-2.5 mt-2">
-              <span>Total Payable on Delivery:</span>
-              <span>{currentCountryObj.currency}{totalAmount.toLocaleString()}</span>
-            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                backgroundColor: customBtnBg,
+                color: customBtnText,
+                borderRadius: customBtnRadius
+              }}
+              className={`w-full py-4 font-black text-base md:text-lg tracking-wider flex items-center justify-center gap-2 shadow-xl active:scale-[0.98] transition-all uppercase cursor-pointer ${animClass}`}
+            >
+              {isSubmitting ? (
+                <span className="flex items-center gap-2 font-black">
+                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  PROCESSING ORDER...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2 font-black text-base md:text-lg tracking-wide drop-shadow">
+                  <ShoppingBag className="w-5 h-5 stroke-[2.5]" /> {formConfig?.button_text || 'PLACE ORDER - PAY ON DELIVERY'}
+                </span>
+              )}
+            </button>
           </div>
+        );
 
-          {submitAttempted && (errors.customerName || errors.customerPhone || errors.deliveryAddress || errors.customerEmail) && (
-            <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2.5 animate-shake">
-              <AlertTriangle className="w-5 h-5 shrink-0 text-rose-500" />
-              <span>Please fill in all required fields marked with * above to complete your order.</span>
-            </div>
-          )}
+      default:
+        return null;
+    }
+  };
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-4 rounded-xl bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed hover:bg-emerald-500 text-white font-black text-base md:text-lg tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 active:scale-[0.98] transition-all uppercase cursor-pointer"
-          >
-            {isSubmitting ? (
-              <span className="flex items-center gap-2 font-black">
-                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                PROCESSING ORDER...
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-2 font-black text-base md:text-lg tracking-wide drop-shadow">
-                <ShoppingBag className="w-5 h-5 stroke-[2.5]" /> PLACE ORDER - PAY ON DELIVERY
-              </span>
-            )}
-          </button>
+  return (
+    <div style={{ fontFamily: customFont, backgroundColor: customBgColor }} className={theme.panel}>
+      {/* Widget Header */}
+      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 mb-5">
+        <div className="flex items-center gap-2">
+          <ShoppingBag className="w-5 h-5 text-indigo-500" />
+          <div>
+            <h4 className={theme.headerTitle}>{formConfig?.header_text || 'Fast Checkout (COD)'}</h4>
+            <span className={theme.headerSub}>{formConfig?.subheader_text || 'Fill details below • Free Delivery to All States (COD)'}</span>
+          </div>
         </div>
+        <span className={theme.badge}>
+          <ShieldCheck className="w-3.5 h-3.5" /> Secure Checkout
+        </span>
+      </div>
+
+      <form onSubmit={handleFormSubmit} noValidate className="space-y-5">
+        {sectionOrder.map(secId => renderSection(secId))}
       </form>
     </div>
   );
