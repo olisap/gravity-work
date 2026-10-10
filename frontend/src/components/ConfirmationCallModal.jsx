@@ -75,10 +75,22 @@ export default function ConfirmationCallModal({ order, onClose, onUpdateStatus, 
               <Phone className="w-3 h-3" /> {order.customer_phone}
             </a>
           </div>
+          {order.customer_whatsapp && (
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">WhatsApp:</span>
+              <span className="font-bold text-emerald-400">{order.customer_whatsapp}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span className="text-slate-400">Delivery Address:</span>
             <span className="text-slate-300 text-right">{order.delivery_address}, {order.state}</span>
           </div>
+          {order.comments && (
+            <div className="flex justify-between items-start border-t border-slate-800/80 pt-1.5 text-xs">
+              <span className="text-slate-400 shrink-0">Extra Details:</span>
+              <span className="text-indigo-300 font-semibold text-right max-w-[280px] break-words">{order.comments}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center border-t border-slate-800 pt-1.5 mt-1 font-bold text-emerald-400">
             <span>Total COD Amount:</span>
             <span>₦{order.total_amount?.toLocaleString()}</span>

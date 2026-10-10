@@ -8,11 +8,20 @@ export function copyOrderToClipboard(order, currency = '₦') {
     ? order.items.map(i => `${i.quantity}x ${i.name} (${currency}${(i.unit_price_at_time_of_order * i.quantity).toLocaleString()})`).join('\n   - ')
     : 'N/A';
 
+  const customResponses = order.custom_field_responses || {};
+  const customEntries = Object.entries(customResponses).filter(([k, v]) => v);
+  const extraFieldsText = customEntries.length > 0
+    ? customEntries.map(([k, v]) => `   - ${k.replace(/_/g, ' ').toUpperCase()}: ${v}`).join('\n')
+    : (order.comments ? `   - ${order.comments}` : null);
+  const whatsappLine = (order.customer_whatsapp || customResponses.whatsapp_number || customResponses.whatsapp)
+    ? `\n💬 WhatsApp: ${order.customer_whatsapp || customResponses.whatsapp_number || customResponses.whatsapp}`
+    : '';
+
   const formattedText = isDraft
     ? `⚠️ ABANDONED DRAFT DETAILS
 📌 Order Ref: #${order.order_number || 'DRAFT'}
 👤 Customer: ${order.customer_name || 'Guest'}
-📞 Phone: ${order.customer_phone || 'N/A'}
+📞 Phone: ${order.customer_phone || 'N/A'}${whatsappLine}
 📧 Email: ${order.customer_email || 'N/A'}
 📍 State: ${order.state || 'N/A'}, ${order.country || 'Nigeria'}
 📍 Address: ${order.delivery_address || 'Not completed'}
@@ -20,16 +29,16 @@ export function copyOrderToClipboard(order, currency = '₦') {
 🛍️ Item Chosen:
    - ${itemsText}
 💰 Total Amount: ${currency}${(order.total_amount || 0).toLocaleString()}
-🔗 Resume Token: ${order.resume_token || 'N/A'}`
+${extraFieldsText ? `📝 Extra Details:\n${extraFieldsText}\n` : ''}🔗 Resume Token: ${order.resume_token || 'N/A'}`
     : `📦 ORDER DETAILS
 📌 Order Ref: #${order.order_number || 'N/A'}
 👤 Customer Name: ${order.customer_name || 'N/A'}
-📞 Phone Number: ${order.customer_phone || 'N/A'}
+📞 Phone Number: ${order.customer_phone || 'N/A'}${whatsappLine}
 📧 Email Address: ${order.customer_email || 'N/A'}
 📍 Delivery Address: ${order.delivery_address || 'N/A'}, ${order.state || ''}, ${order.country || ''}
 🛍️ Items Ordered:
    - ${itemsText}
-💰 Total Payable (COD): ${currency}${(order.total_amount || 0).toLocaleString()}
+${extraFieldsText ? `📝 Extra Details:\n${extraFieldsText}\n` : ''}💰 Total Payable (COD): ${currency}${(order.total_amount || 0).toLocaleString()}
 ⚡ Order Status: ${order.status || 'Pending'}`;
 
   const showToast = () => {

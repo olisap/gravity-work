@@ -8,6 +8,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const [selectedBundleIndex, setSelectedBundleIndex] = useState(0);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerWhatsapp, setCustomerWhatsapp] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('Nigeria');
@@ -91,7 +92,40 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const customBtnAnimation = formConfig?.button_animation || 'none'; // 'none', 'pulse', 'bounce', 'glow'
   const textBeforeSubmit = formConfig?.text_before_submit || 'DO NOT CLICK THE ORDER BUTTON IF YOU ARE NOT READY TO RECEIVE THE PRODUCT IN 2-4 DAYS';
   const bannerImageUrl = formConfig?.banner_image_url || '';
-  const customFields = Array.isArray(formConfig?.custom_fields) ? formConfig.custom_fields : [];
+
+  // Standard Field Configurations & Labels
+  const cfg = formConfig?.fields_config || {};
+  const nameLabel = cfg.nameLabel || formConfig?.nameLabel || formConfig?.name_label || 'Full Name';
+  const nameShow = cfg.nameShow !== undefined ? cfg.nameShow : (formConfig?.nameShow !== undefined ? formConfig.nameShow : true);
+  const nameReq = cfg.nameReq !== undefined ? cfg.nameReq : (formConfig?.nameReq !== undefined ? formConfig.nameReq : true);
+
+  const phoneLabel = cfg.phoneLabel || formConfig?.phoneLabel || formConfig?.phone_label || 'Phone Number';
+  const phoneShow = cfg.phoneShow !== undefined ? cfg.phoneShow : (formConfig?.phoneShow !== undefined ? formConfig.phoneShow : true);
+  const phoneReq = cfg.phoneReq !== undefined ? cfg.phoneReq : (formConfig?.phoneReq !== undefined ? formConfig.phoneReq : true);
+
+  const whatsappLabel = cfg.whatsappLabel || formConfig?.whatsappLabel || formConfig?.whatsapp_label || 'WhatsApp Number';
+  const whatsappShow = cfg.whatsappShow !== undefined ? cfg.whatsappShow : (formConfig?.whatsappShow !== undefined ? formConfig.whatsappShow : false);
+  const whatsappReq = cfg.whatsappReq !== undefined ? cfg.whatsappReq : (formConfig?.whatsappReq !== undefined ? formConfig.whatsappReq : false);
+
+  const emailLabel = cfg.emailLabel || formConfig?.emailLabel || formConfig?.email_label || 'Email Address';
+  const emailShow = cfg.emailShow !== undefined ? cfg.emailShow : (formConfig?.emailShow !== undefined ? formConfig.emailShow : true);
+  const emailReq = cfg.emailReq !== undefined ? cfg.emailReq : (formConfig?.emailReq !== undefined ? formConfig.emailReq : false);
+
+  const addressLabel = cfg.addressLabel || formConfig?.addressLabel || formConfig?.address_label || 'Detailed Street Address';
+  const addressShow = cfg.addressShow !== undefined ? cfg.addressShow : (formConfig?.addressShow !== undefined ? formConfig.addressShow : true);
+  const addressReq = cfg.addressReq !== undefined ? cfg.addressReq : (formConfig?.addressReq !== undefined ? formConfig.addressReq : true);
+
+  const stateLabel = cfg.stateLabel || formConfig?.stateLabel || formConfig?.state_label || 'State / Region';
+  const stateShow = cfg.stateShow !== undefined ? cfg.stateShow : (formConfig?.stateShow !== undefined ? formConfig.stateShow : true);
+  const stateReq = cfg.stateReq !== undefined ? cfg.stateReq : (formConfig?.stateReq !== undefined ? formConfig.stateReq : true);
+
+  // Dynamic User-Defined Extra & Custom Fields
+  const rawFields = cfg.extra_fields || formConfig?.extra_fields || formConfig?.custom_fields || cfg.custom_fields || [];
+  const allExtraFields = Array.isArray(rawFields) ? rawFields.filter(f => f.visible !== false) : [];
+
+  const contactFields = allExtraFields.filter(f => f.section === 'contact' || (!f.section && f.type === 'tel'));
+  const deliveryFields = allExtraFields.filter(f => f.section === 'delivery');
+  const customFields = allExtraFields.filter(f => f.section === 'custom' || (!f.section && f.type !== 'tel'));
   
   // Custom Section Order (defaults to standard flow)
   const defaultSectionOrder = ['banner', 'packages', 'contact', 'delivery', 'custom_fields', 'upsell', 'summary'];
@@ -127,38 +161,162 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     divider: lightMode ? "flex items-center gap-2 border-b border-slate-200 pb-2 mb-2" : "flex items-center gap-2 border-b border-slate-800/80 pb-2 mb-2"
   };
 
-  const validateFields = (fields = { name: customerName, phone: customerPhone, address: deliveryAddress, email: customerEmail }) => {
+  const renderExtraField = (cf) => {
+    const val = customFieldValues[cf.id] || '';
+    const hasError = !!errors[cf.id];
+    const isRequired = !!cf.required;
+    const optionsList = typeof cf.options === 'string'
+      ? cf.options.split(',').map(s => s.trim()).filter(Boolean)
+      : (Array.isArray(cf.options) ? cf.options : []);
+
+    return (
+      <div key={cf.id} className="space-y-1">
+        <label className={theme.label}>
+          {cf.label} {isRequired ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400">(Optional)</span>}
+        </label>
+        {cf.type === 'select' ? (
+          <select
+            value={val}
+            onChange={e => {
+              setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }));
+              if (submitAttempted && isRequired) {
+                setErrors(prev => ({ ...prev, [cf.id]: e.target.value ? undefined : `Please select ${cf.label}` }));
+              }
+            }}
+            onBlur={handleFieldBlur}
+            className={`${theme.select} ${hasError ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+          >
+            <option value="">{cf.placeholder || 'Select option...'}</option>
+            {optionsList.map((opt, oIdx) => (
+              <option key={oIdx} value={opt} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>{opt}</option>
+            ))}
+          </select>
+        ) : cf.type === 'radio' ? (
+          <div className="flex gap-3 flex-wrap pt-1">
+            {optionsList.map((opt, oIdx) => (
+              <label key={oIdx} className="flex items-center gap-2 cursor-pointer text-xs">
+                <input
+                  type="radio"
+                  name={`cf_${cf.id}`}
+                  value={opt}
+                  checked={val === opt}
+                  onChange={e => {
+                    setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }));
+                    if (submitAttempted && isRequired) {
+                      setErrors(prev => ({ ...prev, [cf.id]: undefined }));
+                    }
+                  }}
+                  className="accent-indigo-600"
+                />
+                <span className={lightMode ? "text-slate-700" : "text-slate-300"}>{opt}</span>
+              </label>
+            ))}
+          </div>
+        ) : cf.type === 'textarea' ? (
+          <textarea
+            rows="2"
+            placeholder={cf.placeholder || ''}
+            value={val}
+            onChange={e => {
+              setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }));
+              if (submitAttempted && isRequired) {
+                setErrors(prev => ({ ...prev, [cf.id]: e.target.value.trim() ? undefined : `Please enter ${cf.label}` }));
+              }
+            }}
+            onBlur={handleFieldBlur}
+            className={`${theme.input} ${hasError ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+          />
+        ) : cf.type === 'checkbox' ? (
+          <label className="flex items-center gap-2 cursor-pointer text-xs py-1">
+            <input
+              type="checkbox"
+              checked={!!val}
+              onChange={e => {
+                setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.checked }));
+                if (submitAttempted && isRequired) {
+                  setErrors(prev => ({ ...prev, [cf.id]: e.target.checked ? undefined : `Please check ${cf.label}` }));
+                }
+              }}
+              className="accent-indigo-600 w-4 h-4 rounded"
+            />
+            <span className={lightMode ? "text-slate-700" : "text-slate-300"}>{cf.placeholder || cf.label}</span>
+          </label>
+        ) : (
+          <input
+            type={cf.type === 'tel' ? 'tel' : cf.type === 'date' ? 'date' : cf.type === 'number' ? 'number' : 'text'}
+            placeholder={cf.placeholder || ''}
+            value={val}
+            onChange={e => {
+              setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }));
+              if (submitAttempted && isRequired) {
+                setErrors(prev => ({ ...prev, [cf.id]: e.target.value.trim() ? undefined : `Please enter ${cf.label}` }));
+              }
+            }}
+            onBlur={handleFieldBlur}
+            className={`${theme.input} ${hasError ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+          />
+        )}
+        {hasError && (
+          <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+            <span>⚠️</span> {errors[cf.id]}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  const validateFields = (fields = { name: customerName, phone: customerPhone, address: deliveryAddress, email: customerEmail, whatsapp: customerWhatsapp }) => {
     const errs = {};
-    if (!fields.name || !fields.name.trim()) {
-      errs.customerName = 'Please enter your Full Name';
-    } else if (fields.name.trim().length < 2) {
-      errs.customerName = 'Please enter a valid full name';
+    if (nameShow && nameReq) {
+      if (!fields.name || !fields.name.trim()) {
+        errs.customerName = `Please enter your ${nameLabel || 'Full Name'}`;
+      } else if (fields.name.trim().length < 2) {
+        errs.customerName = 'Please enter a valid full name';
+      }
     }
 
-    const cleanPhone = (fields.phone || '').replace(/\s+/g, '').replace(/-/g, '');
-    if (!cleanPhone) {
-      errs.customerPhone = 'Please enter your Phone Number';
-    } else if (cleanPhone.replace('+', '').length < 10) {
-      errs.customerPhone = 'Please enter a valid phone number (at least 10 digits)';
+    if (phoneShow && phoneReq) {
+      const cleanPhone = (fields.phone || '').replace(/\s+/g, '').replace(/-/g, '');
+      if (!cleanPhone) {
+        errs.customerPhone = `Please enter your ${phoneLabel || 'Phone Number'}`;
+      } else if (cleanPhone.replace('+', '').length < 10) {
+        errs.customerPhone = 'Please enter a valid phone number (at least 10 digits)';
+      }
     }
 
-    if (!fields.address || !fields.address.trim()) {
-      errs.deliveryAddress = 'Please enter your Detailed Delivery Address';
-    } else if (fields.address.trim().length < 5) {
-      errs.deliveryAddress = 'Please provide a more detailed street address';
+    if (whatsappShow && whatsappReq) {
+      const cleanWa = (fields.whatsapp || '').replace(/\s+/g, '').replace(/-/g, '');
+      if (!cleanWa) {
+        errs.customerWhatsapp = `Please enter your ${whatsappLabel || 'WhatsApp Number'}`;
+      } else if (cleanWa.replace('+', '').length < 10) {
+        errs.customerWhatsapp = 'Please enter a valid WhatsApp number';
+      }
     }
 
-    if (fields.email && fields.email.trim()) {
+    if (addressShow && addressReq) {
+      if (!fields.address || !fields.address.trim()) {
+        errs.deliveryAddress = `Please enter your ${addressLabel || 'Detailed Delivery Address'}`;
+      } else if (fields.address.trim().length < 5) {
+        errs.deliveryAddress = 'Please provide a more detailed street address';
+      }
+    }
+
+    if (emailShow && fields.email && fields.email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(fields.email.trim())) {
         errs.customerEmail = 'Please enter a valid email address';
       }
+    } else if (emailShow && emailReq && (!fields.email || !fields.email.trim())) {
+      errs.customerEmail = `Please enter your ${emailLabel || 'Email Address'}`;
     }
 
-    // Custom fields validation
-    customFields.forEach(cf => {
-      if (cf.required && !customFieldValues[cf.id]) {
-        errs[cf.id] = `Please fill in ${cf.label || 'this field'}`;
+    // Dynamic and custom extra fields validation
+    allExtraFields.forEach(cf => {
+      if (cf.required) {
+        const val = customFieldValues[cf.id];
+        if (val === undefined || val === null || val === '' || val === false) {
+          errs[cf.id] = `Please fill in ${cf.label || 'this field'}`;
+        }
       }
     });
 
@@ -179,6 +337,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         resume_token: resumeToken,
         customer_name: customerName,
         customer_phone: customerPhone,
+        customer_whatsapp: customerWhatsapp,
         customer_email: customerEmail,
         delivery_address: deliveryAddress,
         country: selectedCountry,
@@ -189,7 +348,10 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         notification_email: formConfig?.notification_email || '',
         thank_you_url: formConfig?.thank_you_url || '',
         store_id: formConfig?.store_id || null,
-        custom_field_responses: customFieldValues,
+        custom_field_responses: {
+          ...customFieldValues,
+          ...(customerWhatsapp ? { whatsapp_number: customerWhatsapp } : {})
+        },
         items: [
           {
             product_id: selectedProduct?.id || 'p1',
@@ -284,12 +446,19 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const handleFormSubmit = (e) => {
     e.preventDefault();
     setSubmitAttempted(true);
-    const errs = validateFields();
+    const errs = validateFields({
+      name: customerName,
+      phone: customerPhone,
+      whatsapp: customerWhatsapp,
+      email: customerEmail,
+      address: deliveryAddress
+    });
     setErrors(errs);
 
     if (Object.keys(errs).length > 0) {
       if (errs.customerName) document.getElementById('embed-input-name')?.focus();
       else if (errs.customerPhone) document.getElementById('embed-input-phone')?.focus();
+      else if (errs.customerWhatsapp) document.getElementById('embed-input-whatsapp')?.focus();
       else if (errs.deliveryAddress) document.getElementById('embed-input-address')?.focus();
       return;
     }
@@ -324,6 +493,9 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         ) : (
           <div className={lightMode ? "my-4 p-3.5 bg-slate-50 rounded-xl text-left text-xs space-y-1.5 border border-slate-200 text-slate-700" : "my-4 p-3.5 bg-slate-900/60 rounded-xl text-left text-xs space-y-1.5 border border-slate-800"}>
             <p className={lightMode ? "text-slate-600" : "text-slate-300"}><strong>Customer:</strong> {submittedOrder.customer_name} ({submittedOrder.customer_phone})</p>
+            {customerWhatsapp && (
+              <p className={lightMode ? "text-slate-600" : "text-slate-300"}><strong>WhatsApp:</strong> {customerWhatsapp}</p>
+            )}
             <p className={lightMode ? "text-slate-600" : "text-slate-300"}><strong>Delivery Address:</strong> {submittedOrder.delivery_address}, {submittedOrder.state}</p>
             <p className="text-emerald-600 font-bold mt-2 text-sm">Total Payable on Delivery (COD): {currentCountryObj.currency}{submittedOrder.total_amount?.toLocaleString()}</p>
           </div>
@@ -403,80 +575,122 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
               <h3 className={theme.sectionTitle}>Contact Details</h3>
             </div>
 
-            <div>
-              <label className={theme.label}>{formConfig?.name_label || 'Full Name'} <span className="text-rose-500">*</span></label>
-              <input
-                id="embed-input-name"
-                type="text"
-                required
-                placeholder="e.g. Amina Adeleke"
-                value={customerName}
-                onChange={(e) => {
-                  setCustomerName(e.target.value);
-                  if (submitAttempted) {
-                    setErrors(prev => ({ ...prev, customerName: e.target.value.trim() ? undefined : 'Please enter your Full Name' }));
-                  }
-                }}
-                onBlur={handleFieldBlur}
-                className={`${theme.input} ${errors.customerName ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
-              />
-              {errors.customerName && (
-                <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
-                  <span>⚠️</span> {errors.customerName}
-                </p>
-              )}
-            </div>
+            {nameShow && (
+              <div>
+                <label className={theme.label}>
+                  {nameLabel} {nameReq ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400">(Optional)</span>}
+                </label>
+                <input
+                  id="embed-input-name"
+                  type="text"
+                  required={nameReq}
+                  placeholder="e.g. Amina Adeleke"
+                  value={customerName}
+                  onChange={(e) => {
+                    setCustomerName(e.target.value);
+                    if (submitAttempted && nameReq) {
+                      setErrors(prev => ({ ...prev, customerName: e.target.value.trim() ? undefined : `Please enter your ${nameLabel}` }));
+                    }
+                  }}
+                  onBlur={handleFieldBlur}
+                  className={`${theme.input} ${errors.customerName ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+                />
+                {errors.customerName && (
+                  <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.customerName}
+                  </p>
+                )}
+              </div>
+            )}
 
-            <div>
-              <label className={theme.label}>{formConfig?.phone_label || 'Phone Number'} <span className="text-rose-500">*</span> <span className="text-[10px] text-slate-400">(Required for verification)</span></label>
-              <input
-                id="embed-input-phone"
-                type="tel"
-                required
-                placeholder="e.g. 08031234567"
-                value={customerPhone}
-                onChange={(e) => {
-                  setCustomerPhone(e.target.value);
-                  if (submitAttempted) {
-                    const clean = e.target.value.replace(/\s+/g, '').replace(/-/g, '').replace('+', '');
-                    setErrors(prev => ({ ...prev, customerPhone: clean.length >= 10 ? undefined : 'Please enter a valid Phone Number (at least 10 digits)' }));
-                  }
-                }}
-                onBlur={handleFieldBlur}
-                className={`${theme.input} ${errors.customerPhone ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
-              />
-              {errors.customerPhone && (
-                <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
-                  <span>⚠️</span> {errors.customerPhone}
-                </p>
-              )}
-            </div>
+            {phoneShow && (
+              <div>
+                <label className={theme.label}>
+                  {phoneLabel} {phoneReq ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400">(Optional)</span>} <span className="text-[10px] text-slate-400">(Required for verification)</span>
+                </label>
+                <input
+                  id="embed-input-phone"
+                  type="tel"
+                  required={phoneReq}
+                  placeholder="e.g. 08031234567"
+                  value={customerPhone}
+                  onChange={(e) => {
+                    setCustomerPhone(e.target.value);
+                    if (submitAttempted && phoneReq) {
+                      const clean = e.target.value.replace(/\s+/g, '').replace(/-/g, '').replace('+', '');
+                      setErrors(prev => ({ ...prev, customerPhone: clean.length >= 10 ? undefined : 'Please enter a valid Phone Number (at least 10 digits)' }));
+                    }
+                  }}
+                  onBlur={handleFieldBlur}
+                  className={`${theme.input} ${errors.customerPhone ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+                />
+                {errors.customerPhone && (
+                  <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.customerPhone}
+                  </p>
+                )}
+              </div>
+            )}
 
-            <div>
-              <label className={theme.label}>{formConfig?.email_label || 'Email Address'} <span className="text-[10px] text-slate-400">(Optional)</span></label>
-              <input
-                id="embed-input-email"
-                type="email"
-                placeholder="e.g. customer@gmail.com"
-                value={customerEmail}
-                onChange={(e) => {
-                  setCustomerEmail(e.target.value);
-                  if (submitAttempted && e.target.value.trim()) {
-                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                    setErrors(prev => ({ ...prev, customerEmail: emailRegex.test(e.target.value.trim()) ? undefined : 'Please enter a valid email address' }));
-                  } else if (submitAttempted && !e.target.value.trim()) {
-                    setErrors(prev => ({ ...prev, customerEmail: undefined }));
-                  }
-                }}
-                onBlur={handleFieldBlur}
-                className={`${theme.input} ${errors.customerEmail ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
-              />
-              {errors.customerEmail && (
-                <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
-                  <span>⚠️</span> {errors.customerEmail}
-                </p>
-              )}
-            </div>
+            {whatsappShow && (
+              <div>
+                <label className={theme.label}>
+                  {whatsappLabel} {whatsappReq ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400">(WhatsApp verification)</span>}
+                </label>
+                <input
+                  id="embed-input-whatsapp"
+                  type="tel"
+                  placeholder="e.g. 08031234567"
+                  value={customerWhatsapp}
+                  onChange={(e) => {
+                    setCustomerWhatsapp(e.target.value);
+                    if (submitAttempted && whatsappReq) {
+                      const clean = e.target.value.replace(/\s+/g, '').replace(/-/g, '').replace('+', '');
+                      setErrors(prev => ({ ...prev, customerWhatsapp: clean.length >= 10 ? undefined : 'Please enter a valid WhatsApp Number' }));
+                    }
+                  }}
+                  onBlur={handleFieldBlur}
+                  className={`${theme.input} ${errors.customerWhatsapp ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+                />
+                {errors.customerWhatsapp && (
+                  <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.customerWhatsapp}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {emailShow && (
+              <div>
+                <label className={theme.label}>
+                  {emailLabel} {emailReq ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400">(Optional)</span>}
+                </label>
+                <input
+                  id="embed-input-email"
+                  type="email"
+                  placeholder="e.g. customer@gmail.com"
+                  value={customerEmail}
+                  onChange={(e) => {
+                    setCustomerEmail(e.target.value);
+                    if (submitAttempted && e.target.value.trim()) {
+                      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                      setErrors(prev => ({ ...prev, customerEmail: emailRegex.test(e.target.value.trim()) ? undefined : 'Please enter a valid email address' }));
+                    } else if (submitAttempted && !e.target.value.trim()) {
+                      setErrors(prev => ({ ...prev, customerEmail: emailReq ? `Please enter your ${emailLabel}` : undefined }));
+                    }
+                  }}
+                  onBlur={handleFieldBlur}
+                  className={`${theme.input} ${errors.customerEmail ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+                />
+                {errors.customerEmail && (
+                  <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.customerEmail}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {contactFields.map(renderExtraField)}
           </div>
         );
 
@@ -488,45 +702,55 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
               <h3 className={theme.sectionTitle}>Delivery Destination</h3>
             </div>
 
-            <div>
-              <label className={theme.label}>{formConfig?.state_label || 'State / Region'} <span className="text-rose-500">*</span></label>
-              <select
-                value={selectedState}
-                onChange={(e) => {
-                  setSelectedState(e.target.value);
-                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
-                }}
-                className={theme.select}
-              >
-                {currentCountryObj.states.map(s => (
-                  <option key={s} value={s} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>{s}</option>
-                ))}
-              </select>
-            </div>
+            {stateShow && (
+              <div>
+                <label className={theme.label}>
+                  {stateLabel} {stateReq ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400">(Optional)</span>}
+                </label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => {
+                    setSelectedState(e.target.value);
+                    if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                  }}
+                  className={theme.select}
+                >
+                  {currentCountryObj.states.map(s => (
+                    <option key={s} value={s} className={lightMode ? "bg-white text-slate-800" : "bg-slate-900"}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            <div>
-              <label className={theme.label}>{formConfig?.address_label || 'Detailed Street Address'} <span className="text-rose-500">*</span></label>
-              <textarea
-                id="embed-input-address"
-                rows="2"
-                required
-                placeholder="e.g. House 14, Admiralty Way, Lekki Phase 1"
-                value={deliveryAddress}
-                onChange={(e) => {
-                  setDeliveryAddress(e.target.value);
-                  if (submitAttempted) {
-                    setErrors(prev => ({ ...prev, deliveryAddress: e.target.value.trim().length >= 5 ? undefined : 'Please enter your Detailed Delivery Address' }));
-                  }
-                }}
-                onBlur={handleFieldBlur}
-                className={`${theme.input} ${errors.deliveryAddress ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
-              ></textarea>
-              {errors.deliveryAddress && (
-                <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
-                  <span>⚠️</span> {errors.deliveryAddress}
-                </p>
-              )}
-            </div>
+            {addressShow && (
+              <div>
+                <label className={theme.label}>
+                  {addressLabel} {addressReq ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400">(Optional)</span>}
+                </label>
+                <textarea
+                  id="embed-input-address"
+                  rows="2"
+                  required={addressReq}
+                  placeholder="e.g. House 14, Admiralty Way, Lekki Phase 1"
+                  value={deliveryAddress}
+                  onChange={(e) => {
+                    setDeliveryAddress(e.target.value);
+                    if (submitAttempted && addressReq) {
+                      setErrors(prev => ({ ...prev, deliveryAddress: e.target.value.trim().length >= 5 ? undefined : 'Please enter your Detailed Delivery Address' }));
+                    }
+                  }}
+                  onBlur={handleFieldBlur}
+                  className={`${theme.input} ${errors.deliveryAddress ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/40' : ''}`}
+                ></textarea>
+                {errors.deliveryAddress && (
+                  <p className="text-xs text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.deliveryAddress}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {deliveryFields.map(renderExtraField)}
           </div>
         );
 
@@ -538,50 +762,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
               <span className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">4</span>
               <h3 className={theme.sectionTitle}>Additional Information</h3>
             </div>
-            {customFields.map(cf => (
-              <div key={cf.id}>
-                <label className={theme.label}>{cf.label} {cf.required && <span className="text-rose-500">*</span>}</label>
-                {cf.type === 'select' ? (
-                  <select
-                    value={customFieldValues[cf.id] || ''}
-                    onChange={e => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
-                    className={theme.select}
-                  >
-                    <option value="">Select option...</option>
-                    {(cf.options || []).map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                ) : cf.type === 'radio' ? (
-                  <div className="flex gap-3 flex-wrap pt-1">
-                    {(cf.options || []).map(opt => (
-                      <label key={opt} className="flex items-center gap-2 cursor-pointer text-xs">
-                        <input
-                          type="radio"
-                          name={`cf_${cf.id}`}
-                          value={opt}
-                          checked={customFieldValues[cf.id] === opt}
-                          onChange={e => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
-                          className="accent-indigo-600"
-                        />
-                        <span>{opt}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    placeholder={cf.placeholder || ''}
-                    value={customFieldValues[cf.id] || ''}
-                    onChange={e => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
-                    className={theme.input}
-                  />
-                )}
-                {errors[cf.id] && (
-                  <p className="text-xs text-rose-500 font-semibold mt-1">⚠️ {errors[cf.id]}</p>
-                )}
-              </div>
-            ))}
+            {customFields.map(renderExtraField)}
           </div>
         );
 

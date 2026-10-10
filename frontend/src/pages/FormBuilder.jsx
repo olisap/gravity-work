@@ -75,11 +75,11 @@ export default function FormBuilder({
   const [showCountryCode, setShowCountryCode] = useState('Yes');
 
   const [whatsappLabel, setWhatsappLabel] = useState('Your WhatsApp Number');
-  const [whatsappReq, setWhatsappReq] = useState(true);
+  const [whatsappReq, setWhatsappReq] = useState(false);
   const [whatsappShow, setWhatsappShow] = useState(true);
 
   const [emailLabel, setEmailLabel] = useState('Your Email Address');
-  const [emailReq, setEmailReq] = useState(true);
+  const [emailReq, setEmailReq] = useState(false);
   const [emailShow, setEmailShow] = useState(true);
 
   const [addressLabel, setAddressLabel] = useState('Your Address');
@@ -90,9 +90,18 @@ export default function FormBuilder({
   const [stateReq, setStateReq] = useState(true);
   const [stateShow, setStateShow] = useState(true);
 
-  // Custom User-Defined Fields Array
-  const [customFields, setCustomFields] = useState([
-    { id: 'note_1', type: 'text', label: 'Delivery Notes / Special Instructions', placeholder: 'e.g. Call before delivery or leave with security', required: false }
+  // Quick Preset Definitions for Common Nigerian/African E-commerce Form Fields
+  const FIELD_PRESETS = [
+    { label: 'Alternative Phone Number', type: 'tel', section: 'contact', placeholder: 'e.g. 08098765432 (Backup line)', options: '', required: false, visible: true },
+    { label: 'Nearest Landmark / Bus Stop', type: 'text', section: 'delivery', placeholder: 'e.g. Opposite Central Mosque / First Bank', options: '', required: false, visible: true },
+    { label: 'Delivery LGA / Area', type: 'text', section: 'delivery', placeholder: 'e.g. Ikeja, Alimosho, or Port Harcourt LGA', options: '', required: false, visible: true },
+    { label: 'Preferred Delivery Date', type: 'date', section: 'delivery', placeholder: '', options: '', required: false, visible: true },
+    { label: 'Delivery Notes / Special Instructions', type: 'textarea', section: 'delivery', placeholder: 'e.g. Call before delivery or leave with security', options: '', required: false, visible: true }
+  ];
+
+  // Extra / Custom User-Defined Fields Array
+  const [extraFields, setExtraFields] = useState([
+    { id: 'note_1', type: 'textarea', label: 'Delivery Notes / Special Instructions', section: 'delivery', placeholder: 'e.g. Call before delivery or leave with security', options: '', required: false, visible: true }
   ]);
 
   // Layout & Styling
@@ -156,7 +165,8 @@ export default function FormBuilder({
       label_color: labelColor,
       custom_font: customFont,
       section_order: sectionOrder,
-      custom_fields: customFields,
+      custom_fields: extraFields,
+      extra_fields: extraFields,
       payment_cod_enabled: payCod,
       payment_paystack_enabled: payPaystack,
       payment_flutterwave_enabled: payFlutterwave,
@@ -168,6 +178,13 @@ export default function FormBuilder({
       upsell_title: upsellTitle,
       upsell_description: upsellDescription,
       upsell_price: Number(upsellPrice),
+      // Top-level fallbacks
+      nameLabel, nameReq, nameShow,
+      phoneLabel, phoneReq, phoneShow, showCountryCode,
+      whatsappLabel, whatsappReq, whatsappShow,
+      emailLabel, emailReq, emailShow,
+      addressLabel, addressReq, addressShow,
+      stateLabel, stateReq, stateShow,
       fields_config: {
         nameLabel, nameReq, nameShow,
         phoneLabel, phoneReq, phoneShow, showCountryCode,
@@ -176,7 +193,8 @@ export default function FormBuilder({
         addressLabel, addressReq, addressShow,
         stateLabel, stateReq, stateShow,
         section_order: sectionOrder,
-        custom_fields: customFields,
+        custom_fields: extraFields,
+        extra_fields: extraFields,
         custom_font: customFont,
         button_animation: buttonAnimation,
         banner_image_url: bannerImageUrl,
@@ -190,7 +208,7 @@ export default function FormBuilder({
     editingFormId, forms, formName, selectedProductId, headerText, subHeaderText,
     bannerImageUrl, submitBtnText, submitBgColor, submitTextColor, borderRadius,
     buttonAnimation, textBeforeSubmit, formBgColor, innerBgColor, labelColor,
-    customFont, sectionOrder, customFields, payCod, payPaystack, payFlutterwave,
+    customFont, sectionOrder, extraFields, payCod, payPaystack, payFlutterwave,
     payBank, notificationEmail, thankYouUrl, upsellEnabled, upsellProductId,
     upsellTitle, upsellDescription, upsellPrice, nameLabel, nameReq, nameShow,
     phoneLabel, phoneReq, phoneShow, showCountryCode, whatsappLabel, whatsappReq,
@@ -219,22 +237,35 @@ export default function FormBuilder({
     setSectionOrder(['banner', 'packages', 'contact', 'delivery', 'custom_fields', 'order_bump', 'summary']);
   };
 
-  // Custom Fields Handlers
-  const addCustomField = () => {
-    const newId = `custom_${Date.now()}`;
-    setCustomFields(prev => [
-      ...prev,
-      { id: newId, type: 'text', label: 'New Question / Label', placeholder: 'Enter answer here...', options: '', required: false }
-    ]);
+  // Extra / Custom Fields Handlers
+  const addExtraField = (preset = null) => {
+    const newId = `field_${Date.now()}`;
+    const newField = preset ? { ...preset, id: newId } : {
+      id: newId,
+      type: 'text',
+      label: 'New Field / Question',
+      section: 'contact',
+      placeholder: 'Enter details...',
+      options: '',
+      required: false,
+      visible: true
+    };
+    setExtraFields(prev => [...prev, newField]);
   };
 
-  const updateCustomField = (id, key, val) => {
-    setCustomFields(prev => prev.map(f => f.id === id ? { ...f, [key]: val } : f));
+  const updateExtraField = (id, key, val) => {
+    setExtraFields(prev => prev.map(f => f.id === id ? { ...f, [key]: val } : f));
   };
 
-  const removeCustomField = (id) => {
-    setCustomFields(prev => prev.filter(f => f.id !== id));
+  const removeExtraField = (id) => {
+    setExtraFields(prev => prev.filter(f => f.id !== id));
   };
+
+  // Backward compatibility aliases
+  const addCustomField = () => addExtraField();
+  const updateCustomField = (id, key, val) => updateExtraField(id, key, val);
+  const removeCustomField = (id) => removeExtraField(id);
+  const customFields = extraFields;
 
   // Apply Theme Preset
   const applyPresetTheme = (theme) => {
@@ -270,14 +301,34 @@ export default function FormBuilder({
     setCustomFont(f.custom_font || cfg.custom_font || 'Inter');
 
     setSectionOrder(f.section_order || cfg.section_order || ['banner', 'packages', 'contact', 'delivery', 'custom_fields', 'order_bump', 'summary']);
-    setCustomFields(f.custom_fields || cfg.custom_fields || []);
 
-    if (cfg.nameLabel) setNameLabel(cfg.nameLabel);
-    if (cfg.phoneLabel) setPhoneLabel(cfg.phoneLabel);
-    if (cfg.whatsappLabel) setWhatsappLabel(cfg.whatsappLabel);
-    if (cfg.emailLabel) setEmailLabel(cfg.emailLabel);
-    if (cfg.addressLabel) setAddressLabel(cfg.addressLabel);
-    if (cfg.stateLabel) setStateLabel(cfg.stateLabel);
+    const loadedExtra = cfg.extra_fields || f.extra_fields || f.custom_fields || cfg.custom_fields || [];
+    setExtraFields(Array.isArray(loadedExtra) ? loadedExtra.map(item => ({ ...item, visible: item.visible !== false })) : []);
+
+    setNameLabel(cfg.nameLabel || f.name_label || 'Your Name');
+    setNameReq(cfg.nameReq !== undefined ? cfg.nameReq : true);
+    setNameShow(cfg.nameShow !== undefined ? cfg.nameShow : true);
+
+    setPhoneLabel(cfg.phoneLabel || f.phone_label || 'Your Phone Number');
+    setPhoneReq(cfg.phoneReq !== undefined ? cfg.phoneReq : true);
+    setPhoneShow(cfg.phoneShow !== undefined ? cfg.phoneShow : true);
+    setShowCountryCode(f.show_country_code || cfg.showCountryCode || 'Yes');
+
+    setWhatsappLabel(cfg.whatsappLabel || f.whatsapp_label || 'Your WhatsApp Number');
+    setWhatsappReq(cfg.whatsappReq !== undefined ? cfg.whatsappReq : false);
+    setWhatsappShow(cfg.whatsappShow !== undefined ? cfg.whatsappShow : true);
+
+    setEmailLabel(cfg.emailLabel || f.email_label || 'Your Email Address');
+    setEmailReq(cfg.emailReq !== undefined ? cfg.emailReq : false);
+    setEmailShow(cfg.emailShow !== undefined ? cfg.emailShow : true);
+
+    setAddressLabel(cfg.addressLabel || f.address_label || 'Your Address');
+    setAddressReq(cfg.addressReq !== undefined ? cfg.addressReq : true);
+    setAddressShow(cfg.addressShow !== undefined ? cfg.addressShow : true);
+
+    setStateLabel(cfg.stateLabel || f.state_label || 'Your Delivery State');
+    setStateReq(cfg.stateReq !== undefined ? cfg.stateReq : true);
+    setStateShow(cfg.stateShow !== undefined ? cfg.stateShow : true);
 
     setPayCod(f.payment_cod_enabled !== undefined ? f.payment_cod_enabled : true);
     setPayPaystack(f.payment_paystack_enabled || false);
@@ -285,7 +336,7 @@ export default function FormBuilder({
     setPayBank(f.payment_bank_enabled || false);
 
     setNotificationEmail(f.notification_email || '');
-    setThankYouUrl(f.thank_you_url || '');
+    setThankYouUrl(f.thank_you_url || cfg.thank_you_url || '');
     setUpsellEnabled(f.upsell_enabled !== false);
     setUpsellProductId(f.upsell_product_id || products[0]?.id || '');
     setUpsellTitle(f.upsell_title || 'Special 1-Click Offer!');
@@ -304,7 +355,31 @@ export default function FormBuilder({
     setSubHeaderText('Only Serious Buyers Should Fill The Form Below');
     setBannerImageUrl('');
     setSectionOrder(['banner', 'packages', 'contact', 'delivery', 'custom_fields', 'order_bump', 'summary']);
-    setCustomFields([]);
+    setExtraFields([]);
+
+    setNameLabel('Your Name');
+    setNameReq(true);
+    setNameShow(true);
+
+    setPhoneLabel('Your Phone Number');
+    setPhoneReq(true);
+    setPhoneShow(true);
+
+    setWhatsappLabel('Your WhatsApp Number');
+    setWhatsappReq(false);
+    setWhatsappShow(true);
+
+    setEmailLabel('Your Email Address');
+    setEmailReq(false);
+    setEmailShow(true);
+
+    setAddressLabel('Your Address');
+    setAddressReq(true);
+    setAddressShow(true);
+
+    setStateLabel('Your Delivery State');
+    setStateReq(true);
+    setStateShow(true);
 
     setSubmitBtnText('ORDER NOW');
     setSubmitBgColor('#4f46e5');
@@ -350,7 +425,8 @@ export default function FormBuilder({
       label_color: labelColor,
       custom_font: customFont,
       section_order: sectionOrder,
-      custom_fields: customFields,
+      custom_fields: extraFields,
+      extra_fields: extraFields,
       show_country_code: showCountryCode,
       payment_cod_enabled: payCod,
       payment_paystack_enabled: payPaystack,
@@ -362,7 +438,25 @@ export default function FormBuilder({
       upsell_product_id: upsellProductId ? upsellProductId : null,
       upsell_title: upsellTitle,
       upsell_description: upsellDescription,
-      upsell_price: Number(upsellPrice)
+      upsell_price: Number(upsellPrice),
+      fields_config: {
+        nameLabel, nameReq, nameShow,
+        phoneLabel, phoneReq, phoneShow, showCountryCode,
+        whatsappLabel, whatsappReq, whatsappShow,
+        emailLabel, emailReq, emailShow,
+        addressLabel, addressReq, addressShow,
+        stateLabel, stateReq, stateShow,
+        section_order: sectionOrder,
+        custom_fields: extraFields,
+        extra_fields: extraFields,
+        custom_font: customFont,
+        button_animation: buttonAnimation,
+        banner_image_url: bannerImageUrl,
+        text_before_submit: textBeforeSubmit,
+        inner_bg_color: innerBgColor,
+        label_color: labelColor,
+        button_border_radius: borderRadius
+      }
     };
 
     const token = localStorage.getItem('gravity_crm_token');
@@ -921,26 +1015,64 @@ export default function FormBuilder({
             {/* ── SUB-TAB 3: FIELDS & CUSTOM QUESTION BUILDER ── */}
             {builderSubTab === 'fields' && (
               <div className="space-y-4">
-                {/* Standard Field Toggles */}
+                {/* Standard & Custom Contact / Address Fields */}
                 <div className="glass p-5 rounded-2xl border-slate-800 space-y-4">
-                  <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
-                    <FileText className="w-4 h-4 text-indigo-400" /> Standard Contact & Address Fields
-                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-indigo-400" /> Standard Contact & Address Fields
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Configure standard fields or add custom contact, address, or funnel questions</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => addExtraField()}
+                        className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/30"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Field
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Preset Badges */}
+                  <div className="flex items-center gap-1.5 flex-wrap bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
+                    <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1 mr-1">
+                      <Sparkles className="w-3 h-3 text-amber-400" /> Quick Add:
+                    </span>
+                    {FIELD_PRESETS.map((preset, pIdx) => (
+                      <button
+                        key={pIdx}
+                        type="button"
+                        onClick={() => addExtraField(preset)}
+                        className="px-2.5 py-1 bg-slate-900 hover:bg-indigo-600/30 hover:border-indigo-500/50 border border-slate-800 text-slate-200 rounded-lg text-[11px] transition-all flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3 text-indigo-400" /> {preset.label.replace(' / Special Instructions', '').replace(' / Bus Stop', '')}
+                      </button>
+                    ))}
+                  </div>
 
                   <div className="overflow-x-auto">
                     <table className="data-table w-full text-xs">
                       <thead>
                         <tr className="bg-slate-950 text-slate-400">
-                          <th className="px-3 py-2">LABEL TEXT</th>
-                          <th className="px-3 py-2 text-center w-24">REQUIRED?</th>
-                          <th className="px-3 py-2 text-center w-24">VISIBLE?</th>
+                          <th className="px-3 py-2.5">LABEL TEXT</th>
+                          <th className="px-3 py-2.5 text-center w-28">TYPE</th>
+                          <th className="px-3 py-2.5 text-center w-24">REQUIRED?</th>
+                          <th className="px-3 py-2.5 text-center w-24">VISIBLE?</th>
+                          <th className="px-3 py-2.5 text-center w-16">ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60">
+                        {/* 1. FULL NAME */}
                         <tr>
                           <td className="p-2">
                             <span className="text-[10px] text-slate-400 block font-bold">FULL NAME</span>
                             <input type="text" value={nameLabel} onChange={e => setNameLabel(e.target.value)} className="input text-xs py-1" />
+                          </td>
+                          <td className="p-2 text-center text-[11px] text-slate-400">
+                            <span className="badge badge-scheduled">Text</span>
                           </td>
                           <td className="p-2 text-center">
                             <button type="button" onClick={() => setNameReq(!nameReq)}>
@@ -952,12 +1084,19 @@ export default function FormBuilder({
                               {nameShow ? <ToggleRight className="w-6 h-6 text-emerald-400 inline" /> : <ToggleLeft className="w-6 h-6 text-slate-500 inline" />}
                             </button>
                           </td>
+                          <td className="p-2 text-center">
+                            <span className="text-[10px] text-slate-500">Default</span>
+                          </td>
                         </tr>
 
+                        {/* 2. PHONE NUMBER */}
                         <tr>
                           <td className="p-2">
                             <span className="text-[10px] text-slate-400 block font-bold">PHONE NUMBER</span>
                             <input type="text" value={phoneLabel} onChange={e => setPhoneLabel(e.target.value)} className="input text-xs py-1" />
+                          </td>
+                          <td className="p-2 text-center text-[11px] text-slate-400">
+                            <span className="badge badge-scheduled">Phone / Tel</span>
                           </td>
                           <td className="p-2 text-center">
                             <button type="button" onClick={() => setPhoneReq(!phoneReq)}>
@@ -969,12 +1108,19 @@ export default function FormBuilder({
                               {phoneShow ? <ToggleRight className="w-6 h-6 text-emerald-400 inline" /> : <ToggleLeft className="w-6 h-6 text-slate-500 inline" />}
                             </button>
                           </td>
+                          <td className="p-2 text-center">
+                            <span className="text-[10px] text-slate-500">Default</span>
+                          </td>
                         </tr>
 
+                        {/* 3. WHATSAPP NUMBER */}
                         <tr>
                           <td className="p-2">
                             <span className="text-[10px] text-slate-400 block font-bold">WHATSAPP NUMBER</span>
                             <input type="text" value={whatsappLabel} onChange={e => setWhatsappLabel(e.target.value)} className="input text-xs py-1" />
+                          </td>
+                          <td className="p-2 text-center text-[11px] text-slate-400">
+                            <span className="badge badge-delivered">WhatsApp</span>
                           </td>
                           <td className="p-2 text-center">
                             <button type="button" onClick={() => setWhatsappReq(!whatsappReq)}>
@@ -986,12 +1132,19 @@ export default function FormBuilder({
                               {whatsappShow ? <ToggleRight className="w-6 h-6 text-emerald-400 inline" /> : <ToggleLeft className="w-6 h-6 text-slate-500 inline" />}
                             </button>
                           </td>
+                          <td className="p-2 text-center">
+                            <span className="text-[10px] text-slate-500">Default</span>
+                          </td>
                         </tr>
 
+                        {/* 4. EMAIL ADDRESS */}
                         <tr>
                           <td className="p-2">
                             <span className="text-[10px] text-slate-400 block font-bold">EMAIL ADDRESS</span>
                             <input type="text" value={emailLabel} onChange={e => setEmailLabel(e.target.value)} className="input text-xs py-1" />
+                          </td>
+                          <td className="p-2 text-center text-[11px] text-slate-400">
+                            <span className="badge badge-scheduled">Email</span>
                           </td>
                           <td className="p-2 text-center">
                             <button type="button" onClick={() => setEmailReq(!emailReq)}>
@@ -1003,12 +1156,19 @@ export default function FormBuilder({
                               {emailShow ? <ToggleRight className="w-6 h-6 text-emerald-400 inline" /> : <ToggleLeft className="w-6 h-6 text-slate-500 inline" />}
                             </button>
                           </td>
+                          <td className="p-2 text-center">
+                            <span className="text-[10px] text-slate-500">Default</span>
+                          </td>
                         </tr>
 
+                        {/* 5. ADDRESS */}
                         <tr>
                           <td className="p-2">
                             <span className="text-[10px] text-slate-400 block font-bold">ADDRESS</span>
                             <input type="text" value={addressLabel} onChange={e => setAddressLabel(e.target.value)} className="input text-xs py-1" />
+                          </td>
+                          <td className="p-2 text-center text-[11px] text-slate-400">
+                            <span className="badge badge-pending">Address</span>
                           </td>
                           <td className="p-2 text-center">
                             <button type="button" onClick={() => setAddressReq(!addressReq)}>
@@ -1020,12 +1180,19 @@ export default function FormBuilder({
                               {addressShow ? <ToggleRight className="w-6 h-6 text-emerald-400 inline" /> : <ToggleLeft className="w-6 h-6 text-slate-500 inline" />}
                             </button>
                           </td>
+                          <td className="p-2 text-center">
+                            <span className="text-[10px] text-slate-500">Default</span>
+                          </td>
                         </tr>
 
+                        {/* 6. STATE / CITY */}
                         <tr>
                           <td className="p-2">
                             <span className="text-[10px] text-slate-400 block font-bold">STATE / CITY</span>
                             <input type="text" value={stateLabel} onChange={e => setStateLabel(e.target.value)} className="input text-xs py-1" />
+                          </td>
+                          <td className="p-2 text-center text-[11px] text-slate-400">
+                            <span className="badge badge-pending">State List</span>
                           </td>
                           <td className="p-2 text-center">
                             <button type="button" onClick={() => setStateReq(!stateReq)}>
@@ -1037,43 +1204,146 @@ export default function FormBuilder({
                               {stateShow ? <ToggleRight className="w-6 h-6 text-emerald-400 inline" /> : <ToggleLeft className="w-6 h-6 text-slate-500 inline" />}
                             </button>
                           </td>
+                          <td className="p-2 text-center">
+                            <span className="text-[10px] text-slate-500">Default</span>
+                          </td>
                         </tr>
+
+                        {/* ── DYNAMIC EXTRA FIELDS ── */}
+                        {extraFields.map((field, idx) => (
+                          <tr key={field.id} className="hover:bg-slate-900/40 transition-colors bg-indigo-950/10">
+                            <td className="p-2 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">
+                                  EXTRA FIELD #{idx + 1}
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-900 text-indigo-300 border border-indigo-900">
+                                  {field.section === 'delivery' ? 'Delivery Section' : field.section === 'custom' ? 'Questions Section' : 'Contact Section'}
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                placeholder="Field Label (e.g. Alternative Phone)"
+                                value={field.label}
+                                onChange={e => updateExtraField(field.id, 'label', e.target.value)}
+                                className="input text-xs py-1"
+                              />
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5">
+                                <input
+                                  type="text"
+                                  placeholder="Placeholder hint text..."
+                                  value={field.placeholder || ''}
+                                  onChange={e => updateExtraField(field.id, 'placeholder', e.target.value)}
+                                  className="input text-[11px] py-1 text-slate-300"
+                                />
+                                <select
+                                  value={field.section || 'contact'}
+                                  onChange={e => updateExtraField(field.id, 'section', e.target.value)}
+                                  className="select text-[11px] py-1 text-slate-300"
+                                >
+                                  <option value="contact">Show in Contact Info</option>
+                                  <option value="delivery">Show in Delivery Destination</option>
+                                  <option value="custom">Show in Extra Questions</option>
+                                </select>
+                              </div>
+                              {['select', 'radio'].includes(field.type) && (
+                                <input
+                                  type="text"
+                                  placeholder="Options (Comma-separated, e.g. Red, Blue, Green)"
+                                  value={field.options || ''}
+                                  onChange={e => updateExtraField(field.id, 'options', e.target.value)}
+                                  className="input text-[11px] py-1 font-mono text-indigo-300"
+                                />
+                              )}
+                            </td>
+                            <td className="p-2 text-center align-top pt-3">
+                              <select
+                                value={field.type}
+                                onChange={e => updateExtraField(field.id, 'type', e.target.value)}
+                                className="select text-xs py-1 w-full"
+                              >
+                                <option value="text">Text Input</option>
+                                <option value="tel">Phone / Tel</option>
+                                <option value="textarea">Textarea</option>
+                                <option value="select">Dropdown</option>
+                                <option value="radio">Radio</option>
+                                <option value="date">Date Picker</option>
+                                <option value="number">Number</option>
+                                <option value="checkbox">Checkbox</option>
+                              </select>
+                            </td>
+                            <td className="p-2 text-center align-top pt-3">
+                              <button type="button" onClick={() => updateExtraField(field.id, 'required', !field.required)}>
+                                {field.required ? <ToggleRight className="w-6 h-6 text-emerald-400 inline" /> : <ToggleLeft className="w-6 h-6 text-slate-500 inline" />}
+                              </button>
+                            </td>
+                            <td className="p-2 text-center align-top pt-3">
+                              <button type="button" onClick={() => updateExtraField(field.id, 'visible', field.visible === false ? true : false)}>
+                                {field.visible !== false ? <ToggleRight className="w-6 h-6 text-emerald-400 inline" /> : <ToggleLeft className="w-6 h-6 text-slate-500 inline" />}
+                              </button>
+                            </td>
+                            <td className="p-2 text-center align-top pt-3">
+                              <button
+                                type="button"
+                                onClick={() => removeExtraField(field.id)}
+                                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-200 hover:bg-rose-950/60 transition-colors"
+                                title="Remove this field"
+                              >
+                                <Trash2 className="w-4 h-4 inline" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Bottom Action Row */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                    <p className="text-[11px] text-slate-400">
+                      {extraFields.length} extra field{extraFields.length !== 1 ? 's' : ''} configured
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => addExtraField()}
+                      className="btn-ghost text-xs py-1.5 px-3 flex items-center justify-center gap-1.5 border-indigo-500/30 text-indigo-300 hover:bg-indigo-600/20"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Another Field
+                    </button>
+                  </div>
                 </div>
 
-                {/* Custom User-Defined Fields Builder */}
+                {/* Additional Questions Card (kept in sync) */}
                 <div className="glass p-5 rounded-2xl border-slate-800 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                     <div>
                       <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
-                        <Plus className="w-4 h-4 text-emerald-400" /> Custom Fields & Questions Builder
+                        <Plus className="w-4 h-4 text-emerald-400" /> Additional Questions & Funnel Fields
                       </h3>
-                      <p className="text-[11px] text-slate-400">Add dropdowns, radio choices, text inputs or checkboxes to your form</p>
+                      <p className="text-[11px] text-slate-400">Detailed view of all custom fields configured for this form</p>
                     </div>
                     <button
                       type="button"
-                      onClick={addCustomField}
+                      onClick={() => addExtraField({ label: 'New Question', type: 'text', section: 'custom', placeholder: 'Enter answer here...', options: '', required: false, visible: true })}
                       className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1"
                     >
                       <Plus className="w-3.5 h-3.5" /> Add New Field
                     </button>
                   </div>
 
-                  {customFields.length === 0 ? (
+                  {extraFields.length === 0 ? (
                     <p className="text-xs text-slate-500 italic py-3 text-center">
-                      No custom fields added yet. Click "+ Add New Field" to ask extra questions on checkout.
+                      No extra fields added yet. Click "+ Add Field" above to add alternative phone, landmark, LGA, or custom questions.
                     </p>
                   ) : (
                     <div className="space-y-4">
-                      {customFields.map((field, idx) => (
+                      {extraFields.map((field, idx) => (
                         <div key={field.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 relative">
                           <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                            <span className="text-xs font-bold text-indigo-400">Custom Field #{idx + 1}</span>
+                            <span className="text-xs font-bold text-indigo-400">Field #{idx + 1}: {field.label || 'Untitled'}</span>
                             <button
                               type="button"
-                              onClick={() => removeCustomField(field.id)}
+                              onClick={() => removeExtraField(field.id)}
                               className="text-rose-400 hover:text-rose-300 text-xs flex items-center gap-1"
                             >
                               <Trash2 className="w-3.5 h-3.5" /> Remove
@@ -1085,13 +1355,16 @@ export default function FormBuilder({
                               <label className="text-[10px] text-slate-400 block mb-1">FIELD TYPE</label>
                               <select
                                 value={field.type}
-                                onChange={e => updateCustomField(field.id, 'type', e.target.value)}
+                                onChange={e => updateExtraField(field.id, 'type', e.target.value)}
                                 className="select text-xs w-full py-1.5"
                               >
                                 <option value="text">Text Input</option>
+                                <option value="tel">Phone / Tel</option>
                                 <option value="textarea">Textarea (Multi-line)</option>
                                 <option value="select">Dropdown Select</option>
                                 <option value="radio">Radio Choices</option>
+                                <option value="date">Date Picker</option>
+                                <option value="number">Number</option>
                                 <option value="checkbox">Single Checkbox</option>
                               </select>
                             </div>
@@ -1101,7 +1374,7 @@ export default function FormBuilder({
                               <input
                                 type="text"
                                 value={field.label}
-                                onChange={e => updateCustomField(field.id, 'label', e.target.value)}
+                                onChange={e => updateExtraField(field.id, 'label', e.target.value)}
                                 className="input text-xs py-1.5"
                               />
                             </div>
@@ -1114,30 +1387,45 @@ export default function FormBuilder({
                                 type="text"
                                 placeholder="Option 1, Option 2, Option 3"
                                 value={field.options || ''}
-                                onChange={e => updateCustomField(field.id, 'options', e.target.value)}
+                                onChange={e => updateExtraField(field.id, 'options', e.target.value)}
                                 className="input text-xs py-1.5 font-mono"
                               />
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between pt-1">
-                            <input
-                              type="text"
-                              placeholder="Placeholder hint text..."
-                              value={field.placeholder || ''}
-                              onChange={e => updateCustomField(field.id, 'placeholder', e.target.value)}
-                              className="input text-xs py-1 w-2/3"
-                            />
-
-                            <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 items-center">
+                            <div className="sm:col-span-2">
+                              <label className="text-[10px] text-slate-400 block mb-1">PLACEHOLDER HINT</label>
                               <input
-                                type="checkbox"
-                                checked={field.required || false}
-                                onChange={e => updateCustomField(field.id, 'required', e.target.checked)}
-                                className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0"
+                                type="text"
+                                placeholder="Placeholder hint text..."
+                                value={field.placeholder || ''}
+                                onChange={e => updateExtraField(field.id, 'placeholder', e.target.value)}
+                                className="input text-xs py-1.5 w-full"
                               />
-                              Required
-                            </label>
+                            </div>
+
+                            <div className="flex items-center gap-4 pt-4">
+                              <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={field.required || false}
+                                  onChange={e => updateExtraField(field.id, 'required', e.target.checked)}
+                                  className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0"
+                                />
+                                Required
+                              </label>
+
+                              <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={field.visible !== false}
+                                  onChange={e => updateExtraField(field.id, 'visible', e.target.checked)}
+                                  className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0"
+                                />
+                                Visible
+                              </label>
+                            </div>
                           </div>
                         </div>
                       ))}

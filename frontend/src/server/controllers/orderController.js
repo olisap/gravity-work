@@ -95,7 +95,7 @@ async function resolveStoreName(storeId) {
 }
 
 function prepareOrderPayloadForSupabase(order) {
-  const { items, thank_you_url, notification_email, ...rest } = order;
+  const { items, thank_you_url, notification_email, custom_field_responses, customer_whatsapp, ...rest } = order;
   return {
     ...rest,
     id: isValidUUID(rest.id) ? rest.id : crypto.randomUUID(),
@@ -245,6 +245,16 @@ export async function createOrUpdateDraftOrder(req, res) {
   let finalOrder = null;
 
   if (orderIndex >= 0) {
+    const customResponses = req.body.custom_field_responses || {};
+    const customerWhatsapp = req.body.customer_whatsapp || customResponses.whatsapp_number || customResponses.whatsapp || null;
+    let formattedCustomNotes = '';
+    if (customResponses && typeof customResponses === 'object') {
+      const validPairs = Object.entries(customResponses).filter(([k, v]) => v !== undefined && v !== '' && v !== null && k !== 'whatsapp_number');
+      if (validPairs.length > 0) {
+        formattedCustomNotes = validPairs.map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' | ');
+      }
+    }
+
     // Update existing draft
     const existing = mockOrders[orderIndex];
     finalOrder = {
@@ -252,6 +262,8 @@ export async function createOrUpdateDraftOrder(req, res) {
       store_id: store_id || existing.store_id || null,
       customer_name: customer_name || existing.customer_name,
       customer_phone: normalizedPhone || existing.customer_phone,
+      customer_whatsapp: customerWhatsapp || existing.customer_whatsapp || null,
+      custom_field_responses: customResponses,
       customer_email: customer_email || existing.customer_email,
       delivery_address: delivery_address || existing.delivery_address,
       country: country || existing.country || 'Nigeria',
@@ -262,6 +274,7 @@ export async function createOrUpdateDraftOrder(req, res) {
       total_amount: subtotal + fee,
       form_step_reached: form_step_reached || existing.form_step_reached,
       thank_you_url: thank_you_url !== undefined ? thank_you_url : (existing.thank_you_url || null),
+      comments: existing.comments || (formattedCustomNotes ? `[Details]: ${formattedCustomNotes}` : null),
       last_activity_at: new Date().toISOString(),
       is_duplicate_flagged: isDuplicate,
       duplicate_reason: duplicateReason,
@@ -278,12 +291,25 @@ export async function createOrUpdateDraftOrder(req, res) {
     const tsBase = Date.now().toString().slice(-6);
     const rndSuffix = Math.floor(Math.random() * 900 + 100);
     const newOrderNumber = `OLI-${tsBase}${rndSuffix}`;
+
+    const customResponses = req.body.custom_field_responses || {};
+    const customerWhatsapp = req.body.customer_whatsapp || customResponses.whatsapp_number || customResponses.whatsapp || null;
+    let formattedCustomNotes = '';
+    if (customResponses && typeof customResponses === 'object') {
+      const validPairs = Object.entries(customResponses).filter(([k, v]) => v !== undefined && v !== '' && v !== null && k !== 'whatsapp_number');
+      if (validPairs.length > 0) {
+        formattedCustomNotes = validPairs.map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' | ');
+      }
+    }
+
     finalOrder = {
       id: isValidUUID(id) ? id : crypto.randomUUID(),
       store_id: store_id || null,
       order_number: newOrderNumber,
       customer_name: customer_name || 'Guest Customer',
       customer_phone: normalizedPhone,
+      customer_whatsapp: customerWhatsapp || null,
+      custom_field_responses: customResponses,
       customer_email: customer_email || '',
       delivery_address: delivery_address || '',
       country: country || 'Nigeria',
@@ -299,6 +325,7 @@ export async function createOrUpdateDraftOrder(req, res) {
       resume_token: is_final_submit ? null : `RESUME-${Date.now()}`,
       form_step_reached: form_step_reached || 1,
       thank_you_url: thank_you_url || null,
+      comments: formattedCustomNotes ? `[Details]: ${formattedCustomNotes}` : null,
       is_duplicate_flagged: isDuplicate,
       duplicate_reason: duplicateReason,
       created_at: new Date().toISOString(),
