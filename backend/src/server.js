@@ -14,6 +14,7 @@ import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from './
 import { getDeliveryAgents, createDeliveryAgent, updateDeliveryAgent, deleteDeliveryAgent, assignStockToAgent } from './controllers/deliveryAgentsController.js';
 import { getExpenses, createExpense, deleteExpense } from './controllers/expensesController.js';
 import { AbandonmentWorker } from './services/abandonmentWorker.js';
+import { BroadcastWorker } from './services/broadcastWorker.js';
 import { NotificationService } from './services/notificationService.js';
 import { whatsappService } from './services/whatsappService.js';
 import { supabase } from './config/supabase.js';
@@ -143,6 +144,42 @@ app.post('/api/whatsapp/test', requireAuth, requireStoreContext, async (req, res
   const { phone, message } = req.body;
   if (!phone) return res.status(400).json({ error: 'Phone number is required' });
   const result = await whatsappService.sendMessage(phone, message || 'Hello! This is a test message from your Nigeria E-Commerce CRM.', req.storeId);
+  res.json(result);
+});
+
+// Broadcast Campaign Worker Routes (Strictly Store-Scoped with Anti-Ban Pacing)
+app.post('/api/broadcast/start', requireAuth, requireStoreContext, async (req, res) => {
+  const { channel, template, audience, minDelaySec, maxDelaySec } = req.body;
+  const result = BroadcastWorker.startCampaign(req.storeId, {
+    channel,
+    template,
+    audience,
+    minDelaySec,
+    maxDelaySec
+  });
+  if (!result.success) {
+    return res.status(400).json(result);
+  }
+  res.json(result);
+});
+
+app.get('/api/broadcast/status', requireAuth, requireStoreContext, (req, res) => {
+  const status = BroadcastWorker.getStatus(req.storeId);
+  res.json(status);
+});
+
+app.post('/api/broadcast/pause', requireAuth, requireStoreContext, (req, res) => {
+  const result = BroadcastWorker.pauseCampaign(req.storeId);
+  res.json(result);
+});
+
+app.post('/api/broadcast/resume', requireAuth, requireStoreContext, (req, res) => {
+  const result = BroadcastWorker.resumeCampaign(req.storeId);
+  res.json(result);
+});
+
+app.post('/api/broadcast/cancel', requireAuth, requireStoreContext, (req, res) => {
+  const result = BroadcastWorker.cancelCampaign(req.storeId);
   res.json(result);
 });
 

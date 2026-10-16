@@ -344,9 +344,10 @@ class WhatsAppService {
             session.status = 'disconnected';
             session.isInitializing = false;
             session.reconnectAttempts = 0;
-            console.log(`🚪 [WhatsAppService] Store ${sid} device logged out on WhatsApp. Clearing auth.`);
+            console.log(`⚠️ [WhatsAppService] Store ${sid} session disconnected or closed by WhatsApp server (code ${statusCode}). Preserving cloud session backup for recovery.`);
+            // Only clear local memory/cache, but PRESERVE cloud backup in Supabase.
+            // Cloud session is only permanently purged when the merchant explicitly clicks "Disconnect" in the CRM UI.
             this.clearAuthFiles(sid);
-            this.clearCloudSession(sid);
           }
         } else if (connection === 'open') {
           console.log(`✅ [WhatsAppService] Connected successfully to WhatsApp Web Gateway for store ${sid}!`);

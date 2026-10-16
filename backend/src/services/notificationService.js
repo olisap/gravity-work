@@ -54,34 +54,55 @@ export class NotificationService {
   }
 
   /**
-   * Termii SMS Adapter with sandbox fallback
+   * Termii SMS Adapter with automatic Nigerian phone normalization and DND bypass
    */
   static async sendSMS(phone, text) {
     const apiKey = process.env.TERMII_API_KEY;
-    const cleanPhone = phone ? phone.replace(/\s+/g, '').replace('+', '') : '';
-    if (apiKey && apiKey !== 'your-termii-api-key') {
+    if (!phone) return { success: false, error: 'Phone number is required' };
+
+    // Normalize Nigerian phone numbers to international standard (234...)
+    let cleanPhone = String(phone).replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '234' + cleanPhone.slice(1);
+    } else if (cleanPhone.length === 10) {
+      cleanPhone = '234' + cleanPhone;
+    }
+
+    if (apiKey && apiKey !== 'your-termii-api-key' && apiKey.trim() !== '') {
       try {
+        // Use 'dnd' route by default to bypass MTN/Airtel Do-Not-Disturb blocks
+        const channel = process.env.TERMII_CHANNEL || 'dnd';
+        const senderId = process.env.TERMII_SENDER_ID || 'N-ALERT';
+
         const response = await fetch('https://api.ng.termii.com/api/sms/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             to: cleanPhone,
-            from: process.env.TERMII_SENDER_ID || 'N-ALERT',
+            from: senderId,
             sms: text,
             type: 'plain',
-            channel: 'generic',
+            channel: channel,
             api_key: apiKey
           })
         });
         const resData = await response.json();
-        console.log(`📱 Termii SMS API Response (${cleanPhone}):`, resData);
-        return { success: true, provider: 'Termii', response: resData };
+        console.log(`📱 [Termii SMS] Dispatched to ${cleanPhone} via ${channel} route:`, resData);
+        const isOk = resData.code === 'ok' || resData.message === 'Successfully Sent' || resData.status === 'success';
+        return { 
+          success: isOk, 
+          provider: 'Termii', 
+          channel, 
+          response: resData, 
+          error: isOk ? null : (resData.message || resData.error || 'Termii dispatch error') 
+        };
       } catch (err) {
-        console.error(`Failed to send SMS to ${phone} via Termii:`, err);
+        console.error(`❌ [Termii SMS] Failed to send SMS to ${cleanPhone}:`, err.message);
+        return { success: false, provider: 'Termii', error: err.message };
       }
     }
 
-    console.log(`📱 [SMS Sandbox Mode] To: ${phone} | Text: "${text}"`);
+    console.log(`📱 [SMS Sandbox Mode] To: ${cleanPhone} | Text: "${text}"`);
     return { success: true, provider: 'Sandbox', mockSent: true };
   }
 
