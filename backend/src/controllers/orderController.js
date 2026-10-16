@@ -5,6 +5,7 @@ import { NotificationService } from '../services/notificationService.js';
 import { AbandonmentWorker } from '../services/abandonmentWorker.js';
 import { recordAuditEvent, getStoreSettings } from './settingsController.js';
 import { whatsappService } from '../services/whatsappService.js';
+import { formatForm } from './formController.js';
 
 function isValidUUID(str) {
   if (!str) return false;
@@ -119,6 +120,7 @@ function prepareOrderPayloadForSupabase(order) {
   if (order.comments) meta.comments = order.comments;
   if (order.custom_field_responses) meta.custom_field_responses = order.custom_field_responses;
   if (order.customer_whatsapp) meta.customer_whatsapp = order.customer_whatsapp;
+  if (order.form_embed_key) meta.form_embed_key = order.form_embed_key;
 
   for (const col of KNOWN_ORDER_COLUMNS) {
     if (order[col] !== undefined) {
@@ -151,6 +153,7 @@ function formatOrderFromSupabase(order) {
     ...order,
     items: order.items || order.upsell_items || [],
     customer_whatsapp: order.customer_whatsapp || meta.customer_whatsapp || null,
+    form_embed_key: order.form_embed_key || meta.form_embed_key || null,
     custom_field_responses: order.custom_field_responses || meta.custom_field_responses || {},
     delivery_agent_id: order.delivery_agent_id || meta.delivery_agent_id || null,
     delivery_agent_name: order.delivery_agent_name || meta.delivery_agent_name || null,
@@ -338,7 +341,8 @@ export async function createOrUpdateDraftOrder(req, res) {
     delivery_fee,
     notification_email,
     thank_you_url,
-    store_id
+    store_id,
+    form_embed_key
   } = req.body;
 
   const normalizedPhone = normalizePhone(customer_phone);
@@ -389,12 +393,35 @@ export async function createOrUpdateDraftOrder(req, res) {
   }
 
   let orderIndex = mockOrders.findIndex(o => o.id === id || (resume_token && o.resume_token === resume_token));
+  let existingFromDb = null;
+  if (orderIndex < 0 && supabase && (id || resume_token)) {
+    try {
+      let q = supabase.from('orders').select('*');
+      if (isValidUUID(id)) {
+        q = q.eq('id', id);
+      } else if (resume_token) {
+        q = q.eq('resume_token', resume_token);
+      } else {
+        q = null;
+      }
+      if (q) {
+        const { data: dbRows } = await q.limit(1);
+        if (dbRows && dbRows.length > 0) {
+          existingFromDb = formatOrderFromSupabase(dbRows[0]);
+        }
+      }
+    } catch (e) {
+      console.error('Error finding existing draft in Supabase:', e);
+    }
+  }
+
+  const existing = orderIndex >= 0 ? mockOrders[orderIndex] : existingFromDb;
   const subtotal = items ? items.reduce((acc, i) => acc + (i.unit_price_at_time_of_order * i.quantity), 0) : 0;
   const fee = delivery_fee !== undefined ? Number(delivery_fee) : 0;
 
   let finalOrder = null;
 
-  if (orderIndex >= 0) {
+  if (existing) {
     const customResponses = req.body.custom_field_responses || {};
     const customerWhatsapp = req.body.customer_whatsapp || customResponses.whatsapp_number || customResponses.whatsapp || null;
     let formattedCustomNotes = '';
@@ -406,10 +433,10 @@ export async function createOrUpdateDraftOrder(req, res) {
     }
 
     // Update existing draft
-    const existing = mockOrders[orderIndex];
     finalOrder = {
       ...existing,
       store_id: store_id || existing.store_id || null,
+      form_embed_key: form_embed_key || existing.form_embed_key || null,
       customer_name: customer_name || existing.customer_name,
       customer_phone: normalizedPhone || existing.customer_phone,
       customer_whatsapp: customerWhatsapp || existing.customer_whatsapp || null,
@@ -435,7 +462,11 @@ export async function createOrUpdateDraftOrder(req, res) {
       finalOrder.resume_token = null; // Clear resume token on final submit
     }
 
-    mockOrders[orderIndex] = finalOrder;
+    if (orderIndex >= 0) {
+      mockOrders[orderIndex] = finalOrder;
+    } else {
+      mockOrders.unshift(finalOrder);
+    }
   } else {
     // Create new Order / Draft
     const tsBase = Date.now().toString().slice(-6);  // last 6 digits of ms timestamp
@@ -841,3 +872,159 @@ export async function sendManualDraftReminder(req, res) {
     order: draft
   });
 }
+
+export async function getDraftByResumeToken(req, res) {
+  const { token } = req.params;
+  if (!token) {
+    return res.status(400).json({ error: 'Resume token is required' });
+  }
+
+  let draft = null;
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('resume_token', token)
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        draft = formatOrderFromSupabase(data[0]);
+      } else if (isValidUUID(token)) {
+        const { data: byId } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', token)
+          .limit(1);
+        if (byId && byId.length > 0) {
+          draft = formatOrderFromSupabase(byId[0]);
+        }
+      }
+    } catch (e) {
+      console.error('getDraftByResumeToken Supabase query exception:', e);
+    }
+  }
+
+  if (!draft) {
+    const found = mockOrders.find(o => o.resume_token === token || o.id === token);
+    if (found) draft = { ...found };
+  }
+
+  if (!draft) {
+    return res.status(404).json({ error: 'Draft order not found or invalid link' });
+  }
+
+  if (draft.status !== 'Draft') {
+    return res.json({
+      success: false,
+      already_completed: true,
+      order_number: draft.order_number,
+      message: 'This order has already been finalized and placed.'
+    });
+  }
+
+  // Resolve form and product
+  let form = null;
+  let formEmbedKey = draft.form_embed_key || null;
+  const productId = (draft.items && draft.items[0]?.product_id) || null;
+
+  if (supabase) {
+    try {
+      if (formEmbedKey) {
+        const { data: f } = await supabase.from('forms').select('*').eq('embed_key', formEmbedKey).maybeSingle();
+        if (f) form = f;
+      }
+      if (!form && productId) {
+        let q = supabase.from('forms').select('*').eq('linked_product_id', productId).eq('is_active', true);
+        if (draft.store_id) q = q.eq('store_id', draft.store_id);
+        const { data: forms } = await q.order('updated_at', { ascending: false }).limit(1);
+        if (forms && forms.length > 0) {
+          form = forms[0];
+          formEmbedKey = form.embed_key;
+        }
+      }
+      if (!form && draft.store_id) {
+        const { data: forms } = await supabase
+          .from('forms')
+          .select('*')
+          .eq('store_id', draft.store_id)
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        if (forms && forms.length > 0) {
+          form = forms[0];
+          formEmbedKey = form.embed_key;
+        }
+      }
+    } catch (e) {
+      console.error('Error resolving form in getDraftByResumeToken:', e);
+    }
+  }
+
+  // Resolve product and store products
+  let product = null;
+  let allProducts = [];
+
+  if (supabase) {
+    try {
+      const targetProdId = form?.linked_product_id || productId;
+      if (targetProdId) {
+        const { data: prodData } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', targetProdId)
+          .maybeSingle();
+        if (prodData) product = prodData;
+      }
+
+      const storeId = form?.store_id || draft.store_id;
+      if (storeId) {
+        const { data: prodsList } = await supabase
+          .from('products')
+          .select('*')
+          .eq('store_id', storeId)
+          .eq('is_active', true);
+        if (prodsList && prodsList.length > 0) {
+          allProducts = prodsList;
+        }
+      }
+
+      if (product && !allProducts.find(p => p.id === product.id)) {
+        allProducts.unshift(product);
+      }
+    } catch (e) {
+      console.error('Error resolving product in getDraftByResumeToken:', e);
+    }
+  }
+
+  const formattedForm = form ? formatForm(form) : null;
+
+  return res.json({
+    success: true,
+    draft: {
+      id: draft.id,
+      order_number: draft.order_number,
+      customer_name: draft.customer_name,
+      customer_phone: draft.customer_phone,
+      customer_whatsapp: draft.customer_whatsapp,
+      customer_email: draft.customer_email,
+      delivery_address: draft.delivery_address,
+      country: draft.country,
+      state: draft.state,
+      items: draft.items,
+      subtotal: draft.subtotal,
+      delivery_fee: draft.delivery_fee,
+      total_amount: draft.total_amount,
+      resume_token: draft.resume_token,
+      form_step_reached: draft.form_step_reached,
+      custom_field_responses: draft.custom_field_responses,
+      store_id: draft.store_id,
+      form_embed_key: formEmbedKey
+    },
+    form: formattedForm,
+    product: product || (allProducts.length > 0 ? allProducts[0] : null),
+    allProducts,
+    form_embed_key: formEmbedKey
+  });
+}
+

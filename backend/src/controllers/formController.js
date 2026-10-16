@@ -12,7 +12,7 @@ function isValidUUID(str) {
   return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str.trim());
 }
 
-function formatForm(form) {
+export function formatForm(form) {
   if (!form) return null;
   const cfg = (typeof form.fields_config === 'object' && form.fields_config && !Array.isArray(form.fields_config))
     ? form.fields_config

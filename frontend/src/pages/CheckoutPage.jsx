@@ -8,13 +8,79 @@ export default function CheckoutPage() {
   const [product, setProduct] = useState(null);
   const [allProducts, setAllProducts] = useState([]);
   const [form, setForm] = useState(null);
+  const [prefillDraft, setPrefillDraft] = useState(null);
+  const [alreadyCompletedOrder, setAlreadyCompletedOrder] = useState(null);
 
   useEffect(() => {
     const fetchFormAndProduct = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const embedKey = params.get('form') || 'EMBED-POTKNOBORD-5463';
+        const resumeToken = params.get('resume');
+        const queryForm = params.get('form');
         const queryThankYouUrl = params.get('thank_you_url') || params.get('redirect_url') || '';
+
+        // 1. If resumeToken is present, fetch and restore the abandoned draft order
+        if (resumeToken) {
+          try {
+            const resumeRes = await fetch(apiUrl(`/api/orders/resume/${encodeURIComponent(resumeToken)}`));
+            if (resumeRes.ok) {
+              const resData = await resumeRes.json();
+              if (resData.already_completed) {
+                setAlreadyCompletedOrder(resData);
+                setLoading(false);
+                return;
+              }
+              if (resData.success && resData.draft) {
+                setPrefillDraft(resData.draft);
+
+                let loadedForm = resData.form;
+                let loadedProduct = resData.product;
+                let loadedProducts = Array.isArray(resData.allProducts) ? resData.allProducts : [];
+
+                // If form was not directly embedded, load via resolved embed key
+                const formKey = queryForm || resData.form_embed_key || resData.draft.form_embed_key;
+                if (!loadedForm && formKey) {
+                  try {
+                    const formRes = await fetch(apiUrl(`/api/forms/embed/${encodeURIComponent(formKey)}`));
+                    if (formRes.ok) loadedForm = await formRes.json();
+                  } catch (e) {}
+                }
+
+                if (!loadedProduct && formKey) {
+                  try {
+                    const prodRes = await fetch(apiUrl(`/api/forms/embed/${encodeURIComponent(formKey)}/product`));
+                    if (prodRes.ok) {
+                      const pData = await prodRes.json();
+                      loadedProducts = Array.isArray(pData.products) ? pData.products : [];
+                      loadedProduct = pData.product || loadedProducts[0];
+                    }
+                  } catch (e) {}
+                }
+
+                if (loadedForm) {
+                  if (!loadedForm.thank_you_url && queryThankYouUrl) {
+                    loadedForm.thank_you_url = queryThankYouUrl;
+                  }
+                  setForm(loadedForm);
+                }
+                if (loadedProduct) setProduct(loadedProduct);
+                if (loadedProducts.length > 0) setAllProducts(loadedProducts);
+
+                if (loadedForm && (loadedProduct || loadedProducts.length > 0)) {
+                  setLoading(false);
+                  return;
+                }
+              }
+            } else if (resumeRes.status === 404) {
+              console.warn('Draft order not found for resume token:', resumeToken);
+            }
+          } catch (e) {
+            console.error('Failed to resolve draft order by resume token:', e);
+          }
+        }
+
+        // 2. Standard direct checkout resolution
+        const embedKey = queryForm || 'EMBED-POTKNOBORD-5463';
 
         // Fetch form configuration
         let formData = null;
@@ -30,14 +96,12 @@ export default function CheckoutPage() {
         if (!formData || formData.error) {
           throw new Error('Order form was not found');
         }
-        // The Thank You Page URL saved in Form Builder (database) has primary priority.
-        // The URL query param is only used as a fallback if the saved form has no thank_you_url configured.
         if (!formData.thank_you_url && queryThankYouUrl) {
           formData.thank_you_url = queryThankYouUrl;
         }
         setForm(formData);
 
-        // Fetch only products exposed by this public form, never the whole store catalog.
+        // Fetch products exposed by this public form
         let productsData = [];
         try {
           const productsRes = await fetch(apiUrl(`/api/forms/embed/${encodeURIComponent(embedKey)}/product`));
@@ -134,6 +198,27 @@ export default function CheckoutPage() {
     );
   }
 
+  if (alreadyCompletedOrder) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#090d16] text-slate-100 p-4">
+        <div className="bg-slate-900 border border-emerald-500/40 p-8 max-w-md w-full text-center rounded-2xl shadow-2xl">
+          <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/40">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Order Already Placed!</h2>
+          <p className="text-sm text-slate-300 mb-4">
+            Your delivery order {alreadyCompletedOrder.order_number ? `(#${alreadyCompletedOrder.order_number})` : ''} has already been received and confirmed.
+          </p>
+          <p className="text-xs text-slate-400">
+            Our dispatch team is currently preparing your package for delivery. You do not need to submit this form again.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#090d16] text-slate-100 p-4">
@@ -153,6 +238,16 @@ export default function CheckoutPage() {
 
   return (
     <div className={`min-h-screen py-4 px-2 flex flex-col justify-center ${isLight ? 'text-slate-800' : 'text-slate-100'}`} style={{ backgroundColor: formBgColor }}>
+      {prefillDraft && (
+        <div className="max-w-md mx-auto mb-3 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center w-full">
+          <p className="text-xs font-semibold text-amber-600 dark:text-amber-300">
+            👋 Welcome back{prefillDraft.customer_name ? `, ${prefillDraft.customer_name}` : ''}! Your item was saved.
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Review your details below and click Order Now to complete your delivery.
+          </p>
+        </div>
+      )}
       {form && (
         <div className="max-w-md mx-auto mb-2 text-center px-4">
           <h2 className={`text-base font-bold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{form.header_text}</h2>
@@ -161,7 +256,13 @@ export default function CheckoutPage() {
           )}
         </div>
       )}
-      <EmbedFormWidget products={[product]} allProducts={allProducts} formConfig={form} lightMode={isLight} />
+      <EmbedFormWidget
+        products={product ? [product] : []}
+        allProducts={allProducts}
+        formConfig={form}
+        lightMode={isLight}
+        prefillData={prefillDraft}
+      />
     </div>
   );
 }

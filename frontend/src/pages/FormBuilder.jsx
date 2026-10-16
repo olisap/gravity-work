@@ -613,10 +613,10 @@ export default function FormBuilder({
   };
 
   const embedThankYouQuery = selectedFormForEmbed.thank_you_url ? `&thank_you_url=${encodeURIComponent(selectedFormForEmbed.thank_you_url)}` : '';
-  const scriptCode = `<script src="https://olinwa.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
+  const scriptCode = `<script src="https://crm.olistores.com.ng/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
   const iframeId = `olinwa-iframe-${selectedFormForEmbed.embed_key}`;
   const iframeCode = `<div class="olinwa-iframe-wrapper">
-  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;" allow="top-navigation top-navigation-by-user-activation"></iframe>
+  <iframe id="${iframeId}" src="https://crm.olistores.com.ng/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;" allow="top-navigation top-navigation-by-user-activation"></iframe>
   <script>
     window.addEventListener('message', function(e) {
       if (!e.data) return;

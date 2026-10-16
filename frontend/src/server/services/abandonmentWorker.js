@@ -71,8 +71,22 @@ export class AbandonmentWorker {
     }
 
     const resolvedStore = storeName || await this.resolveStoreName(draft.store_id);
-    const baseUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.olistores.com.ng');
-    const resumeLink = `${baseUrl.replace(/\/+$/, '')}/checkout?resume=${encodeURIComponent(draft.resume_token || draft.id)}`;
+    const baseUrl = process.env.APP_URL || 'https://crm.olistores.com.ng';
+
+    // Attach form parameter if known so form can immediately load
+    let formParam = '';
+    if (draft.form_embed_key) {
+      formParam = `&form=${encodeURIComponent(draft.form_embed_key)}`;
+    } else if (draft.confirmation_call_notes) {
+      try {
+        const meta = typeof draft.confirmation_call_notes === 'string' ? JSON.parse(draft.confirmation_call_notes) : draft.confirmation_call_notes;
+        if (meta?.form_embed_key) {
+          formParam = `&form=${encodeURIComponent(meta.form_embed_key)}`;
+        }
+      } catch (e) {}
+    }
+
+    const resumeLink = `${baseUrl.replace(/\/+$/, '')}/checkout?resume=${encodeURIComponent(draft.resume_token || draft.id)}${formParam}`;
     const productName = (draft.items && draft.items[0]?.name) || 'your selected item';
     const customerName = draft.customer_name || 'Valued Customer';
     const totalFormatted = (draft.total_amount || 0).toLocaleString();

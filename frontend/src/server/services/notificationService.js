@@ -270,7 +270,7 @@ export class NotificationService {
 
     const firstName = (user.full_name || 'there').split(' ')[0];
     const storeName = user.store_name || 'your store';
-    const appUrl = process.env.APP_URL || 'https://app.olistores.com.ng';
+    const appUrl = process.env.APP_URL || 'https://crm.olistores.com.ng';
 
     const subject = `Welcome to ${process.env.SENDER_APP_NAME || 'the CRM'}, ${firstName}! 🎉`;
     const html = `
@@ -343,7 +343,7 @@ export class NotificationService {
     const merchantSubject = `📦 [${displayStoreName} Orders] — ${dateFormatted}`;
 
     // RFC-2822 threading headers ensure mailbox conversation grouping
-    const threadMessageId = `<daily-orders-${dateSlug}-${cleanStoreTag}@crm.olinwa.com>`;
+    const threadMessageId = `<daily-orders-${dateSlug}-${cleanStoreTag}@crm.olistores.com.ng>`;
     const merchantHeaders = {
       'In-Reply-To': threadMessageId,
       'References': threadMessageId,

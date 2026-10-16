@@ -3,7 +3,7 @@ import { ShoppingBag, CheckCircle, ArrowRight, ShieldCheck, Zap, AlertTriangle, 
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { apiUrl } from '../utils/apiUrl';
 
-export default function EmbedFormWidget({ products = [], allProducts = [], formConfig = null, onOrderSubmitted, lightMode = true }) {
+export default function EmbedFormWidget({ products = [], allProducts = [], formConfig = null, onOrderSubmitted, lightMode = true, prefillData = null }) {
   const [selectedProduct, setSelectedProduct] = useState(products[0] || null);
   const [selectedBundleIndex, setSelectedBundleIndex] = useState(0);
   const [customerName, setCustomerName] = useState('');
@@ -35,6 +35,23 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const [resumeToken, setResumeToken] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState(null);
+
+  // Restore fields from abandoned cart draft if prefillData is provided
+  useEffect(() => {
+    if (!prefillData) return;
+    if (prefillData.id) setDraftId(prefillData.id);
+    if (prefillData.resume_token) setResumeToken(prefillData.resume_token);
+    if (prefillData.customer_name) setCustomerName(prefillData.customer_name);
+    if (prefillData.customer_phone) setCustomerPhone(prefillData.customer_phone);
+    if (prefillData.customer_whatsapp) setCustomerWhatsapp(prefillData.customer_whatsapp);
+    if (prefillData.customer_email) setCustomerEmail(prefillData.customer_email);
+    if (prefillData.delivery_address) setDeliveryAddress(prefillData.delivery_address);
+    if (prefillData.country) setSelectedCountry(prefillData.country);
+    if (prefillData.state) setSelectedState(prefillData.state);
+    if (prefillData.custom_field_responses && typeof prefillData.custom_field_responses === 'object') {
+      setCustomFieldValues(prev => ({ ...prev, ...prefillData.custom_field_responses }));
+    }
+  }, [prefillData]);
 
   useEffect(() => {
     if (formConfig?.linked_product_id) {
@@ -82,6 +99,30 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
   const bumpPrice = formConfig?.upsell_price ? Number(formConfig.upsell_price) : (upsellProduct?.base_price || 7000);
   const bumpTitle = formConfig?.upsell_title || 'Special 1-Click Offer!';
   const bumpDesc = formConfig?.upsell_description || (upsellProduct ? `Add ${upsellProduct.name} for only ${currentCountryObj.currency}${bumpPrice.toLocaleString()} extra!` : `Add a Portable USB Juicer Cup for only ${currentCountryObj.currency}7,000 extra!`);
+
+  // Match bundle & upsell bump when restoring from abandoned draft
+  useEffect(() => {
+    if (!prefillData || !Array.isArray(prefillData.items) || prefillData.items.length === 0) return;
+
+    // Check for upsell addon
+    const hasUpsell = prefillData.items.some(i => i.is_upsell || (upsellProduct && i.product_id === upsellProduct.id));
+    if (hasUpsell) {
+      setAddUpsellBump(true);
+    }
+
+    // Match main bundle
+    const mainItem = prefillData.items.find(i => !i.is_upsell) || prefillData.items[0];
+    if (mainItem && bundleOptions.length > 0) {
+      const idx = bundleOptions.findIndex(b => 
+        b.qty === mainItem.quantity ||
+        (mainItem.name && b.label && mainItem.name.includes(b.label)) ||
+        b.price === (mainItem.unit_price_at_time_of_order * (mainItem.quantity || 1))
+      );
+      if (idx !== -1) {
+        setSelectedBundleIndex(idx);
+      }
+    }
+  }, [prefillData, bundleOptions, upsellProduct]);
 
   // Advanced Visual Styling Config from formConfig
   const customBgColor = formConfig?.form_bg_color || (lightMode ? '#ffffff' : '#0f172a');
@@ -347,7 +388,8 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         delivery_fee: deliveryFee,
         notification_email: formConfig?.notification_email || '',
         thank_you_url: formConfig?.thank_you_url || '',
-        store_id: formConfig?.store_id || null,
+        store_id: formConfig?.store_id || prefillData?.store_id || null,
+        form_embed_key: formConfig?.embed_key || prefillData?.form_embed_key || null,
         custom_field_responses: {
           ...customFieldValues,
           ...(customerWhatsapp ? { whatsapp_number: customerWhatsapp } : {})
@@ -924,6 +966,17 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           <ShieldCheck className="w-3.5 h-3.5" /> Secure Checkout
         </span>
       </div>
+
+      {resumeToken && (
+        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs text-amber-700 dark:text-amber-300">
+          <span className="flex items-center gap-2 font-semibold">
+            <Zap className="w-4 h-4 text-amber-500 fill-amber-500" /> Cart Restored — Complete your order below
+          </span>
+          <span className="font-mono text-[10px] bg-amber-500/20 px-2 py-0.5 rounded">
+            {resumeToken}
+          </span>
+        </div>
+      )}
 
       <form onSubmit={handleFormSubmit} noValidate className="space-y-5">
         {sectionOrder.map(secId => renderSection(secId))}
