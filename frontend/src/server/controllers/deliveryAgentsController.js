@@ -3,7 +3,7 @@ import { supabase } from '../config/supabase.js';
 let mockAgents = [];
 
 export async function getDeliveryAgents(req, res) {
-  const storeId = req.user?.store_id || req.query.store_id;
+  const storeId = req.storeId;
 
   if (supabase) {
     let query = supabase.from('delivery_agents').select('*').order('created_at', { ascending: false });
@@ -23,7 +23,7 @@ export async function getDeliveryAgents(req, res) {
 }
 
 export async function createDeliveryAgent(req, res) {
-  const storeId = req.user?.store_id || req.body.store_id;
+  const storeId = req.storeId;
   const newAgent = {
     id: `agent-${Date.now()}`,
     store_id: storeId,
@@ -58,7 +58,7 @@ export async function updateDeliveryAgent(req, res) {
   const updates = req.body;
 
   if (supabase) {
-    const { data, error } = await supabase.from('delivery_agents').update(updates).eq('id', id).select();
+    const { data, error } = await supabase.from('delivery_agents').update(updates).eq('id', id).eq('store_id', req.storeId).select();
     if (!error && data && data.length > 0) {
       const idx = mockAgents.findIndex(a => a.id === id);
       if (idx !== -1) mockAgents[idx] = { ...mockAgents[idx], ...data[0] };
@@ -93,7 +93,7 @@ export async function assignStockToAgent(req, res) {
   agent.assigned_stock = stockList;
 
   if (supabase) {
-    await supabase.from('delivery_agents').update({ assigned_stock: stockList }).eq('id', id);
+    await supabase.from('delivery_agents').update({ assigned_stock: stockList }).eq('id', id).eq('store_id', req.storeId);
   }
 
   res.json(agent);
@@ -102,7 +102,8 @@ export async function assignStockToAgent(req, res) {
 export async function deleteDeliveryAgent(req, res) {
   const { id } = req.params;
   if (supabase) {
-    await supabase.from('delivery_agents').delete().eq('id', id);
+    const { error } = await supabase.from('delivery_agents').delete().eq('id', id).eq('store_id', req.storeId);
+    if (error) return res.status(502).json({ error: 'Delivery agent could not be deleted from Supabase', details: error.message });
   }
   mockAgents = mockAgents.filter(a => a.id !== id);
   res.json({ success: true, message: 'Delivery Agent deleted' });

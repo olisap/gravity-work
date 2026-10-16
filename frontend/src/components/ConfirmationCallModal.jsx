@@ -32,8 +32,8 @@ export default function ConfirmationCallModal({ order, onClose, onUpdateStatus, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="glass-panel w-full max-w-lg p-6 rounded-2xl border-slate-700 space-y-4 shadow-2xl animate-pulse-glow">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="glass-panel w-full max-w-lg max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border-slate-700 space-y-4 shadow-2xl animate-pulse-glow">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div>

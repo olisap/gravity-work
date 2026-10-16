@@ -86,7 +86,7 @@ export class NotificationService {
    * Universal Email Adapter supporting Standard SMTP (Gmail, SendGrid, Mailgun),
    * Resend API, Brevo API / SMTP, and sandbox fallback.
    */
-  static async sendEmail(email, subject, text, htmlBody = null, storeName = null) {
+  static async sendEmail(email, subject, text, htmlBody = null, storeName = null, replyTo = null, extraHeaders = {}) {
     const smtpHost = process.env.SMTP_HOST;
     const smtpPort = process.env.SMTP_PORT || 587;
     const smtpUser = process.env.SMTP_USER;
@@ -136,9 +136,11 @@ export class NotificationService {
         const info = await transporter.sendMail({
           from: `"${senderName}" <${senderEmail}>`,
           to: email,
+          ...(replyTo ? { replyTo } : {}),
           subject,
           html: finalHtml,
-          text
+          text,
+          ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
         });
         console.log(`📧 [Custom SMTP Email Sent] To: ${email} | Host: ${smtpHost} | MessageId:`, info.messageId);
         await logNotification(`SMTP (${smtpHost})`, 'sent', { messageId: info.messageId });
@@ -161,8 +163,10 @@ export class NotificationService {
           body: JSON.stringify({
             from: process.env.RESEND_FROM_EMAIL || `"${senderName}" <onboarding@resend.dev>`,
             to: [email],
+            ...(replyTo ? { reply_to: replyTo } : {}),
             subject,
-            html: finalHtml
+            html: finalHtml,
+            ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
           })
         });
         const resData = await response.json();
@@ -191,8 +195,10 @@ export class NotificationService {
           body: JSON.stringify({
             sender: { name: senderName, email: senderEmail },
             to: [{ email }],
+            ...(replyTo ? { replyTo: { email: replyTo } } : {}),
             subject,
-            htmlContent: finalHtml
+            htmlContent: finalHtml,
+            ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
           })
         });
         const resData = await response.json();
@@ -225,8 +231,11 @@ export class NotificationService {
         const info = await transporter.sendMail({
           from: `"${senderName}" <${senderEmail}>`,
           to: email,
+          ...(replyTo ? { replyTo } : {}),
           subject,
-          html: finalHtml
+          html: finalHtml,
+          text,
+          ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
         });
         console.log(`📧 [Brevo SMTP Email Sent] To: ${email} | MessageId:`, info.messageId);
         await logNotification('Brevo SMTP', 'sent', { messageId: info.messageId });
@@ -237,9 +246,12 @@ export class NotificationService {
       }
     }
 
-    console.log(`📧 [Email Sandbox Mode] To: ${email} | Subject: "${subject}" | Content length: ${finalHtml.length} chars`);
-    await logNotification('Sandbox', 'sent_sandbox', { note: 'No live email credentials active or all providers failed' });
-    return { success: true, provider: 'Sandbox', mockSent: true };
+    const reason = smtpHost || resendKey || brevoKey
+      ? 'All configured email providers failed'
+      : 'No live email provider credentials configured';
+    console.error(`❌ Email was not sent to ${email}: ${reason}`);
+    await logNotification('None', 'failed', { note: reason });
+    return { success: false, provider: 'none', error: reason };
   }
 
   /**
@@ -282,6 +294,13 @@ export class NotificationService {
     );
   }
 
+  static async sendStaffInvitationEmail({ full_name, email, password, role, store_name }) {
+    const subject = `You have been invited to ${store_name || 'the CRM'}`;
+    const text = `Hello ${full_name}, your ${role} account has been created for ${store_name || 'the CRM'}. Login email: ${email}. Temporary password: ${password}.`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;color:#1e293b;"><h2>Team account created</h2><p>Hello ${full_name},</p><p>You have been added as <strong>${role}</strong> to <strong>${store_name || 'the CRM'}</strong>.</p><p><strong>Login email:</strong> ${email}<br><strong>Temporary password:</strong> ${password}</p><p>Please change this password after signing in.</p></div>`;
+    return this.sendEmail(email, subject, text, html);
+  }
+
   /**
    * Send all three notifications when an order is completed/finalized:
    * 1. Merchant Notification Email (form notification_email / store owner)
@@ -298,14 +317,35 @@ export class NotificationService {
     const totalFormatted = (order.total_amount || 0).toLocaleString();
     const itemsList = order.items || [];
 
-    // ── 1. Merchant Order Alert Email ──
+    // ── 1. Merchant Order Alert Email (Date-Threaded for Gmail / Mailbox grouping) ──
     const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || null;
-    const merchantSubject = mainProductName;
+
+    const orderDate = new Date();
+    const dateFormatted = orderDate.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    }); // e.g. "Fri, 16 Oct 2026"
+    const dateSlug = orderDate.toISOString().slice(0, 10); // e.g. "2026-10-16"
+    const cleanStoreTag = (displayStoreName || 'Orders').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'store';
+
+    // Consistent daily subject: Gmail groups identical subjects for the day into 1 thread
+    const merchantSubject = `📦 [${displayStoreName} Orders] — ${dateFormatted}`;
+
+    // RFC-2822 threading headers ensure mailbox conversation grouping
+    const threadMessageId = `<daily-orders-${dateSlug}-${cleanStoreTag}@crm.olinwa.com>`;
+    const merchantHeaders = {
+      'In-Reply-To': threadMessageId,
+      'References': threadMessageId,
+      'Thread-Topic': `${displayStoreName} Orders - ${dateFormatted}`
+    };
+
     const merchantHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
         <div style="background-color: #4f46e5; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #ffffff; margin: 0; font-size: 20px;">🛒 New Order Received!</h2>
-          <p style="color: #e0e7ff; margin: 6px 0 0 0; font-size: 13px;">Order Ref: <strong>#${order.order_number}</strong></p>
+          <h2 style="color: #ffffff; margin: 0; font-size: 20px;">🛒 New Order #${order.order_number} Received!</h2>
+          <p style="color: #e0e7ff; margin: 6px 0 0 0; font-size: 13px;">${mainProductName} • ₦${totalFormatted} • ${order.customer_name}</p>
         </div>
 
         <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Customer Information</h3>
@@ -349,9 +389,11 @@ export class NotificationService {
       await this.sendEmail(
         targetMerchantEmail,
         merchantSubject,
-        `New order #${order.order_number} from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
+        `New order #${order.order_number} for ${mainProductName} (₦${totalFormatted}) from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
         merchantHtml,
-        displayStoreName
+        displayStoreName,
+        order.customer_email && order.customer_email.includes('@') ? order.customer_email.trim() : null,
+        merchantHeaders
       );
     } else {
       console.warn(`⚠️ Skipped merchant order alert for #${order.order_number}: no merchant notification email available.`);
@@ -359,7 +401,7 @@ export class NotificationService {
 
     // ── 2. Customer Receipt Email ──
     if (order.customer_email && order.customer_email.trim().includes('@')) {
-      const customerSubject = mainProductName;
+      const customerSubject = `Order Confirmed: ${mainProductName} (Ref: #${order.order_number})`;
       const customerHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
           <div style="background-color: #10b981; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
@@ -412,8 +454,11 @@ export class NotificationService {
         customerSubject,
         `Thank you ${order.customer_name}! Your order #${order.order_number} for ₦${totalFormatted} (Pay on Delivery) from ${displayStoreName} has been confirmed.`,
         customerHtml,
-        displayStoreName
+        displayStoreName,
+        targetMerchantEmail
       );
+    } else {
+      console.log(`ℹ️ [NotificationService] Customer email not provided for #${order.order_number}; skipped customer receipt.`);
     }
 
     // ── 3. Customer Order Confirmation SMS ──

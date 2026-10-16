@@ -28,26 +28,6 @@ export async function getDashboardStats(req, res) {
     }
   }
 
-  // 2. If no Supabase data or mock mode, calculate dynamically based on store_id
-  if (orders.length === 0 && (!effectiveStoreId || effectiveStoreId === '00000000-0000-0000-0000-000000000001' || effectiveStoreId.startsWith('a100') || effectiveStoreId.startsWith('u100'))) {
-    // Default demo store orders
-    orders = [
-      { id: '1', total_amount: 20500, status: 'Delivered', country: 'Nigeria', state: 'Lagos' },
-      { id: '2', total_amount: 30500, status: 'Delivered', country: 'Nigeria', state: 'Abuja (FCT)' },
-      { id: '3', total_amount: 25500, status: 'Scheduled', country: 'Ghana', state: 'Greater Accra' },
-      { id: '4', total_amount: 20500, status: 'Awaiting', country: 'Nigeria', state: 'Oyo' },
-      { id: '5', total_amount: 32000, status: 'Pending', country: 'South Africa', state: 'Gauteng' },
-      { id: '6', total_amount: 18500, status: 'Draft', country: 'Nigeria', state: 'Lagos' }
-    ];
-
-    if (country && country !== 'All') {
-      orders = orders.filter(o => o.country === country);
-    }
-    if (state && state !== 'AllRegions') {
-      orders = orders.filter(o => o.state === state);
-    }
-  }
-
   // Filter out Drafts and Cancelled for total valid orders
   const validOrders = orders.filter(o => o.status !== 'Draft' && o.status !== 'Cancelled');
   const deliveredOrders = orders.filter(o => o.status === 'Delivered');

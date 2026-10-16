@@ -94,13 +94,47 @@ async function resolveStoreName(storeId) {
   return process.env.SENDER_NAME || 'Our Store';
 }
 
+const KNOWN_ORDER_COLUMNS = [
+  'id', 'order_number', 'customer_name', 'customer_phone', 'customer_email',
+  'delivery_address', 'country', 'state', 'subtotal', 'delivery_fee',
+  'total_amount', 'status', 'payment_method', 'payment_status', 'source',
+  'assigned_staff_id', 'confirmation_call_notes', 'resume_token', 'last_activity_at',
+  'form_step_reached', 'upsell_items', 'upsell_source', 'reminder_sent_at',
+  'post_delivery_nudge_sent_at', 'is_duplicate_flagged', 'duplicate_reason',
+  'created_at', 'updated_at', 'delivered_at', 'store_id', 'scheduled_delivery_date',
+  'scheduled_delivery_time', 'reminder_notes'
+];
+
 function prepareOrderPayloadForSupabase(order) {
-  const { items, thank_you_url, notification_email, custom_field_responses, customer_whatsapp, ...rest } = order;
-  return {
-    ...rest,
-    id: isValidUUID(rest.id) ? rest.id : crypto.randomUUID(),
-    upsell_items: items || []
-  };
+  const payload = {};
+  const orderId = isValidUUID(order.id) ? order.id : crypto.randomUUID();
+
+  // Merge any existing confirmation_call_notes with custom metadata
+  let meta = {};
+  if (order.confirmation_call_notes && typeof order.confirmation_call_notes === 'string' && order.confirmation_call_notes.startsWith('{')) {
+    try { meta = JSON.parse(order.confirmation_call_notes); } catch (e) {}
+  }
+  if (order.comments) meta.comments = order.comments;
+  if (order.custom_field_responses) meta.custom_field_responses = order.custom_field_responses;
+  if (order.customer_whatsapp) meta.customer_whatsapp = order.customer_whatsapp;
+
+  for (const col of KNOWN_ORDER_COLUMNS) {
+    if (order[col] !== undefined) {
+      if (['store_id', 'assigned_staff_id'].includes(col)) {
+        payload[col] = isValidUUID(order[col]) ? order[col] : null;
+      } else {
+        payload[col] = order[col];
+      }
+    }
+  }
+
+  payload.id = orderId;
+  payload.upsell_items = order.items || order.upsell_items || [];
+  if (Object.keys(meta).length > 0) {
+    payload.confirmation_call_notes = JSON.stringify(meta);
+  }
+
+  return payload;
 }
 
 function formatOrderFromSupabase(order) {
@@ -114,6 +148,8 @@ function formatOrderFromSupabase(order) {
   return {
     ...order,
     items: order.items || order.upsell_items || [],
+    customer_whatsapp: order.customer_whatsapp || meta.customer_whatsapp || null,
+    custom_field_responses: order.custom_field_responses || meta.custom_field_responses || {},
     delivery_agent_id: order.delivery_agent_id || meta.delivery_agent_id || null,
     delivery_agent_name: order.delivery_agent_name || meta.delivery_agent_name || null,
     amount_remitted: order.amount_remitted ?? meta.amount_remitted ?? (order.payment_status === 'Paid' ? (order.total_amount || 0) : 0),

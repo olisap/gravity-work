@@ -94,25 +94,173 @@ async function resolveStoreName(storeId) {
   return process.env.SENDER_NAME || 'Our Store';
 }
 
+const KNOWN_ORDER_COLUMNS = [
+  'id', 'order_number', 'customer_name', 'customer_phone', 'customer_email',
+  'delivery_address', 'country', 'state', 'subtotal', 'delivery_fee',
+  'total_amount', 'status', 'payment_method', 'payment_status', 'source',
+  'assigned_staff_id', 'confirmation_call_notes', 'resume_token', 'last_activity_at',
+  'form_step_reached', 'upsell_items', 'upsell_source', 'reminder_sent_at',
+  'post_delivery_nudge_sent_at', 'is_duplicate_flagged', 'duplicate_reason',
+  'created_at', 'updated_at', 'delivered_at', 'store_id', 'scheduled_delivery_date',
+  'scheduled_delivery_time', 'reminder_notes'
+];
+
 function prepareOrderPayloadForSupabase(order) {
-  const { items, thank_you_url, notification_email, custom_field_responses, customer_whatsapp, ...rest } = order;
-  return {
-    ...rest,
-    id: isValidUUID(rest.id) ? rest.id : crypto.randomUUID(),
-    upsell_items: items || []
-  };
+  const payload = {};
+  const orderId = isValidUUID(order.id) ? order.id : crypto.randomUUID();
+
+  // Merge any existing confirmation_call_notes with custom metadata
+  let meta = {};
+  if (order.confirmation_call_notes && typeof order.confirmation_call_notes === 'string' && order.confirmation_call_notes.startsWith('{')) {
+    try { meta = JSON.parse(order.confirmation_call_notes); } catch (e) {}
+  }
+  if (order.comments) meta.comments = order.comments;
+  if (order.custom_field_responses) meta.custom_field_responses = order.custom_field_responses;
+  if (order.customer_whatsapp) meta.customer_whatsapp = order.customer_whatsapp;
+
+  for (const col of KNOWN_ORDER_COLUMNS) {
+    if (order[col] !== undefined) {
+      if (['store_id', 'assigned_staff_id'].includes(col)) {
+        payload[col] = isValidUUID(order[col]) ? order[col] : null;
+      } else {
+        payload[col] = order[col];
+      }
+    }
+  }
+
+  payload.id = orderId;
+  payload.upsell_items = order.items || order.upsell_items || [];
+  if (Object.keys(meta).length > 0) {
+    payload.confirmation_call_notes = JSON.stringify(meta);
+  }
+
+  return payload;
 }
 
 function formatOrderFromSupabase(order) {
   if (!order) return order;
+  let meta = {};
+  if (order.confirmation_call_notes && typeof order.confirmation_call_notes === 'string' && order.confirmation_call_notes.startsWith('{')) {
+    try {
+      meta = JSON.parse(order.confirmation_call_notes);
+    } catch (e) {}
+  }
   return {
     ...order,
-    items: order.items || order.upsell_items || []
+    items: order.items || order.upsell_items || [],
+    customer_whatsapp: order.customer_whatsapp || meta.customer_whatsapp || null,
+    custom_field_responses: order.custom_field_responses || meta.custom_field_responses || {},
+    delivery_agent_id: order.delivery_agent_id || meta.delivery_agent_id || null,
+    delivery_agent_name: order.delivery_agent_name || meta.delivery_agent_name || null,
+    amount_remitted: order.amount_remitted ?? meta.amount_remitted ?? (order.payment_status === 'Paid' ? (order.total_amount || 0) : 0),
+    proof_of_payment_url: order.proof_of_payment_url || meta.proof_of_payment_url || null,
+    account_paid_into: order.account_paid_into || meta.account_paid_into || (order.payment_method === 'COD' ? 'Cash on Delivery' : 'Bank Transfer'),
+    on_hold_by: order.on_hold_by || meta.on_hold_by || (order.status === 'Audit Hold' ? (order.updated_by || 'Staff') : null),
+    assigned_to_name: order.assigned_to_name || meta.sales_rep_name || null,
+    tags: Array.isArray(order.tags) ? order.tags : (Array.isArray(meta.tags) ? meta.tags : []),
+    comments: order.comments || meta.comments || null,
+    combo_details: order.combo_details || meta.combo_details || null,
+    added_by: order.added_by || meta.added_by || (order.source?.startsWith('form:') ? 'Form Customer' : 'System'),
+    updated_by: order.updated_by || meta.updated_by || 'System',
+    processed_by: order.processed_by || meta.processed_by || meta.sales_rep_name || null
   };
 }
 
 // In-memory fallback mock orders database if Supabase isn't connected
-let mockOrders = [];
+let mockOrders = [
+  {
+    id: '44000000-0000-0000-0000-000000000010',
+    store_id: '00000000-0000-0000-0000-000000000001',
+    order_number: '1677638564',
+    customer_name: 'Bright Ayebakari',
+    customer_phone: '+2348031234567',
+    customer_email: 'brightayebakari@gmail.com',
+    delivery_address: 'Okaka Road Yenagoa Bayelsa State 79',
+    state: 'Bayelsa',
+    city: 'Yenagoa',
+    country: 'Nigeria',
+    items: [{ name: 'ROD HOLDER', quantity: 8, unit_price_at_time_of_order: 4312.5 }],
+    subtotal: 34500,
+    delivery_fee: 0,
+    total_amount: 34500,
+    status: 'Pending',
+    payment_method: 'COD',
+    payment_status: 'Unpaid',
+    on_hold_by: null,
+    assigned_to_name: 'Unassigned',
+    created_at: '2026-09-16T13:28:00Z',
+    updated_at: '2026-09-16T13:28:00Z'
+  },
+  {
+    id: '44000000-0000-0000-0000-000000000011',
+    store_id: '00000000-0000-0000-0000-000000000001',
+    order_number: '1414742744',
+    customer_name: 'Ifeanyi Ezeah',
+    customer_phone: '+2347061234567',
+    customer_email: 'ifeanyiezeah@gmail.com',
+    delivery_address: 'Kpokpo ogbozalla Opi, Nsukka',
+    state: 'Enugu',
+    city: 'Nsukka',
+    country: 'Nigeria',
+    items: [{ name: 'FIX GLUE', quantity: 1, unit_price_at_time_of_order: 65500 }],
+    subtotal: 65500,
+    delivery_fee: 0,
+    total_amount: 65500,
+    status: 'Pending',
+    payment_method: 'COD',
+    payment_status: 'Unpaid',
+    on_hold_by: null,
+    assigned_to_name: 'Unassigned',
+    created_at: '2026-09-16T13:25:00Z',
+    updated_at: '2026-09-16T13:25:00Z'
+  },
+  {
+    id: '44000000-0000-0000-0000-000000000012',
+    store_id: '00000000-0000-0000-0000-000000000001',
+    order_number: '5908450138',
+    customer_name: 'Sunday',
+    customer_phone: '+2348029876543',
+    customer_email: 'sundayorder@gmail.com',
+    delivery_address: 'No.1 ospuc Av. Behind Jehovah jireh ANGLICAN church,egbu road. Owerri',
+    state: 'Imo',
+    city: 'Owerri',
+    country: 'Nigeria',
+    items: [{ name: 'FIX GLUE', quantity: 1, unit_price_at_time_of_order: 65500 }],
+    subtotal: 65500,
+    delivery_fee: 0,
+    total_amount: 65500,
+    status: 'Pending',
+    payment_method: 'COD',
+    payment_status: 'Unpaid',
+    on_hold_by: null,
+    assigned_to_name: 'Unassigned',
+    created_at: '2026-09-16T11:54:00Z',
+    updated_at: '2026-09-16T11:54:00Z'
+  },
+  {
+    id: '44000000-0000-0000-0000-000000000013',
+    store_id: '00000000-0000-0000-0000-000000000001',
+    order_number: '2399488443',
+    customer_name: 'ONOWU Dennis',
+    customer_phone: '+2348051112233',
+    customer_email: 'onowudennis@gmail.com',
+    delivery_address: '24 Aba Owerri road,Aba Abia',
+    state: 'Abia',
+    city: 'Aba',
+    country: 'Nigeria',
+    items: [{ name: 'FIX GLUE', quantity: 1, unit_price_at_time_of_order: 65500 }],
+    subtotal: 65500,
+    delivery_fee: 0,
+    total_amount: 65500,
+    status: 'Pending',
+    payment_method: 'COD',
+    payment_status: 'Unpaid',
+    on_hold_by: null,
+    assigned_to_name: 'Unassigned',
+    created_at: '2026-09-16T10:30:00Z',
+    updated_at: '2026-09-16T10:30:00Z'
+  }
+];
 
 /**
  * Phone Sanitization for Nigerian and International Phone Numbers
@@ -288,8 +436,8 @@ export async function createOrUpdateDraftOrder(req, res) {
     mockOrders[orderIndex] = finalOrder;
   } else {
     // Create new Order / Draft
-    const tsBase = Date.now().toString().slice(-6);
-    const rndSuffix = Math.floor(Math.random() * 900 + 100);
+    const tsBase = Date.now().toString().slice(-6);  // last 6 digits of ms timestamp
+    const rndSuffix = Math.floor(Math.random() * 900 + 100); // 3-digit random: 100-999
     const newOrderNumber = `OLI-${tsBase}${rndSuffix}`;
 
     const customResponses = req.body.custom_field_responses || {};
@@ -339,12 +487,15 @@ export async function createOrUpdateDraftOrder(req, res) {
   if (supabase) {
     try {
       const dbPayload = prepareOrderPayloadForSupabase(finalOrder);
+      // Use onConflict on 'id' so updating an existing draft by UUID works correctly
+      // without hitting the order_number unique constraint on re-inserts.
       const { data: dbData, error: dbErr } = await supabase
         .from('orders')
         .upsert([dbPayload], { onConflict: 'id' })
         .select();
       if (dbErr) {
         console.error('Failed to upsert order to Supabase:', dbErr);
+        // If it's a duplicate order_number, retry with a fresh unique number
         if (dbErr.code === '23505' && dbErr.details?.includes('order_number')) {
           const retryTs = Date.now().toString().slice(-6);
           const retryRnd = Math.floor(Math.random() * 900 + 100);
@@ -358,6 +509,8 @@ export async function createOrUpdateDraftOrder(req, res) {
             console.log('✅ Order saved to Supabase (retry):', retryData[0].order_number);
             finalOrder.id = retryData[0].id;
             finalOrder.order_number = retryData[0].order_number;
+          } else {
+            console.error('Failed retry upsert:', retryErr);
           }
         }
       } else if (dbData && dbData[0]) {
@@ -395,14 +548,35 @@ export async function createOrUpdateDraftOrder(req, res) {
 
 export async function updateOrderStatus(req, res) {
   const { id } = req.params;
-  const { status, confirmation_notes, assigned_staff_id, scheduled_delivery_date, scheduled_delivery_time, reminder_notes } = req.body;
+  const {
+    status,
+    confirmation_notes,
+    assigned_staff_id,
+    assigned_to_name,
+    scheduled_delivery_date,
+    scheduled_delivery_time,
+    reminder_notes,
+    on_hold_by,
+    delivery_agent_id,
+    delivery_agent_name,
+    delivery_fee,
+    amount_remitted,
+    proof_of_payment_url,
+    account_paid_into,
+    tags,
+    comments,
+    combo_details,
+    added_by,
+    updated_by,
+    processed_by
+  } = req.body;
 
   const validStatuses = [
     'Draft', 'Pending', 'Audit Hold', 'Awaiting', 'Scheduled', 'Confirmed',
     'Shipped', 'Delivered', 'Paid', 'Cash Remitted', 'Cancelled', 'Failed',
     'After-Sale Followup', 'Returned', 'Deleted', 'Cart Abandonment', 'Banned'
   ];
-  if (!validStatuses.includes(status)) {
+  if (status && !validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Invalid order status' });
   }
 
@@ -410,14 +584,29 @@ export async function updateOrderStatus(req, res) {
   if (supabase) {
     try {
       const updates = {
-        status,
         updated_at: new Date().toISOString()
       };
+      if (status) updates.status = status;
       if (confirmation_notes !== undefined) updates.confirmation_call_notes = confirmation_notes;
-      if (assigned_staff_id) updates.assigned_staff_id = assigned_staff_id;
-      if (scheduled_delivery_date) updates.scheduled_delivery_date = scheduled_delivery_date;
-      if (scheduled_delivery_time) updates.scheduled_delivery_time = scheduled_delivery_time;
-      if (reminder_notes) updates.reminder_notes = reminder_notes;
+      if (assigned_staff_id !== undefined) updates.assigned_staff_id = assigned_staff_id;
+      if (assigned_to_name !== undefined) updates.assigned_to_name = assigned_to_name;
+      if (scheduled_delivery_date !== undefined) updates.scheduled_delivery_date = scheduled_delivery_date;
+      if (scheduled_delivery_time !== undefined) updates.scheduled_delivery_time = scheduled_delivery_time;
+      if (reminder_notes !== undefined) updates.reminder_notes = reminder_notes;
+      if (on_hold_by !== undefined) updates.on_hold_by = on_hold_by;
+      if (delivery_agent_id !== undefined) updates.delivery_agent_id = delivery_agent_id;
+      if (delivery_agent_name !== undefined) updates.delivery_agent_name = delivery_agent_name;
+      if (delivery_fee !== undefined) updates.delivery_fee = Number(delivery_fee);
+      if (amount_remitted !== undefined) updates.amount_remitted = Number(amount_remitted);
+      if (proof_of_payment_url !== undefined) updates.proof_of_payment_url = proof_of_payment_url;
+      if (account_paid_into !== undefined) updates.account_paid_into = account_paid_into;
+      if (tags !== undefined) updates.tags = tags;
+      if (comments !== undefined) updates.comments = comments;
+      if (combo_details !== undefined) updates.combo_details = combo_details;
+      if (added_by !== undefined) updates.added_by = added_by;
+      if (updated_by !== undefined) updates.updated_by = updated_by;
+      if (processed_by !== undefined) updates.processed_by = processed_by;
+
       if (status === 'Delivered') {
         updates.delivered_at = new Date().toISOString();
         updates.payment_status = 'Paid';
@@ -425,14 +614,18 @@ export async function updateOrderStatus(req, res) {
         updates.payment_status = 'Unpaid';
       }
 
-      const { data: dbData, error: dbErr } = await supabase.from('orders').update(updates).eq('id', id).select();
+      let updateQuery = supabase.from('orders').update(updates).eq('id', id);
+      if (req.storeId) {
+        updateQuery = updateQuery.eq('store_id', req.storeId);
+      }
+      const { data: dbData, error: dbErr } = await updateQuery.select();
       if (!dbErr && dbData && dbData[0]) {
         const formatted = formatOrderFromSupabase(dbData[0]);
         const idx = mockOrders.findIndex(o => o.id === id);
         if (idx >= 0) mockOrders[idx] = { ...mockOrders[idx], ...formatted };
         else mockOrders.unshift(formatted);
 
-        console.log(`✅ Order #${formatted.order_number} status updated to "${status}" in Supabase (Scheduled Date: ${scheduled_delivery_date || 'N/A'})`);
+        console.log(`✅ Order #${formatted.order_number} status updated to "${status || formatted.status}" in Supabase`);
         return res.json(formatted);
       }
     } catch (dbErr) {
@@ -440,7 +633,7 @@ export async function updateOrderStatus(req, res) {
     }
   }
 
-  let order = mockOrders.find(o => o.id === id);
+  let order = mockOrders.find(o => o.id === id && (!req.storeId || o.store_id === req.storeId));
   if (!order) {
     return res.status(404).json({ error: 'Order not found' });
   }
@@ -448,16 +641,31 @@ export async function updateOrderStatus(req, res) {
   const previousStatus = order.status;
 
   // Enforce legal status transitions
-  if (previousStatus === 'Delivered' && status !== 'Delivered') {
+  if (previousStatus === 'Delivered' && status && status !== 'Delivered') {
     return res.status(400).json({ error: 'Delivered orders cannot change status directly. Process a Return instead.' });
   }
 
-  order.status = status;
+  if (status) order.status = status;
+  order.updated_at = new Date().toISOString();
   if (confirmation_notes !== undefined) order.confirmation_call_notes = confirmation_notes;
-  if (assigned_staff_id) order.assigned_staff_id = assigned_staff_id;
-  if (scheduled_delivery_date) order.scheduled_delivery_date = scheduled_delivery_date;
-  if (scheduled_delivery_time) order.scheduled_delivery_time = scheduled_delivery_time;
-  if (reminder_notes) order.reminder_notes = reminder_notes;
+  if (assigned_staff_id !== undefined) order.assigned_staff_id = assigned_staff_id;
+  if (assigned_to_name !== undefined) order.assigned_to_name = assigned_to_name;
+  if (scheduled_delivery_date !== undefined) order.scheduled_delivery_date = scheduled_delivery_date;
+  if (scheduled_delivery_time !== undefined) order.scheduled_delivery_time = scheduled_delivery_time;
+  if (reminder_notes !== undefined) order.reminder_notes = reminder_notes;
+  if (on_hold_by !== undefined) order.on_hold_by = on_hold_by;
+  if (delivery_agent_id !== undefined) order.delivery_agent_id = delivery_agent_id;
+  if (delivery_agent_name !== undefined) order.delivery_agent_name = delivery_agent_name;
+  if (delivery_fee !== undefined) order.delivery_fee = Number(delivery_fee);
+  if (amount_remitted !== undefined) order.amount_remitted = Number(amount_remitted);
+  if (proof_of_payment_url !== undefined) order.proof_of_payment_url = proof_of_payment_url;
+  if (account_paid_into !== undefined) order.account_paid_into = account_paid_into;
+  if (tags !== undefined) order.tags = tags;
+  if (comments !== undefined) order.comments = comments;
+  if (combo_details !== undefined) order.combo_details = combo_details;
+  if (added_by !== undefined) order.added_by = added_by;
+  if (updated_by !== undefined) order.updated_by = updated_by;
+  if (processed_by !== undefined) order.processed_by = processed_by;
 
   if (status === 'Delivered') {
     order.delivered_at = new Date().toISOString();
@@ -477,9 +685,11 @@ export async function updateOrderStatus(req, res) {
   }
 
   // Stock Ledger Handling (Deduct on Scheduled, restore on Cancel)
-  await InventoryService.handleOrderStatusChange(order, previousStatus, status);
+  if (status) {
+    await InventoryService.handleOrderStatusChange(order, previousStatus, status);
+  }
 
-  res.json(order);
+  res.json(formatOrderFromSupabase(order));
 }
 
 export async function addUpsellToOrder(req, res) {
@@ -539,4 +749,4 @@ export async function sendManualDraftReminder(req, res) {
     smsSent: result.smsSent,
     order: draft
   });
-}
+}

@@ -17,10 +17,11 @@ function formatForm(form) {
   const cfg = (typeof form.fields_config === 'object' && form.fields_config && !Array.isArray(form.fields_config))
     ? form.fields_config
     : {};
+  const nestedCfg = (cfg.fields_config && typeof cfg.fields_config === 'object') ? cfg.fields_config : {};
   return {
     ...form,
-    notification_email: form.notification_email || cfg.notification_email || '',
-    thank_you_url: form.thank_you_url || cfg.thank_you_url || '',
+    notification_email: form.notification_email || cfg.notification_email || nestedCfg.notification_email || '',
+    thank_you_url: form.thank_you_url || cfg.thank_you_url || nestedCfg.thank_you_url || '',
     upsell_enabled: form.upsell_enabled !== undefined ? form.upsell_enabled : (cfg.upsell_enabled !== undefined ? cfg.upsell_enabled : true),
     upsell_product_id: form.upsell_product_id || cfg.upsell_product_id || '',
     upsell_title: form.upsell_title || cfg.upsell_title || 'Special 1-Click Offer!',
@@ -49,7 +50,14 @@ function prepareSupabasePayload(body, existingFieldsConfig = {}) {
     : {};
   const newFieldsConfig = { ...currentCfg };
 
+  // Flatten any fields_config provided in body to prevent circular/recursive nesting
+  if (body.fields_config && typeof body.fields_config === 'object' && !Array.isArray(body.fields_config)) {
+    Object.assign(newFieldsConfig, body.fields_config);
+    if (newFieldsConfig.fields_config) delete newFieldsConfig.fields_config;
+  }
+
   for (const [key, val] of Object.entries(body)) {
+    if (key === 'fields_config') continue;
     if (knownColumns.includes(key)) {
       if (['linked_product_id', 'store_id'].includes(key)) {
         payload[key] = sanitizeUuid(val);
@@ -63,6 +71,15 @@ function prepareSupabasePayload(body, existingFieldsConfig = {}) {
         newFieldsConfig[key] = val;
       }
     }
+  }
+
+  if (body.thank_you_url !== undefined) {
+    newFieldsConfig.thank_you_url = body.thank_you_url ? String(body.thank_you_url).trim() : null;
+  }
+  if (body.notification_email !== undefined) {
+    const cleanEmail = body.notification_email ? String(body.notification_email).trim() : null;
+    payload.notification_email = cleanEmail;
+    newFieldsConfig.notification_email = cleanEmail;
   }
 
   payload.fields_config = newFieldsConfig;

@@ -3,7 +3,7 @@ import {
   FileText, Code, Eye, Copy, Check, Sparkles, Plus, Trash2, Edit,
   Settings, CreditCard, ShieldCheck, HelpCircle, Palette, ToggleLeft, ToggleRight,
   ArrowUp, ArrowDown, Layers, Smartphone, Monitor, RotateCcw, Image as ImageIcon,
-  Type, Zap, Sliders, CheckCircle2, ChevronRight, Layout
+  Type, Zap, Sliders, CheckCircle2, ChevronRight, Layout, ExternalLink
 } from 'lucide-react';
 import EmbedFormWidget from '../components/EmbedFormWidget';
 import { useAuth } from '../context/AuthContext';
@@ -335,7 +335,7 @@ export default function FormBuilder({
     setPayFlutterwave(f.payment_flutterwave_enabled || false);
     setPayBank(f.payment_bank_enabled || false);
 
-    setNotificationEmail(f.notification_email || '');
+    setNotificationEmail(f.notification_email || cfg.notification_email || user?.email || '');
     setThankYouUrl(f.thank_you_url || cfg.thank_you_url || '');
     setUpsellEnabled(f.upsell_enabled !== false);
     setUpsellProductId(f.upsell_product_id || products[0]?.id || '');
@@ -393,6 +393,7 @@ export default function FormBuilder({
     setLabelColor('#f8fafc');
     setCustomFont('Inter');
 
+    setNotificationEmail(user?.email || '');
     setThankYouUrl('');
     setUpsellEnabled(true);
     setUpsellProductId(products[0]?.id || '');
@@ -615,7 +616,7 @@ export default function FormBuilder({
   const scriptCode = `<script src="https://olinwa.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
   const iframeId = `olinwa-iframe-${selectedFormForEmbed.embed_key}`;
   const iframeCode = `<div class="olinwa-iframe-wrapper">
-  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}${embedThankYouQuery}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;" allow="top-navigation top-navigation-by-user-activation"></iframe>
+  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;" allow="top-navigation top-navigation-by-user-activation"></iframe>
   <script>
     window.addEventListener('message', function(e) {
       if (!e.data) return;
@@ -946,6 +947,59 @@ export default function FormBuilder({
                         Remove Banner
                       </button>
                     )}
+                  </div>
+                </div>
+
+                {/* Thank You Page URL & Notification Email */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
+                  <div className="border-b border-slate-800 pb-2">
+                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                      <ExternalLink className="w-3.5 h-3.5 text-emerald-400" /> Funnel Redirect & Order Notifications
+                    </h4>
+                    <p className="text-[10px] text-slate-400">Configure where clients are redirected after placing orders, and where merchant alerts are sent</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        THANK YOU PAGE URL (AFTER ORDER)
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://yourwebsite.com/thank-you"
+                        value={thankYouUrl}
+                        onChange={e => setThankYouUrl(e.target.value)}
+                        className="input text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">Leave blank to show the built-in instant confirmation card</p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        EMAIL TO RECEIVE ORDER NOTIFICATIONS
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="you@store.com"
+                        value={notificationEmail}
+                        onChange={e => setNotificationEmail(e.target.value)}
+                        className="input text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">New order alert emails will be sent here instantly</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">
+                      TERMS & CONDITIONS / SERIOUS BUYERS WARNING (ABOVE SUBMIT BUTTON)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={textBeforeSubmit}
+                      onChange={e => setTextBeforeSubmit(e.target.value)}
+                      placeholder="e.g. DO NOT CLICK THE ORDER BUTTON IF YOU ARE NOT READY TO RECEIVE THE PRODUCT IN 2-4 DAYS"
+                      className="input text-xs leading-relaxed"
+                    />
                   </div>
                 </div>
               </div>

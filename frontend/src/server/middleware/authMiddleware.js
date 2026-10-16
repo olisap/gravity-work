@@ -14,22 +14,17 @@ export async function requireAuth(req, res, next) {
 
   const token = authHeader.split(' ')[1];
   try {
-    // If token starts with jwt_token_, look up user from Supabase to get store_id
+    // If token starts with jwt_token_, handle legacy fallback
     if (token.startsWith('jwt_token_')) {
       const userId = token.replace('jwt_token_', '');
-      if (supabase) {
-        const { data: user, error } = await supabase
-          .from('users')
-          .select('id, email, role, store_id, store_name')
-          .eq('id', userId)
-          .single();
-        if (!error && user) {
-          req.user = user;
-          return next();
-        }
-      }
-      // Fallback if Supabase unavailable
-      req.user = { id: userId, role: 'owner' };
+      if (!supabase) return res.status(401).json({ error: 'Legacy session cannot be verified.' });
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id, email, role, store_id')
+        .eq('id', userId)
+        .single();
+      if (error || !user?.store_id) return res.status(401).json({ error: 'Session has no valid store context. Please sign in again.' });
+      req.user = user;
       return next();
     }
 
@@ -39,6 +34,14 @@ export async function requireAuth(req, res, next) {
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired session token.' });
   }
+}
+
+export function requireStoreContext(req, res, next) {
+  if (!req.user?.store_id) {
+    return res.status(403).json({ error: 'Authenticated store context is required.' });
+  }
+  req.storeId = req.user.store_id;
+  next();
 }
 
 /**

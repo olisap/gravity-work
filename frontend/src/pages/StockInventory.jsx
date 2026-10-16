@@ -267,7 +267,7 @@ export default function StockInventory({ products = [], selectedCountry, onProdu
       {/* Restock & Adjustment Modal */}
       {selectedProductForAdjust && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-4 animate-fade-in">
+          <div className="glass w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-4 animate-fade-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <RefreshCw className="w-5 h-5 text-indigo-400" /> Adjust Stock: {selectedProductForAdjust.name}

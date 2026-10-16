@@ -58,7 +58,12 @@ export default function OrdersPipeline({
   onOpenConfirmationModal,
   onUpdateStatus
 }) {
-  const [viewMode, setViewMode] = useState('table'); // Default to 'table' as shown in reference design
+  const [viewMode, setViewMode] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return 'cards';
+    }
+    return 'table';
+  });
   const [activePipelineTab, setActivePipelineTab] = useState('All');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -420,8 +425,225 @@ export default function OrdersPipeline({
     window.print();
   };
 
+  // Touch-optimized Mobile Order Card Renderer
+  const renderOrderCard = (o) => {
+    const meta = getOrderMeta(o);
+    const rep = teamMembers.find(m => String(m.id) === String(o.assigned_staff_id));
+    const ag = agents.find(a => String(a.id) === String(o.delivery_agent_id));
+    const daysInStatus = getDaysInStatus(o);
+    const assignedTo = o.assigned_to_name || meta.sales_rep_name || rep?.full_name || 'Unassigned';
+    const commentsStr = o.comments || meta.comments || (typeof o.confirmation_call_notes === 'string' && !o.confirmation_call_notes.startsWith('{') ? o.confirmation_call_notes : '');
+    const primaryItem = o.items?.[0] || { name: 'Order Package', quantity: 1 };
+    const itemTitle = primaryItem.name || 'Order Package';
+    const itemQty = primaryItem.quantity || (o.items ? o.items.reduce((sum, i) => sum + (i.quantity || 1), 0) : 1);
+    const statusConfig = getStatusBadgeConfig(o.status);
+    const isSelected = selectedOrderIds.includes(o.id);
+    const isMenuOpen = activeActionMenuId === o.id;
+
+    return (
+      <div
+        key={o.id}
+        className={`bg-[#0f172a] border rounded-2xl p-4 space-y-3.5 shadow-xl transition-all relative ${
+          isSelected ? 'border-indigo-500 bg-indigo-950/20' : 'border-slate-800 hover:border-slate-700'
+        }`}
+      >
+        {/* Top Bar: Checkbox, Ref Number, Amount & Actions */}
+        <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-3">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => toggleSelectOrder(o.id)}
+              className="w-4 h-4 mt-0.5 rounded border-slate-700 bg-[#0d121d] text-indigo-600 focus:ring-0 cursor-pointer accent-indigo-600 shrink-0"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-xs font-black text-indigo-400">
+                  #{o.order_number}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyOrderToClipboard(o, curr)}
+                  title="Copy order details"
+                  className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-indigo-600 transition-colors"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+                {o.is_duplicate_flagged && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded-md">
+                    <AlertTriangle className="w-2.5 h-2.5" /> Duplicate
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-slate-500 shrink-0" />
+                <span>{formatCustomerDate(o.created_at)}</span>
+                {daysInStatus > 0 && <span className="text-slate-500">• {daysInStatus}d in stage</span>}
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right shrink-0">
+            <span className="text-sm font-black text-emerald-400 block font-mono">
+              {curr}{(o.total_amount || 0).toLocaleString()}
+            </span>
+            <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full mt-1 ${
+              o.payment_status === 'Paid'
+                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${o.payment_status === 'Paid' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              {o.payment_method === 'COD' ? 'COD' : 'Prepaid'} • {o.payment_status || 'Unpaid'}
+            </span>
+          </div>
+        </div>
+
+        {/* Customer Information & Direct 1-Tap Action Buttons */}
+        <div className="space-y-2 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="font-bold text-slate-100 text-sm truncate">{o.customer_name || 'Guest Customer'}</h4>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <a
+                href={`tel:${o.customer_phone}`}
+                className="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors border border-indigo-500/30"
+                title="Call Customer"
+              >
+                <Phone className="w-3 h-3 text-indigo-400" />
+                <span>Call</span>
+              </a>
+              <a
+                href={getWhatsAppUrl(o)}
+                target="_blank"
+                rel="noreferrer"
+                className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors border border-emerald-500/30"
+                title="Chat on WhatsApp"
+              >
+                <MessageCircle className="w-3 h-3 text-emerald-400" />
+                <span>WhatsApp</span>
+              </a>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <span className="font-mono text-slate-300 font-semibold">{o.customer_phone}</span>
+            <span className="text-slate-500">Staff: {assignedTo}</span>
+          </div>
+
+          <p className="text-[11px] text-slate-300 flex items-start gap-1.5 pt-0.5">
+            <Truck className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+            <span className="leading-snug">
+              {o.delivery_address || 'No street address'}, <strong className="text-slate-200">{o.state}</strong>
+            </span>
+          </p>
+
+          {commentsStr && (
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-[11px] text-indigo-300 font-medium">
+              <span className="text-slate-500 uppercase text-[9px] font-bold block mb-0.5">Customer Delivery Notes:</span>
+              <p className="line-clamp-2">{commentsStr}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Ordered Product Package */}
+        <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 text-xs flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] text-slate-500 uppercase font-bold block">Package:</span>
+            <p className="font-semibold text-slate-200 truncate">{itemTitle}</p>
+            {o.items?.length > 1 && (
+              <span className="text-[10px] text-amber-400 font-bold block mt-0.5">
+                +{o.items.length - 1} extra addon(s)
+              </span>
+            )}
+          </div>
+          <span className="text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg shrink-0">
+            Qty: {itemQty}
+          </span>
+        </div>
+
+        {/* Pipeline Stage Selector & Workflow Action Buttons */}
+        <div className="pt-1 space-y-2 border-t border-slate-800/80">
+          <div className="flex items-center justify-between gap-2">
+            <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg ${BADGE_CLASS[o.status] || 'badge-pending'}`}>
+              <span className={`w-2 h-2 rounded-full ${statusConfig.dot}`} />
+              {o.status}
+            </span>
+
+            {/* Stage Selector Dropdown */}
+            <div className="relative flex-1 max-w-[190px]">
+              <select
+                value={o.status}
+                onChange={e => handleStageDropdownChange(o, e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-[11px] font-bold text-slate-200 cursor-pointer outline-none focus:border-indigo-500 appearance-none pr-6"
+              >
+                {ALL_SYSTEM_TABS.map(s => (
+                  <option key={s.id} value={s.id} className="bg-slate-900 text-slate-200">
+                    Move to: {s.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3 h-3 text-slate-500 absolute right-2 top-2.5 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Quick Primary Actions */}
+          {o.status === 'Pending' && (
+            <button
+              onClick={() => onOpenConfirmationModal(o)}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <Phone className="w-3.5 h-3.5" /> Call Script Desk
+            </button>
+          )}
+
+          {(o.status === 'Awaiting' || o.status === 'Confirmed') && (
+            <button
+              onClick={() => setSchedulingOrder(o)}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <Calendar className="w-3.5 h-3.5" /> Schedule & Dispatch
+            </button>
+          )}
+
+          {(o.status === 'Scheduled' || o.status === 'Shipped' || o.status === 'Awaiting') && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  setDeliveryModalMode('delivered');
+                  setDeliveryModalOrder(o);
+                }}
+                className="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
+              >
+                <CheckCircle className="w-3.5 h-3.5" /> Delivered
+              </button>
+              <button
+                onClick={() => {
+                  setDeliveryModalMode('failed');
+                  setDeliveryModalOrder(o);
+                }}
+                className="py-2 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+              >
+                <XCircle className="w-3.5 h-3.5" /> Failed
+              </button>
+            </div>
+          )}
+
+          {(o.status === 'Draft' || o.status === 'Cart Abandonment') && (
+            <button
+              disabled={sendingReminderId === o.id}
+              onClick={() => handleSendRecovery(o)}
+              className="w-full py-2 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              {sendingReminderId === o.id ? 'Sending Reminder...' : 'Send Recovery Reminder'}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-5 animate-fade-in text-slate-100">
+    <div className="space-y-4 sm:space-y-5 animate-fade-in text-slate-100">
 
       {/* Schedule Picker Modal */}
       {schedulingOrder && (
@@ -451,18 +673,18 @@ export default function OrdersPipeline({
       )}
 
       {/* ── TOP FILTER & SEARCH BAR (Matches Top Tier CMS Style) ── */}
-      <div className="bg-[#0f172a] border border-slate-800/90 rounded-2xl p-4 shadow-xl space-y-4">
+      <div className="bg-[#0f172a] border border-slate-800/90 rounded-2xl p-3 sm:p-4 shadow-xl space-y-3 sm:space-y-4">
         
         {/* Row 1: Payment Status & Action Buttons */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div className="w-full md:w-64">
-            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+          <div className="w-full sm:w-56">
+            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
               Payment Status
             </label>
             <select
               value={paymentStatusFilter}
               onChange={e => setPaymentStatusFilter(e.target.value)}
-              className="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              className="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
               <option value="All">All</option>
               <option value="Paid">Paid</option>
@@ -470,58 +692,61 @@ export default function OrdersPipeline({
             </select>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5 pointer-events-none" />
+          <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto">
+            <div className="relative flex-1 min-w-[200px] sm:w-60">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search orders, phone, customer..."
-                className="w-full bg-[#1e293b] border border-slate-700 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-[#1e293b] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
             </div>
-
-            <button
-              onClick={() => {}}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Search className="w-3.5 h-3.5" /> Search
-            </button>
 
             <button
               onClick={() => {
                 setSearchQuery('');
                 setPaymentStatusFilter('All');
               }}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl border border-slate-700 flex items-center gap-1 transition-all cursor-pointer"
               title="Reset filters"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> Reset
+              <RotateCcw className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Reset</span>
             </button>
 
             <button
               onClick={handleExportCSV}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+              className="hidden sm:flex px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 items-center gap-1.5 transition-all cursor-pointer"
             >
-              <Copy className="w-3.5 h-3.5 text-indigo-400" /> Export Search Results
+              <Copy className="w-3.5 h-3.5 text-indigo-400" /> Export CSV
             </button>
 
-            {/* View Mode Toggle */}
+            {/* View Mode Toggle: Cards, Table, Kanban */}
             <div className="flex bg-[#1e293b] p-1 rounded-xl border border-slate-700 gap-1 ml-auto">
               <button
-                onClick={() => setViewMode('kanban')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'kanban' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                title="Kanban Board"
+                onClick={() => setViewMode('cards')}
+                className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${viewMode === 'cards' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                title="Cards View"
               >
                 <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">Cards</span>
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${viewMode === 'table' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                 title="Table View"
               >
                 <List className="w-4 h-4" />
+                <span className="hidden sm:inline">Table</span>
+              </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${viewMode === 'kanban' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                title="Kanban Board"
+              >
+                <Truck className="w-4 h-4" />
+                <span className="hidden sm:inline">Kanban</span>
               </button>
             </div>
           </div>
@@ -856,9 +1081,39 @@ export default function OrdersPipeline({
         </div>
       )}
 
-      {/* ── 26-COLUMN OPERATIONAL TABLE VIEW (Matches User Screenshot Exactly) ── */}
+      {/* ── MOBILE / CARDS VIEW (Clean responsive cards for phones & tablets) ── */}
+      {viewMode === 'cards' && (
+        <div className="space-y-4">
+          {tableOrders.length === 0 ? (
+            <div className="text-center py-16 text-slate-500 italic bg-[#0f172a] border border-slate-800 rounded-2xl">
+              No orders found in "{activePipelineTab}" stage matching current filters.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+              {tableOrders.map(o => renderOrderCard(o))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 26-COLUMN OPERATIONAL TABLE VIEW (With Mobile Cards fallback for < md screens) ── */}
       {viewMode === 'table' && (
-        <div className="bg-[#080b11] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+        <>
+          {/* Mobile Card fallback when on small screens */}
+          <div className="block md:hidden space-y-3.5">
+            {tableOrders.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 italic bg-[#0f172a] border border-slate-800 rounded-2xl">
+                No orders found in "{activePipelineTab}" stage.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3.5">
+                {tableOrders.map(o => renderOrderCard(o))}
+              </div>
+            )}
+          </div>
+
+          {/* Full 26-Column Operational Table for Tablet/Desktop */}
+          <div className="hidden md:block bg-[#080b11] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
           {/* Top Toolbar matching screenshot: Quick Search, Filter by tags, Bulk action, Columns & Order, Excel, PDF */}
           <div className="p-3.5 bg-[#080b11] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3 flex-wrap flex-1">
@@ -1413,6 +1668,7 @@ export default function OrdersPipeline({
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* ── COLUMNS & ORDER CONFIGURATION MODAL ── */}

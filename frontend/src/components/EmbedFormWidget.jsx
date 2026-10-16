@@ -383,8 +383,9 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
         if (onOrderSubmitted) onOrderSubmitted(data);
 
         const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-        const storedThankYou = typeof localStorage !== 'undefined' ? (localStorage.getItem('form_thank_you_' + formConfig?.id) || localStorage.getItem('last_thank_you_url')) : null;
-        const rawRedirectUrl = formConfig?.thank_you_url || data?.thank_you_url || (urlParams ? (urlParams.get('thank_you_url') || urlParams.get('redirect_url')) : null) || storedThankYou;
+        const storedThankYou = typeof localStorage !== 'undefined' ? (localStorage.getItem('form_thank_you_' + formConfig?.id) || localStorage.getItem('form_thank_you_' + formConfig?.embed_key)) : null;
+        // Priority: Form config from DB > Returned order thank_you_url > Stored form thank you > query param fallback
+        const rawRedirectUrl = formConfig?.thank_you_url || data?.thank_you_url || storedThankYou || (urlParams ? (urlParams.get('thank_you_url') || urlParams.get('redirect_url')) : null);
 
         const normalizeRedirectUrl = (url) => {
           if (!url || typeof url !== 'string') return null;
@@ -392,29 +393,46 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           if (!trimmed) return null;
           if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('//')) return trimmed;
           if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+/.test(trimmed)) return 'https://' + trimmed;
-          try { if (document.referrer) return new URL(trimmed, document.referrer).href; } catch (e) {}
+          try {
+            if (document.referrer) {
+              return new URL(trimmed, document.referrer).href;
+            }
+          } catch (e) {}
           return trimmed.startsWith('/') ? trimmed : '/' + trimmed;
         };
 
         const targetUrl = normalizeRedirectUrl(rawRedirectUrl);
 
         if (targetUrl) {
+          // Post message to parent window (supports cross-origin embedded iframes)
           if (window.parent && window.parent !== window) {
             try {
               window.parent.postMessage({ type: 'redirect-thank-you', url: targetUrl }, '*');
               window.parent.postMessage({ type: 'redirect', url: targetUrl }, '*');
             } catch (pe) {}
           }
+          // Direct navigation attempt
+          let navigated = false;
           try {
             if (window.top && window.self !== window.top) {
               window.top.location.href = targetUrl;
-            } else if (window.parent && window.parent !== window) {
-              window.parent.location.href = targetUrl;
-            } else {
-              window.location.href = targetUrl;
+              navigated = true;
             }
           } catch (topErr) {
-            try { window.location.href = targetUrl; } catch (selfErr) {}
+            // Blocked by browser cross-origin policy; parent postMessage handles this if embed script installed
+          }
+          if (!navigated) {
+            try {
+              if (window.parent && window.parent !== window) {
+                window.parent.location.href = targetUrl;
+                navigated = true;
+              }
+            } catch (pErr) {}
+          }
+          if (!navigated) {
+            try {
+              window.location.href = targetUrl;
+            } catch (selfErr) {}
           }
 
           setSubmittedOrder({

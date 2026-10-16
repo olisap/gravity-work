@@ -1,14 +1,14 @@
 import { supabase } from '../config/supabase.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '../../../data');
-const SETTINGS_FILE = join(DATA_DIR, 'store_settings.json');
+const SETTINGS_FILE = join(__dirname, '../../data/store_settings.json');
 
 // ── Ensure data directory exists ──────────────────────────────────────────────
-try { mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+import { mkdirSync } from 'fs';
+try { mkdirSync(join(__dirname, '../../data'), { recursive: true }); } catch {}
 
 // ── Default Store Settings ────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
@@ -61,7 +61,7 @@ function loadSettingsFile() {
       settingsCache = JSON.parse(raw) || {};
     }
   } catch (e) {
-    console.warn('Could not load settings file:', e.message);
+    console.warn('Could not load settings file, using defaults:', e.message);
     settingsCache = {};
   }
 }
@@ -85,14 +85,24 @@ let mockAuditTrail = [
     order_number: 'OLI-10088',
     customer_name: 'David Mark',
     amount: 25000,
-    performed_by: 'Store Owner',
+    performed_by: 'Amina Bello (Owner)',
     timestamp: new Date(Date.now() - 2 * 3600000).toISOString(),
     details: 'Order manually deleted from draft pipeline'
   },
   {
     id: 'aud-002',
+    action: 'ORDER_DELETED',
+    order_number: 'OLI-10042',
+    customer_name: 'Blessing Okon',
+    amount: 18500,
+    performed_by: 'Chidi Okafor (Confirmation)',
+    timestamp: new Date(Date.now() - 14 * 3600000).toISOString(),
+    details: 'Duplicate submission cancelled and removed'
+  },
+  {
+    id: 'aud-003',
     action: 'SETTINGS_UPDATED',
-    performed_by: 'Store Owner',
+    performed_by: 'Amina Bello (Owner)',
     timestamp: new Date(Date.now() - 24 * 3600000).toISOString(),
     details: 'Updated store contact number and invoice footer message'
   }
@@ -100,12 +110,12 @@ let mockAuditTrail = [
 
 // ── GET /api/settings ─────────────────────────────────────────────────────────
 export async function getSettings(req, res) {
-  const store_id = req.user?.store_id || req.query?.store_id;
+  const store_id = req.storeId;
 
   // Start with defaults
   let currentSettings = { ...DEFAULT_SETTINGS };
 
-  // Layer 1: load from persistent file cache (per-store)
+  // Layer 1: load from persistent file cache
   if (store_id && settingsCache[store_id]) {
     currentSettings = { ...currentSettings, ...settingsCache[store_id] };
   }
@@ -115,7 +125,7 @@ export async function getSettings(req, res) {
     try {
       const { data: storeData, error: stErr } = await supabase
         .from('stores')
-        .select('name, country, currency, default_delivery_fee')
+        .select('name, country, currency, default_delivery_fee, category')
         .eq('id', store_id)
         .single();
 
@@ -136,23 +146,23 @@ export async function getSettings(req, res) {
 // ── POST /api/settings ────────────────────────────────────────────────────────
 export async function updateSettings(req, res) {
   const newSettings = req.body;
-  const storeId = req.user?.store_id;
+  const storeId = req.storeId;
 
-  // Merge into per-store cache
+  // Merge into cache (per-store)
   const existing = storeId ? (settingsCache[storeId] || {}) : {};
-  let merged = { ...DEFAULT_SETTINGS, ...existing, ...newSettings };
+  const merged = { ...DEFAULT_SETTINGS, ...existing, ...newSettings };
 
   if (storeId) {
     settingsCache[storeId] = merged;
   }
 
-  // Add audit event
+  // Add audit trail event
   mockAuditTrail.unshift({
     id: `aud-${Date.now()}`,
     action: 'SETTINGS_UPDATED',
     performed_by: req.user?.email || 'Store Owner',
     timestamp: new Date().toISOString(),
-    details: `Settings updated: ${Object.keys(newSettings).slice(0, 5).join(', ')}`
+    details: `Settings updated: ${Object.keys(newSettings).join(', ')}`
   });
 
   // ── Supabase sync ─────────────────────────────────────────────────────────
@@ -171,10 +181,10 @@ export async function updateSettings(req, res) {
           .update(storeUpdates)
           .eq('id', storeId);
         if (stErr) console.warn('stores update error:', stErr.message);
-        else console.log('✅ Store updated:', storeUpdates);
+        else console.log('✅ Store updated in Supabase:', storeUpdates);
       }
 
-      // 2. Sync store_name to all users in this store
+      // 2. Sync store_name to all users belonging to this store
       if (newSettings.store_name) {
         await supabase
           .from('users')
@@ -205,8 +215,10 @@ export async function updateSettings(req, res) {
             } else if (uploadData) {
               const { data: pubUrlData } = supabase.storage.from('logos').getPublicUrl(fileName);
               if (pubUrlData?.publicUrl) {
-                merged = { ...merged, company_logo: pubUrlData.publicUrl };
-                if (storeId) settingsCache[storeId] = merged;
+                merged.company_logo = pubUrlData.publicUrl;
+                if (storeId) {
+                  settingsCache[storeId] = { ...merged, company_logo: pubUrlData.publicUrl };
+                }
                 console.log('✅ Logo uploaded:', pubUrlData.publicUrl);
               }
             }
@@ -220,9 +232,10 @@ export async function updateSettings(req, res) {
     }
   }
 
-  // Persist cache to file
+  // Persist to file
   saveSettingsFile();
 
+  // Return the final merged settings (with resolved logo URL if uploaded)
   const finalSettings = storeId ? settingsCache[storeId] : merged;
   res.json({ message: 'Settings saved successfully', settings: finalSettings });
 }

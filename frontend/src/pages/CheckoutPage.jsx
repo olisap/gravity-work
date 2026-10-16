@@ -29,7 +29,10 @@ export default function CheckoutPage() {
 
         if (!formData || formData.error) {
           throw new Error('Order form was not found');
-        } else if (queryThankYouUrl) {
+        }
+        // The Thank You Page URL saved in Form Builder (database) has primary priority.
+        // The URL query param is only used as a fallback if the saved form has no thank_you_url configured.
+        if (!formData.thank_you_url && queryThankYouUrl) {
           formData.thank_you_url = queryThankYouUrl;
         }
         setForm(formData);

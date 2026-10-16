@@ -108,7 +108,7 @@ export default function ExpensesAccounting({ selectedCountry, orders = [] }) {
       {/* ADD EXPENSE MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-4">
+          <div className="glass w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-bold text-slate-100">Record New Expense</h3>
             <form onSubmit={handleAddExpense} className="space-y-3">
               <div>

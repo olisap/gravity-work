@@ -31,8 +31,8 @@ export default function ScheduleModal({ order, onClose, onConfirmSchedule }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="glass-panel w-full max-w-md p-6 rounded-2xl border-slate-700 space-y-5 shadow-2xl animate-fade-in">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="glass-panel w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border-slate-700 space-y-5 shadow-2xl animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div>
