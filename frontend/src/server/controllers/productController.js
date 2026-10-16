@@ -91,7 +91,7 @@ export async function createProduct(req, res) {
     price_bundles: price_bundles || [
       { qty: 1, label: `1 ${name} + Free Delivery`, price: Number(base_price) || 0 }
     ],
-    images: Array.isArray(req.body.images) && req.body.images.length > 0 ? req.body.images : ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=500&auto=format&fit=crop'],
+    images: Array.isArray(req.body.images) ? req.body.images : [],
     custom_fields: req.body.custom_fields || [],
     has_variants: false,
     is_active: true,

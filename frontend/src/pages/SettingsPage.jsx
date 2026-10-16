@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/apiUrl';
+import WhatsAppGatewayCard from '../components/WhatsAppGatewayCard';
 
 // ── Inline Toggle Switch ──────────────────────────────────
 function Toggle({ checked, onChange, id }) {
@@ -409,6 +410,21 @@ export default function SettingsPage({ onSettingsUpdated }) {
                 <label className="text-label text-slate-400 block mb-1.5">Invoice Footer Message</label>
                 <textarea rows={2} className="input resize-none" value={settings.invoice_footer_message || ''} onChange={e => setSetting('invoice_footer_message', e.target.value)} placeholder="e.g. All prices include VAT" />
               </div>
+              <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between">
+                <span className="text-xs text-slate-400">Save profile details, address, and branding.</span>
+                <button
+                  onClick={handleSave}
+                  disabled={savingSettings || loadingSettings}
+                  className="btn-primary text-xs gap-2"
+                >
+                  {savingSettings
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                    : saveSuccess
+                    ? <><CheckCircle className="w-3.5 h-3.5" /> Saved Changes</>
+                    : <><Save className="w-3.5 h-3.5" /> Save Changes</>
+                  }
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -460,16 +476,38 @@ export default function SettingsPage({ onSettingsUpdated }) {
               ))}
             </div>
           )}
+
+          {settings && (
+            <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between">
+              <span className="text-xs text-slate-400">Save pipeline visibility and order limits.</span>
+              <button
+                onClick={handleSave}
+                disabled={savingSettings || loadingSettings}
+                className="btn-primary text-xs gap-2"
+              >
+                {savingSettings
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                  : saveSuccess
+                  ? <><CheckCircle className="w-3.5 h-3.5" /> Saved Changes</>
+                  : <><Save className="w-3.5 h-3.5" /> Save Changes</>
+                }
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {/* ────────────── NOTIFICATIONS ────────────── */}
       {activeSection === 'notifications' && (
-        <div className="glass p-6 space-y-4 animate-fade-in">
-          <div>
-            <h3 className="text-sm font-bold text-slate-200 mb-1">Notification Preferences</h3>
-            <p className="text-xs text-slate-400 mb-4">Choose which automated messages are sent to customers and staff.</p>
-          </div>
+        <div className="space-y-6 animate-fade-in">
+          {/* WhatsApp Gateway Integration */}
+          <WhatsAppGatewayCard />
+
+          <div className="glass p-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-200 mb-1">Notification Preferences</h3>
+              <p className="text-xs text-slate-400 mb-4">Choose which automated messages are sent to customers and staff.</p>
+            </div>
           {loadingSettings ? (
             <div className="space-y-3">
               {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton h-12 rounded-xl" />)}
@@ -477,14 +515,15 @@ export default function SettingsPage({ onSettingsUpdated }) {
           ) : !settings ? null : (
             <div className="space-y-2">
               {[
-                { key: 'email_on_login',      label: 'Login Alert Email',       desc: 'Email staff when their account signs in' },
-                { key: 'low_stock_email',     label: 'Low Stock: Email',        desc: 'Alert when product stock falls to ≤10 units' },
-                { key: 'low_stock_sms',       label: 'Low Stock: SMS',          desc: 'SMS alert for critical stock thresholds' },
-                { key: 'low_stock_whatsapp',  label: 'Low Stock: WhatsApp',     desc: 'WhatsApp alert for critical stock' },
-                { key: 'reminder_email',      label: 'Draft Reminder: Email',   desc: 'Send resume link to abandoned form customers' },
-                { key: 'reminder_whatsapp',   label: 'Draft Reminder: WhatsApp',desc: 'WhatsApp reminder for abandoned checkouts' },
-                { key: 'invoice_via_email',   label: 'Invoice: Email',          desc: 'Send delivery receipt via email on delivery' },
-                { key: 'invoice_via_whatsapp',label: 'Invoice: WhatsApp',       desc: 'Send delivery receipt via WhatsApp on delivery' },
+                { key: 'whatsapp_order_confirmation', label: 'Order Confirmed: WhatsApp', desc: 'Send automated WhatsApp order confirmation receipt to customer on new form submission (OFF by default)' },
+                { key: 'reminder_whatsapp',           label: 'Draft Reminder: WhatsApp',  desc: 'Send automated cart recovery resume link to abandoned checkouts via WhatsApp (OFF by default)' },
+                { key: 'invoice_via_whatsapp',        label: 'Delivered Receipt: WhatsApp', desc: 'Send automated delivery receipt via WhatsApp when order is marked Delivered (OFF by default)' },
+                { key: 'reminder_email',              label: 'Draft Reminder: Email',     desc: 'Send resume link to abandoned form customers via email' },
+                { key: 'invoice_via_email',           label: 'Delivered Receipt: Email',  desc: 'Send delivery receipt via email on delivery' },
+                { key: 'email_on_login',              label: 'Login Alert Email',         desc: 'Email staff when their account signs in' },
+                { key: 'low_stock_email',             label: 'Low Stock: Email',          desc: 'Alert when product stock falls to ≤10 units' },
+                { key: 'low_stock_sms',               label: 'Low Stock: SMS',            desc: 'SMS alert for critical stock thresholds' },
+                { key: 'low_stock_whatsapp',          label: 'Low Stock: WhatsApp',       desc: 'WhatsApp alert for critical stock' },
               ].map(({ key, label, desc }) => (
                 <div key={key} className="flex items-center justify-between px-4 py-3 rounded-xl"
                   style={{ background: 'rgba(15, 22, 33, 0.60)', border: '1px solid var(--border)' }}>
@@ -497,7 +536,26 @@ export default function SettingsPage({ onSettingsUpdated }) {
               ))}
             </div>
           )}
+
+          {settings && (
+            <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between">
+              <span className="text-xs text-slate-400">Remember to save changes to persist your notification preferences.</span>
+              <button
+                onClick={handleSave}
+                disabled={savingSettings || loadingSettings}
+                className="btn-primary text-xs gap-2"
+              >
+                {savingSettings
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                  : saveSuccess
+                  ? <><CheckCircle className="w-3.5 h-3.5" /> Saved Changes</>
+                  : <><Save className="w-3.5 h-3.5" /> Save Changes</>
+                }
+              </button>
+            </div>
+          )}
         </div>
+      </div>
       )}
 
       {/* ────────────── TEAM & STAFF ────────────── */}

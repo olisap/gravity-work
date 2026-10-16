@@ -1,11 +1,12 @@
 import { supabase } from '../config/supabase.js';
 import nodemailer from 'nodemailer';
+import { whatsappService } from './whatsappService.js';
 
 export class NotificationService {
   /**
-   * Send notification via SMS or Email
+   * Send notification via SMS or Email or WhatsApp
    */
-  static async send({ templateName, recipient, channel = 'sms', variables = {} }) {
+  static async send({ templateName, recipient, channel = 'sms', variables = {}, storeId = null }) {
     console.log(`💬 [NotificationService] Queued ${channel.toUpperCase()} to ${recipient} (Template: ${templateName})`);
 
     // Compile template string
@@ -17,7 +18,7 @@ export class NotificationService {
       recipient,
       channel,
       status: 'sent',
-      payload: { variables, body: messageBody },
+      payload: { variables, body: messageBody, store_id: storeId },
       created_at: new Date().toISOString()
     };
 
@@ -25,7 +26,9 @@ export class NotificationService {
       await supabase.from('notification_logs').insert([logEntry]);
     }
 
-    if (channel === 'sms') {
+    if (channel === 'whatsapp') {
+      return await whatsappService.sendMessage(recipient, messageBody, storeId);
+    } else if (channel === 'sms') {
       return await this.sendSMS(recipient, messageBody);
     } else {
       return await this.sendEmail(recipient, variables.subject || 'Order Update', messageBody);
@@ -472,5 +475,21 @@ export class NotificationService {
       const smsMessage = `Hi ${order.customer_name}, your order #${order.order_number} for ${mainProductName} is confirmed! Total: ₦${totalFormatted} (Pay on Delivery). Our rep will call you shortly to confirm delivery.`;
       await this.sendSMS(order.customer_phone, smsMessage);
     }
+  }
+
+  static async getLogs(limit = 50) {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('notification_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        if (!error && data) return data;
+      } catch (e) {
+        console.error('Error fetching notification logs:', e);
+      }
+    }
+    return [];
   }
 }

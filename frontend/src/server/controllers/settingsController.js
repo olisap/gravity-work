@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase.js';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -7,7 +7,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SETTINGS_FILE = join(__dirname, '../../data/store_settings.json');
 
 // ── Ensure data directory exists ──────────────────────────────────────────────
-import { mkdirSync } from 'fs';
 try { mkdirSync(join(__dirname, '../../data'), { recursive: true }); } catch {}
 
 // ── Default Store Settings ────────────────────────────────────────────────────
@@ -36,11 +35,12 @@ const DEFAULT_SETTINGS = {
   force_delivered_qty_selection: false,
   low_stock_sms: false,
   low_stock_email: true,
-  low_stock_whatsapp: true,
+  low_stock_whatsapp: false,          // OFF by default
   reminder_email: true,
-  reminder_whatsapp: true,
+  reminder_whatsapp: false,           // OFF by default
   invoice_via_email: true,
-  invoice_via_whatsapp: true,
+  invoice_via_whatsapp: false,        // OFF by default
+  whatsapp_order_confirmation: false, // OFF by default
 
   // Dispatch & Inventory Rules
   prevent_duplicate_orders: true,
@@ -53,6 +53,13 @@ const DEFAULT_SETTINGS = {
 
 // ── Per-store settings cache (keyed by store_id) ──────────────────────────────
 let settingsCache = {};
+
+export function getStoreSettings(storeId) {
+  if (storeId && settingsCache[storeId]) {
+    return { ...DEFAULT_SETTINGS, ...settingsCache[storeId] };
+  }
+  return { ...DEFAULT_SETTINGS };
+}
 
 function loadSettingsFile() {
   try {
@@ -74,11 +81,50 @@ function saveSettingsFile() {
   }
 }
 
+// ── Cloud storage sync for store settings ─────────────────────────────────────
+async function restoreSettingsFromCloud(storeId) {
+  if (!supabase || !storeId) return null;
+  try {
+    const { data, error } = await supabase.storage
+      .from('wa_sessions')
+      .download(`stores/${storeId}/settings.json`);
+    if (!error && data) {
+      const text = await data.text();
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') {
+        settingsCache[storeId] = { ...(settingsCache[storeId] || {}), ...parsed };
+        saveSettingsFile();
+        console.log(`☁️ [Settings] Restored cloud settings for store ${storeId}`);
+        return settingsCache[storeId];
+      }
+    }
+  } catch (e) {
+    // silent fallback
+  }
+  return null;
+}
+
+async function syncSettingsToCloud(storeId, settingsObj) {
+  if (!supabase || !storeId || !settingsObj) return;
+  try {
+    const buffer = Buffer.from(JSON.stringify(settingsObj, null, 2), 'utf8');
+    await supabase.storage
+      .from('wa_sessions')
+      .upload(`stores/${storeId}/settings.json`, buffer, {
+        upsert: true,
+        contentType: 'application/json'
+      });
+    console.log(`☁️ [Settings] Synced settings for store ${storeId} to Supabase.`);
+  } catch (e) {
+    console.warn(`Could not sync settings to cloud for ${storeId}:`, e.message);
+  }
+}
+
 // Load on startup
 loadSettingsFile();
 
-// ── Mock Audit Trail ───────────────────────────────────────────────────────────
-let mockAuditTrail = [
+// ── Demo Audit Trail (preserves demo showcase without bleeding into real merchant accounts) ──
+let demoAuditTrail = [
   {
     id: 'aud-001',
     action: 'ORDER_DELETED',
@@ -108,6 +154,23 @@ let mockAuditTrail = [
   }
 ];
 
+const storeAuditLogs = {};
+
+export function recordAuditEvent({ store_id, action, order_number, customer_name, amount, performed_by, details }) {
+  if (!store_id) return;
+  if (!storeAuditLogs[store_id]) storeAuditLogs[store_id] = [];
+  storeAuditLogs[store_id].unshift({
+    id: `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    action: action || 'SYSTEM_EVENT',
+    order_number: order_number || null,
+    customer_name: customer_name || null,
+    amount: amount || 0,
+    performed_by: performed_by || 'Store User',
+    timestamp: new Date().toISOString(),
+    details: details || ''
+  });
+}
+
 // ── GET /api/settings ─────────────────────────────────────────────────────────
 export async function getSettings(req, res) {
   const store_id = req.storeId;
@@ -115,9 +178,14 @@ export async function getSettings(req, res) {
   // Start with defaults
   let currentSettings = { ...DEFAULT_SETTINGS };
 
-  // Layer 1: load from persistent file cache
-  if (store_id && settingsCache[store_id]) {
-    currentSettings = { ...currentSettings, ...settingsCache[store_id] };
+  // Layer 1: load from persistent file cache or cloud
+  if (store_id) {
+    if (!settingsCache[store_id]) {
+      await restoreSettingsFromCloud(store_id);
+    }
+    if (settingsCache[store_id]) {
+      currentSettings = { ...currentSettings, ...settingsCache[store_id] };
+    }
   }
 
   // Layer 2: overlay from Supabase stores table (authoritative for name/country)
@@ -156,19 +224,16 @@ export async function updateSettings(req, res) {
     settingsCache[storeId] = merged;
   }
 
-  // Add audit trail event
-  mockAuditTrail.unshift({
-    id: `aud-${Date.now()}`,
-    action: 'SETTINGS_UPDATED',
-    performed_by: req.user?.email || 'Store Owner',
-    timestamp: new Date().toISOString(),
-    details: `Settings updated: ${Object.keys(newSettings).join(', ')}`
-  });
+  // Persist to local JSON file
+  saveSettingsFile();
 
   // ── Supabase sync ─────────────────────────────────────────────────────────
   if (supabase && storeId) {
     try {
-      // 1. Sync store name + country to stores table
+      // 1. Sync store settings to cloud JSON
+      await syncSettingsToCloud(storeId, merged);
+
+      // 2. Sync store name + country to stores table
       const storeUpdates = {};
       if (newSettings.store_name)    storeUpdates.name    = newSettings.store_name;
       if (newSettings.store_country) storeUpdates.country = newSettings.store_country;
@@ -184,7 +249,7 @@ export async function updateSettings(req, res) {
         else console.log('✅ Store updated in Supabase:', storeUpdates);
       }
 
-      // 2. Sync store_name to all users belonging to this store
+      // 3. Sync store_name to all users belonging to this store
       if (newSettings.store_name) {
         await supabase
           .from('users')
@@ -192,7 +257,7 @@ export async function updateSettings(req, res) {
           .eq('store_id', storeId);
       }
 
-      // 3. Logo upload: if it's a base64 Data URI, upload to 'logos' bucket
+      // 4. Logo upload: if it's a base64 Data URI, upload to 'logos' bucket
       if (newSettings.company_logo && newSettings.company_logo.startsWith('data:image/')) {
         try {
           const matches = newSettings.company_logo.match(/^data:image\/([a-zA-Z+]+);base64,(.+)$/);
@@ -218,6 +283,8 @@ export async function updateSettings(req, res) {
                 merged.company_logo = pubUrlData.publicUrl;
                 if (storeId) {
                   settingsCache[storeId] = { ...merged, company_logo: pubUrlData.publicUrl };
+                  saveSettingsFile();
+                  await syncSettingsToCloud(storeId, settingsCache[storeId]);
                 }
                 console.log('✅ Logo uploaded:', pubUrlData.publicUrl);
               }
@@ -232,8 +299,14 @@ export async function updateSettings(req, res) {
     }
   }
 
-  // Persist to file
-  saveSettingsFile();
+  if (storeId) {
+    recordAuditEvent({
+      store_id: storeId,
+      action: 'SETTINGS_UPDATED',
+      performed_by: `${req.user?.full_name || req.user?.email || 'Store Owner'} (${req.user?.role || 'owner'})`,
+      details: 'Store settings and preferences updated'
+    });
+  }
 
   // Return the final merged settings (with resolved logo URL if uploaded)
   const finalSettings = storeId ? settingsCache[storeId] : merged;
@@ -242,5 +315,14 @@ export async function updateSettings(req, res) {
 
 // ── GET /api/audit-trail ──────────────────────────────────────────────────────
 export async function getAuditTrail(req, res) {
-  res.json(mockAuditTrail);
+  const storeId = req.storeId;
+  const DEMO_STORE_IDS = ['00000000-0000-0000-0000-784637855674', '00000000-0000-0000-0000-000000000001'];
+
+  // Keep demo showcase populated for visitors exploring the demo account
+  if (!storeId || DEMO_STORE_IDS.includes(storeId)) {
+    return res.json(demoAuditTrail);
+  }
+
+  const logs = storeAuditLogs[storeId] || [];
+  res.json(logs);
 }

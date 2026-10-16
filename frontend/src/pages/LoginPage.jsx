@@ -4,8 +4,8 @@ import { Lock, Mail, ShieldCheck, ArrowRight, Sparkles, UserCheck } from 'lucide
 
 export default function LoginPage({ onNavigateToOnboarding }) {
   const { loginUser, switchDemoRole } = useAuth();
-  const [email, setEmail] = useState('owner@merchant.ng');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
 

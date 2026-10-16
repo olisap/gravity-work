@@ -80,8 +80,8 @@ export default function UpsellManager({ selectedCountry, onNavigateToFormBuilder
 
         <div className="glass-panel p-5 rounded-2xl border-emerald-500/30 bg-emerald-950/10">
           <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">Best Channel</span>
-          <h3 className="text-2xl font-extrabold text-slate-100 mt-1">{upsellData.best_channel || 'Confirmation Call'}</h3>
-          <p className="text-[10px] text-slate-400 mt-1">42.0% conversion rate via phone script</p>
+          <h3 className="text-2xl font-extrabold text-slate-100 mt-1">{upsellData.best_channel || 'None yet'}</h3>
+          <p className="text-[10px] text-slate-400 mt-1">{upsellData.best_channel_subtitle || 'Phone & checkout conversion tracking'}</p>
         </div>
       </div>
 

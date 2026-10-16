@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { NotificationService } from './notificationService.js';
+import { getStoreSettings } from '../controllers/settingsController.js';
 
 export class AbandonmentWorker {
   static isRunning = false;
@@ -146,7 +147,29 @@ export class AbandonmentWorker {
       }
     }
 
-    // ── 3. Update Database Stamp ──
+    // ── 3. WhatsApp Recovery (opt-in in store settings, OFF by default) ──
+    let whatsappSent = false;
+    const storeSettings = getStoreSettings(draft.store_id);
+    if (storeSettings?.reminder_whatsapp && draft.customer_phone) {
+      try {
+        await NotificationService.send({
+          templateName: 'draft_reminder',
+          recipient: draft.customer_phone,
+          channel: 'whatsapp',
+          variables: {
+            customer_name: customerName,
+            product_name: productName,
+            resume_link: resumeLink
+          },
+          storeId: draft.store_id
+        });
+        whatsappSent = true;
+      } catch (err) {
+        console.error(`Failed to send recovery WhatsApp to ${draft.customer_phone}:`, err);
+      }
+    }
+
+    // ── 4. Update Database Stamp ──
     const nowIso = new Date().toISOString();
     if (supabase) {
       await supabase
@@ -156,7 +179,7 @@ export class AbandonmentWorker {
     }
     draft.reminder_sent_at = nowIso;
 
-    console.log(`✅ Sent draft abandonment reminder (Email: ${emailSent}, SMS: ${smsSent}) for Draft #${draft.order_number || draft.id}`);
-    return { success: true, emailSent, smsSent, reminder_sent_at: nowIso };
+    console.log(`✅ Sent draft abandonment reminder (Email: ${emailSent}, SMS: ${smsSent}, WhatsApp: ${whatsappSent}) for Draft #${draft.order_number || draft.id}`);
+    return { success: true, emailSent, smsSent, whatsappSent, reminder_sent_at: nowIso };
   }
 }

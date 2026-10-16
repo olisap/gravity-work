@@ -14,6 +14,8 @@ import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from './
 import { getDeliveryAgents, createDeliveryAgent, updateDeliveryAgent, deleteDeliveryAgent, assignStockToAgent } from './controllers/deliveryAgentsController.js';
 import { getExpenses, createExpense, deleteExpense } from './controllers/expensesController.js';
 import { AbandonmentWorker } from './services/abandonmentWorker.js';
+import { NotificationService } from './services/notificationService.js';
+import { whatsappService } from './services/whatsappService.js';
 
 dotenv.config();
 
@@ -40,7 +42,7 @@ app.patch('/api/team/:id/status', requireAuth, requireStoreContext, requireRole(
 // Store Settings & Preferences Routes
 app.get('/api/settings', requireAuth, requireStoreContext, getSettings);
 app.post('/api/settings', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), updateSettings);
-app.get('/api/audit-trail', requireAuth, requireRole(['owner', 'admin']), getAuditTrail);
+app.get('/api/audit-trail', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), getAuditTrail);
 
 // Orders & Pipeline Routes
 app.get('/api/orders', requireAuth, requireStoreContext, getOrders);
@@ -92,9 +94,61 @@ app.get('/api/dashboard', requireAuth, requireStoreContext, requireRole(['owner'
 app.get('/api/upsell', requireAuth, requireStoreContext, getUpsellOffers);
 app.get('/api/upsell/trigger/:productId', requireAuth, requireStoreContext, getUpsellOfferForProduct);
 
+// Marketing & Notification Logs Routes
+app.get('/api/notification-logs', requireAuth, requireStoreContext, async (req, res) => {
+  const storeId = req.storeId;
+  const DEMO_STORE_IDS = ['00000000-0000-0000-0000-784637855674', '00000000-0000-0000-0000-000000000001'];
+  if (!storeId || DEMO_STORE_IDS.includes(storeId)) {
+    return res.json([
+      { id: 1, channel: 'WhatsApp', recipient: 'Emeka Nwosu (+2348039988776)', status: 'Delivered', created_at: new Date(Date.now() - 10 * 60000).toISOString() },
+      { id: 2, channel: 'SMS', recipient: 'Fatima Abubakar (+2348021122334)', status: 'Sent (Sandbox)', created_at: new Date(Date.now() - 45 * 60000).toISOString() },
+      { id: 3, channel: 'Email', recipient: 'Kwame Mensah (kwame@ghana.com)', status: 'Opened', created_at: new Date(Date.now() - 120 * 60000).toISOString() }
+    ]);
+  }
+  const logs = await NotificationService.getLogs(50);
+  res.json(logs);
+});
+
+// WhatsApp Gateway Routes (Linked Device via Phone) - Strictly Scoped to Authenticated Store
+app.get('/api/whatsapp/status', requireAuth, requireStoreContext, (req, res) => {
+  res.json(whatsappService.getStatus(req.storeId));
+});
+
+app.post('/api/whatsapp/connect', requireAuth, requireStoreContext, async (req, res) => {
+  try {
+    const status = await whatsappService.connect(req.storeId);
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/whatsapp/disconnect', requireAuth, requireStoreContext, async (req, res) => {
+  try {
+    const result = await whatsappService.disconnect(req.storeId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/whatsapp/test', requireAuth, requireStoreContext, async (req, res) => {
+  const { phone, message } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Phone number is required' });
+  const result = await whatsappService.sendMessage(phone, message || 'Hello! This is a test message from your Nigeria E-Commerce CRM.', req.storeId);
+  res.json(result);
+});
+
 // Start background draft abandonment scanner (only in dedicated server mode)
 if (!process.env.VERCEL) {
   AbandonmentWorker.startWorker(60000);
+
+  // Auto-reconnect WhatsApp for primary store if saved credentials exist
+  const primaryStoreId = '00000000-0000-0000-0000-784723738041';
+  if (whatsappService.getStatus(primaryStoreId).authExists) {
+    console.log(`🔄 [WhatsAppService] Saved auth found for store ${primaryStoreId}; resuming connection...`);
+    whatsappService.connect(primaryStoreId).catch(err => console.error('Failed auto-reconnect WhatsApp:', err));
+  }
 }
 
 import { fileURLToPath } from 'url';

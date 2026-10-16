@@ -3,6 +3,8 @@ import { supabase } from '../config/supabase.js';
 import { InventoryService } from '../services/inventoryService.js';
 import { NotificationService } from '../services/notificationService.js';
 import { AbandonmentWorker } from '../services/abandonmentWorker.js';
+import { recordAuditEvent, getStoreSettings } from './settingsController.js';
+import { whatsappService } from '../services/whatsappService.js';
 
 function isValidUUID(str) {
   if (!str) return false;
@@ -541,6 +543,16 @@ export async function createOrUpdateDraftOrder(req, res) {
         console.error('Failed to send order finalized notifications:', err);
       });
     }
+
+    // Automated WhatsApp order confirmation (opt-in in store settings, OFF by default)
+    const storeSettings = getStoreSettings(store_id);
+    if (storeSettings?.whatsapp_order_confirmation) {
+      whatsappService.sendOrderConfirmation(finalOrder, storeName, store_id).catch(err => {
+        console.error('Failed to send WhatsApp order confirmation:', err);
+      });
+    } else {
+      console.log(`ℹ️ [WhatsApp] Automated order confirmation is OFF in store settings (Store: ${store_id || 'default'}).`);
+    }
   }
 
   res.status(orderIndex >= 0 ? 200 : 201).json(finalOrder);
@@ -626,6 +638,23 @@ export async function updateOrderStatus(req, res) {
         else mockOrders.unshift(formatted);
 
         console.log(`✅ Order #${formatted.order_number} status updated to "${status || formatted.status}" in Supabase`);
+
+        if (status === 'Delivered') {
+          const storeSettings = getStoreSettings(req.storeId);
+          if (storeSettings?.invoice_via_whatsapp && dbData[0].customer_phone) {
+            NotificationService.send({
+              templateName: 'order_delivered_receipt',
+              recipient: dbData[0].customer_phone,
+              channel: 'whatsapp',
+              variables: {
+                customer_name: dbData[0].customer_name,
+                order_number: dbData[0].order_number,
+                total_amount: Number(dbData[0].total_amount || 0).toLocaleString()
+              }
+            }).catch(err => console.error('Failed to send WhatsApp delivered receipt:', err));
+          }
+        }
+
         return res.json(formatted);
       }
     } catch (dbErr) {
@@ -687,6 +716,16 @@ export async function updateOrderStatus(req, res) {
   // Stock Ledger Handling (Deduct on Scheduled, restore on Cancel)
   if (status) {
     await InventoryService.handleOrderStatusChange(order, previousStatus, status);
+
+    recordAuditEvent({
+      store_id: order.store_id || req.storeId,
+      action: status === 'Deleted' ? 'ORDER_DELETED' : `STATUS_${status.toUpperCase().replace(/\s+/g, '_')}`,
+      order_number: order.order_number,
+      customer_name: order.customer_name,
+      amount: order.total_amount,
+      performed_by: `${req.user?.full_name || 'Staff'} (${req.user?.role || 'staff'})`,
+      details: confirmation_notes || `Order status updated from ${previousStatus || 'Pending'} to ${status}`
+    });
   }
 
   res.json(formatOrderFromSupabase(order));
@@ -694,8 +733,60 @@ export async function updateOrderStatus(req, res) {
 
 export async function addUpsellToOrder(req, res) {
   const { id } = req.params;
-  const { upsell_item, upsell_source } = req.body; // { product_id, name, unit_price_at_time_of_order, quantity }
+  const storeId = req.storeId;
+  const { upsell_item, upsell_source } = req.body;
 
+  if (!upsell_item || !upsell_item.name) {
+    return res.status(400).json({ error: 'Valid upsell item is required' });
+  }
+
+  // 1. Try Supabase order update
+  if (supabase) {
+    try {
+      let query = supabase.from('orders').select('*').eq('id', id);
+      if (storeId) query = query.eq('store_id', storeId);
+      const { data: dbOrder, error } = await query.maybeSingle();
+
+      if (!error && dbOrder) {
+        const currentItems = Array.isArray(dbOrder.items) ? [...dbOrder.items] : [];
+        const newItem = {
+          product_id: upsell_item.product_id || null,
+          name: upsell_item.name,
+          unit_price_at_time_of_order: Number(upsell_item.unit_price_at_time_of_order) || 0,
+          quantity: Number(upsell_item.quantity) || 1,
+          is_upsell: true
+        };
+        currentItems.push(newItem);
+
+        const newSubtotal = currentItems.reduce((sum, item) => sum + (Number(item.unit_price_at_time_of_order || 0) * Number(item.quantity || 1)), 0);
+        const deliveryFee = Number(dbOrder.delivery_fee) || 0;
+        const newTotal = newSubtotal + deliveryFee;
+
+        const updatePayload = {
+          items: currentItems,
+          subtotal: newSubtotal,
+          total_amount: newTotal,
+          upsell_source: upsell_source || 'confirmation_call',
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: updatedOrder, error: updateErr } = await supabase
+          .from('orders')
+          .update(updatePayload)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (!updateErr && updatedOrder) {
+          return res.json(formatOrderFromSupabase(updatedOrder));
+        }
+      }
+    } catch (e) {
+      console.error('Error adding upsell to Supabase order:', e);
+    }
+  }
+
+  // 2. Fallback to demo mock orders if in demo mode
   let order = mockOrders.find(o => o.id === id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 

@@ -2,9 +2,29 @@ import React, { useState } from 'react';
 import { Phone, CheckCircle, XCircle, AlertTriangle, Zap, MessageSquare, Copy } from 'lucide-react';
 import { copyOrderToClipboard } from '../utils/copyOrder';
 
-export default function ConfirmationCallModal({ order, onClose, onUpdateStatus, onAddUpsell }) {
+export default function ConfirmationCallModal({ order, products = [], onClose, onUpdateStatus, onAddUpsell }) {
   const [notes, setNotes] = useState(order?.confirmation_call_notes || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [addingUpsell, setAddingUpsell] = useState(false);
+  const [upsellSuccess, setUpsellSuccess] = useState(false);
+
+  // Identify products suitable for upsell (prefer products not already in customer's order)
+  const orderedProductNames = (order?.items || []).map(i => (i.name || '').toLowerCase());
+  const candidateProducts = products.filter(p => !orderedProductNames.includes((p.name || '').toLowerCase()));
+  const availableUpsellProducts = candidateProducts.length > 0 ? candidateProducts : products;
+
+  const [selectedUpsellId, setSelectedUpsellId] = useState(availableUpsellProducts[0]?.id || '');
+  const [upsellPrice, setUpsellPrice] = useState(availableUpsellProducts[0]?.base_price || 5000);
+
+  const existingUpsell = (order?.items || []).find(i => i.is_upsell);
+
+  const handleProductSelect = (prodId) => {
+    setSelectedUpsellId(prodId);
+    const prod = availableUpsellProducts.find(p => p.id === prodId);
+    if (prod) {
+      setUpsellPrice(prod.base_price || 5000);
+    }
+  };
 
   if (!order) return null;
 
@@ -21,13 +41,24 @@ export default function ConfirmationCallModal({ order, onClose, onUpdateStatus, 
   };
 
   const handleAddUpsellOffer = async () => {
-    if (onAddUpsell) {
+    if (!onAddUpsell || availableUpsellProducts.length === 0) return;
+    const targetProd = availableUpsellProducts.find(p => p.id === selectedUpsellId) || availableUpsellProducts[0];
+    if (!targetProd) return;
+
+    setAddingUpsell(true);
+    try {
       await onAddUpsell(order.id, {
-        product_id: 'p4000000-0000-0000-0000-000000000004',
-        name: 'Portable Electric USB Juicer Cup',
-        unit_price_at_time_of_order: 7000,
+        product_id: targetProd.id,
+        name: targetProd.name,
+        unit_price_at_time_of_order: Number(upsellPrice) || Number(targetProd.base_price) || 0,
         quantity: 1
       }, 'confirmation_call');
+      setUpsellSuccess(true);
+      setTimeout(() => setUpsellSuccess(false), 3500);
+    } catch (err) {
+      console.error('Failed to add upsell offer:', err);
+    } finally {
+      setAddingUpsell(false);
     }
   };
 
@@ -71,9 +102,20 @@ export default function ConfirmationCallModal({ order, onClose, onUpdateStatus, 
           </div>
           <div className="flex justify-between items-center">
             <span className="text-slate-400">Phone Number:</span>
-            <a href={`tel:${order.customer_phone}`} className="font-bold text-indigo-400 underline flex items-center gap-1">
-              <Phone className="w-3 h-3" /> {order.customer_phone}
-            </a>
+            <div className="flex items-center gap-2">
+              <a href={`tel:${order.customer_phone}`} className="font-bold text-indigo-400 underline flex items-center gap-1">
+                <Phone className="w-3 h-3" /> {order.customer_phone}
+              </a>
+              <a 
+                href={`https://wa.me/${(order.customer_whatsapp || order.customer_phone || '').replace(/[^0-9]/g, '').replace(/^0/, '234')}?text=${encodeURIComponent(`Hi ${order.customer_name}, this is from the delivery team regarding your order #${order.order_number} for ₦${Number(order.total_amount || 0).toLocaleString()} (Pay on Delivery). Are you available for delivery?`)}`}
+                target="_blank" 
+                rel="noreferrer"
+                className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 font-semibold text-[11px] flex items-center gap-1 border border-emerald-500/30"
+                title="Open WhatsApp chat"
+              >
+                <MessageSquare className="w-3 h-3" /> WhatsApp
+              </a>
+            </div>
           </div>
           {order.customer_whatsapp && (
             <div className="flex justify-between items-center">
@@ -108,20 +150,68 @@ export default function ConfirmationCallModal({ order, onClose, onUpdateStatus, 
         </div>
 
         {/* Staff Upsell Prompt */}
-        <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-xs flex items-center justify-between">
-          <div>
-            <span className="font-bold text-amber-300 flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 fill-amber-400" /> Phone Call Upsell Offer:
-            </span>
-            <p className="text-slate-300 text-[11px]">Suggest adding Juicer Cup for ₦7,000 extra on call</p>
+        {existingUpsell ? (
+          <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div>
+                <span className="font-bold text-emerald-300">Upsell Attached to Order</span>
+                <p className="text-slate-300 text-[11px]">{existingUpsell.name} (+₦{Number(existingUpsell.unit_price_at_time_of_order).toLocaleString()})</p>
+              </div>
+            </div>
+            <span className="badge badge-delivered text-[10px]">Attached</span>
           </div>
-          <button
-            onClick={handleAddUpsellOffer}
-            className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-[11px] flex items-center gap-1 transition-colors"
-          >
-            + Add Upsell (₦7k)
-          </button>
-        </div>
+        ) : (
+          <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-300 flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 fill-amber-400" /> Phone Call Upsell Offer:
+              </span>
+              {upsellSuccess && (
+                <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" /> Added to order!
+                </span>
+              )}
+            </div>
+
+            {availableUpsellProducts.length > 0 ? (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <select
+                  value={selectedUpsellId}
+                  onChange={(e) => handleProductSelect(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-100 flex-1 focus:border-amber-400 outline-none"
+                >
+                  {availableUpsellProducts.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} (₦{Number(p.base_price || 0).toLocaleString()})
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-slate-400 text-[11px]">₦</span>
+                  <input
+                    type="number"
+                    value={upsellPrice}
+                    onChange={(e) => setUpsellPrice(e.target.value)}
+                    className="w-20 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-100 font-bold focus:border-amber-400 outline-none text-right"
+                    placeholder="Price"
+                  />
+                  <button
+                    type="button"
+                    disabled={addingUpsell}
+                    onClick={handleAddUpsellOffer}
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-[11px] flex items-center gap-1 transition-colors shrink-0"
+                  >
+                    {addingUpsell ? 'Adding...' : '+ Add Upsell'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-400 italic">No additional catalog products available for staff upsell.</p>
+            )}
+          </div>
+        )}
 
         {/* Call Notes Textarea */}
         <div>

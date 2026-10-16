@@ -317,7 +317,7 @@ function CrmAppContent() {
           )}
 
           {activeTab === 'marketing' && (
-            <MarketingHub selectedCountry={selectedCountry} />
+            <MarketingHub selectedCountry={selectedCountry} orders={orders} products={products} />
           )}
 
           {activeTab === 'products-inventory' && (
@@ -349,6 +349,7 @@ function CrmAppContent() {
       {activeModalOrder && (
         <ConfirmationCallModal
           order={activeModalOrder}
+          products={products}
           onClose={() => setActiveModalOrder(null)}
           onUpdateStatus={handleUpdateStatus}
           onAddUpsell={handleAddUpsell}
