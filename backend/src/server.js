@@ -16,6 +16,7 @@ import { getExpenses, createExpense, deleteExpense } from './controllers/expense
 import { AbandonmentWorker } from './services/abandonmentWorker.js';
 import { NotificationService } from './services/notificationService.js';
 import { whatsappService } from './services/whatsappService.js';
+import { supabase } from './config/supabase.js';
 
 dotenv.config();
 
@@ -110,8 +111,12 @@ app.get('/api/notification-logs', requireAuth, requireStoreContext, async (req, 
 });
 
 // WhatsApp Gateway Routes (Linked Device via Phone) - Strictly Scoped to Authenticated Store
-app.get('/api/whatsapp/status', requireAuth, requireStoreContext, (req, res) => {
-  res.json(whatsappService.getStatus(req.storeId));
+app.get('/api/whatsapp/status', requireAuth, requireStoreContext, async (req, res) => {
+  const status = whatsappService.getStatus(req.storeId);
+  if (!status.authExists && supabase) {
+    status.authExists = await whatsappService.hasCloudAuth(req.storeId);
+  }
+  res.json(status);
 });
 
 app.post('/api/whatsapp/connect', requireAuth, requireStoreContext, async (req, res) => {
@@ -143,12 +148,20 @@ app.post('/api/whatsapp/test', requireAuth, requireStoreContext, async (req, res
 if (!process.env.VERCEL) {
   AbandonmentWorker.startWorker(60000);
 
-  // Auto-reconnect WhatsApp for primary store if saved credentials exist
+  // Auto-reconnect WhatsApp for primary store if local or cloud credentials exist
   const primaryStoreId = '00000000-0000-0000-0000-784723738041';
-  if (whatsappService.getStatus(primaryStoreId).authExists) {
-    console.log(`🔄 [WhatsAppService] Saved auth found for store ${primaryStoreId}; resuming connection...`);
-    whatsappService.connect(primaryStoreId).catch(err => console.error('Failed auto-reconnect WhatsApp:', err));
-  }
+  (async () => {
+    try {
+      const hasLocal = whatsappService.hasLocalAuth(primaryStoreId);
+      const hasCloud = !hasLocal && (await whatsappService.hasCloudAuth(primaryStoreId));
+      if (hasLocal || hasCloud) {
+        console.log(`🔄 [WhatsAppService] Saved auth found for store ${primaryStoreId} (local: ${hasLocal}, cloud: ${hasCloud}); resuming connection...`);
+        await whatsappService.connect(primaryStoreId);
+      }
+    } catch (err) {
+      console.error('Failed auto-reconnect WhatsApp:', err.message);
+    }
+  })();
 }
 
 import { fileURLToPath } from 'url';

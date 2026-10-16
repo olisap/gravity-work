@@ -13,7 +13,6 @@ class WhatsAppService {
     this.sessions = new Map();
     this.baseAuthDir = path.resolve(process.cwd(), '.wa_auth');
     this.storageBucket = 'wa_sessions';
-    this.maxReconnectAttempts = 5;
   }
 
   // Resolve storeId with safe fallback to active default store
@@ -69,22 +68,42 @@ class WhatsAppService {
     return `stores/${sid}/session_bundle.json`;
   }
 
-  // Check if local auth files exist for this specific store
+  // Check if valid, registered local auth credentials exist for this store
   hasLocalAuth(storeId) {
     const authDir = this.getAuthDir(storeId);
-    return fs.existsSync(authDir) && fs.existsSync(path.join(authDir, 'creds.json'));
+    const credsPath = path.join(authDir, 'creds.json');
+    if (!fs.existsSync(credsPath)) return false;
+    try {
+      const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+      return !!(creds && creds.registered === true);
+    } catch {
+      return false;
+    }
+  }
+
+  // Check if valid credentials bundle exists in Supabase Storage
+  async hasCloudAuth(storeId) {
+    if (!supabase) return false;
+    const sid = this.resolveStoreId(storeId);
+    try {
+      const { data, error } = await supabase.storage.from(this.storageBucket).list(`stores/${sid}`);
+      return !error && Array.isArray(data) && data.some(f => f.name === 'session_bundle.json');
+    } catch {
+      return false;
+    }
   }
 
   // Get current status summary scoped strictly to the calling store
   getStatus(storeId) {
     const sid = this.resolveStoreId(storeId);
     const session = this.getSession(sid);
+    const authExists = this.hasLocalAuth(sid);
     return {
       storeId: sid,
       status: session.status,
       qrCode: session.qrCode,
       user: session.connectedUser,
-      authExists: this.hasLocalAuth(sid)
+      authExists
     };
   }
 
@@ -110,6 +129,21 @@ class WhatsAppService {
 
       const text = await data.text();
       const bundle = JSON.parse(text);
+
+      // Verify that the cloud bundle actually contains a registered session
+      if (bundle['creds.json']) {
+        try {
+          const creds = JSON.parse(bundle['creds.json']);
+          if (!creds || creds.registered !== true) {
+            console.log(`ℹ️ [WhatsAppService] Cloud session for store ${sid} is not registered yet. Ignoring.`);
+            return false;
+          }
+        } catch {
+          return false;
+        }
+      } else {
+        return false;
+      }
 
       if (!fs.existsSync(authDir)) {
         fs.mkdirSync(authDir, { recursive: true });
@@ -139,10 +173,10 @@ class WhatsAppService {
       this.syncAuthToSupabase(sid).catch(err => {
         console.warn(`⚠️ [WhatsAppService] Cloud sync error for store ${sid}:`, err.message);
       });
-    }, 2500);
+    }, 3000);
   }
 
-  // Upload local auth directory bundle to Supabase Storage strictly under stores/${storeId}/
+  // Upload local auth directory bundle to Supabase Storage strictly when registered === true
   async syncAuthToSupabase(storeId) {
     if (!supabase) return false;
     const sid = this.resolveStoreId(storeId);
@@ -150,7 +184,17 @@ class WhatsAppService {
 
     if (!fs.existsSync(authDir)) return false;
 
+    // Strict validation: never overwrite cloud storage with an unregistered or partial state
+    const credsPath = path.join(authDir, 'creds.json');
+    if (!fs.existsSync(credsPath)) return false;
+
     try {
+      const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+      if (!creds || creds.registered !== true) {
+        console.log(`ℹ️ [WhatsAppService] Skipping cloud backup for store ${sid} because credentials are not yet registered.`);
+        return false;
+      }
+
       const files = fs.readdirSync(authDir);
       if (files.length === 0) return false;
 
@@ -218,8 +262,16 @@ class WhatsAppService {
     const sid = this.resolveStoreId(storeId);
     const session = this.getSession(sid);
 
-    if (session.isInitializing || session.status === 'connected') {
+    if (session.status === 'connected' && session.sock) {
       return this.getStatus(sid);
+    }
+
+    // Clean up any existing socket to avoid conflict/replacement errors
+    if (session.sock) {
+      try {
+        session.sock.end(undefined);
+      } catch {}
+      session.sock = null;
     }
 
     session.isInitializing = true;
@@ -229,7 +281,7 @@ class WhatsAppService {
     try {
       const authDir = this.getAuthDir(sid);
 
-      // 1. If local folder is empty, attempt to restore from Supabase Storage
+      // 1. If local folder is not registered, attempt to restore from Supabase Storage
       if (!this.hasLocalAuth(sid)) {
         await this.restoreAuthFromSupabase(sid);
       }
@@ -251,7 +303,10 @@ class WhatsAppService {
 
       session.sock.ev.on('creds.update', () => {
         saveCreds();
-        this.scheduleCloudSync(sid);
+        // If credentials just became registered, back up immediately
+        if (state.creds?.registered) {
+          this.scheduleCloudSync(sid);
+        }
       });
 
       session.sock.ev.on('connection.update', async (update) => {
@@ -269,27 +324,29 @@ class WhatsAppService {
 
         if (connection === 'close') {
           const statusCode = lastDisconnect?.error?.output?.statusCode;
-          const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+          const isLoggedOut = statusCode === DisconnectReason.loggedOut;
 
-          console.log(`⚠️ [WhatsAppService] Store ${sid} connection closed. Code: ${statusCode}. Reconnect: ${shouldReconnect}`);
+          console.log(`⚠️ [WhatsAppService] Store ${sid} connection closed. Code: ${statusCode}. Logged out: ${isLoggedOut}`);
           session.connectedUser = null;
           session.qrCode = null;
 
-          if (shouldReconnect && session.reconnectAttempts < this.maxReconnectAttempts) {
+          if (!isLoggedOut) {
+            // Reconnect with exponential backoff up to 30s
+            const delay = Math.min(3000 * Math.pow(1.4, session.reconnectAttempts), 30000);
             session.reconnectAttempts++;
             session.status = 'connecting';
+            console.log(`🔄 [WhatsAppService] Auto-reconnecting store ${sid} in ${Math.round(delay / 1000)}s (attempt ${session.reconnectAttempts})...`);
             setTimeout(() => {
               session.isInitializing = false;
-              this.connect(sid);
-            }, 3000);
+              this.connect(sid).catch(err => console.warn('Reconnect failed:', err.message));
+            }, delay);
           } else {
             session.status = 'disconnected';
             session.isInitializing = false;
-            if (statusCode === DisconnectReason.loggedOut) {
-              console.log(`🚪 [WhatsAppService] Store ${sid} device logged out. Clearing auth and cloud bundle.`);
-              this.clearAuthFiles(sid);
-              this.clearCloudSession(sid);
-            }
+            session.reconnectAttempts = 0;
+            console.log(`🚪 [WhatsAppService] Store ${sid} device logged out on WhatsApp. Clearing auth.`);
+            this.clearAuthFiles(sid);
+            this.clearCloudSession(sid);
           }
         } else if (connection === 'open') {
           console.log(`✅ [WhatsAppService] Connected successfully to WhatsApp Web Gateway for store ${sid}!`);
@@ -306,8 +363,9 @@ class WhatsAppService {
             phone: phone
           };
 
-          // Back up authenticated session to Supabase immediately
-          this.scheduleCloudSync(sid);
+          // Save registered credentials and back up to Supabase immediately
+          saveCreds();
+          this.syncAuthToSupabase(sid);
         }
       });
 
