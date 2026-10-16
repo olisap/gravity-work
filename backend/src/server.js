@@ -12,6 +12,7 @@ import { getUpsellOffers, getUpsellOfferForProduct } from './controllers/upsellC
 import { getSettings, updateSettings, getAuditTrail } from './controllers/settingsController.js';
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from './controllers/suppliersController.js';
 import { getDeliveryAgents, createDeliveryAgent, updateDeliveryAgent, deleteDeliveryAgent, assignStockToAgent } from './controllers/deliveryAgentsController.js';
+import { getExpenses, createExpense, deleteExpense } from './controllers/expensesController.js';
 import { AbandonmentWorker } from './services/abandonmentWorker.js';
 
 dotenv.config();
@@ -63,6 +64,11 @@ app.get('/api/suppliers', requireAuth, requireStoreContext, getSuppliers);
 app.post('/api/suppliers', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), createSupplier);
 app.patch('/api/suppliers/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), updateSupplier);
 app.delete('/api/suppliers/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), deleteSupplier);
+
+// Accounting & Business Expenses Routes
+app.get('/api/expenses', requireAuth, requireStoreContext, getExpenses);
+app.post('/api/expenses', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createExpense);
+app.delete('/api/expenses/:id', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), deleteExpense);
 
 // Delivery Fleet & Courier Agents Routes
 app.get('/api/delivery-agents', requireAuth, requireStoreContext, getDeliveryAgents);
