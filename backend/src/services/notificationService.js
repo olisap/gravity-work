@@ -99,6 +99,11 @@ export class NotificationService {
     // Use dynamic store name if provided, otherwise fall back to env config
     const senderName = storeName || process.env.SENDER_NAME || 'Order Notifications';
 
+    // Ensure business owner email is always used as Reply-To
+    const effectiveReplyTo = (replyTo && replyTo.includes('@'))
+      ? replyTo.trim()
+      : (process.env.SENDER_EMAIL || 'smirhty@gmail.com');
+
     if (!senderEmail) {
       console.error('❌ No SENDER_EMAIL configured. Set SENDER_EMAIL (and SENDER_NAME) in your environment before sending live emails.');
       return { success: false, provider: 'none', error: 'SENDER_EMAIL not configured' };
@@ -136,7 +141,7 @@ export class NotificationService {
         const info = await transporter.sendMail({
           from: `"${senderName}" <${senderEmail}>`,
           to: email,
-          ...(replyTo ? { replyTo } : {}),
+          ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
           subject,
           html: finalHtml,
           text,
@@ -163,7 +168,7 @@ export class NotificationService {
           body: JSON.stringify({
             from: process.env.RESEND_FROM_EMAIL || `"${senderName}" <onboarding@resend.dev>`,
             to: [email],
-            ...(replyTo ? { reply_to: replyTo } : {}),
+            ...(effectiveReplyTo ? { reply_to: effectiveReplyTo } : {}),
             subject,
             html: finalHtml,
             ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
@@ -195,7 +200,7 @@ export class NotificationService {
           body: JSON.stringify({
             sender: { name: senderName, email: senderEmail },
             to: [{ email }],
-            ...(replyTo ? { replyTo: { email: replyTo } } : {}),
+            ...(effectiveReplyTo ? { replyTo: { email: effectiveReplyTo } } : {}),
             subject,
             htmlContent: finalHtml,
             ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
@@ -231,7 +236,7 @@ export class NotificationService {
         const info = await transporter.sendMail({
           from: `"${senderName}" <${senderEmail}>`,
           to: email,
-          ...(replyTo ? { replyTo } : {}),
+          ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
           subject,
           html: finalHtml,
           text,
@@ -318,7 +323,8 @@ export class NotificationService {
     const itemsList = order.items || [];
 
     // ── 1. Merchant Order Alert Email (Date-Threaded for Gmail / Mailbox grouping) ──
-    const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || null;
+    const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || 'smirhty@gmail.com';
+    const businessOwnerReplyTo = targetMerchantEmail;
 
     const orderDate = new Date();
     const dateFormatted = orderDate.toLocaleDateString('en-GB', {
@@ -392,7 +398,7 @@ export class NotificationService {
         `New order #${order.order_number} for ${mainProductName} (₦${totalFormatted}) from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
         merchantHtml,
         displayStoreName,
-        order.customer_email && order.customer_email.includes('@') ? order.customer_email.trim() : null,
+        businessOwnerReplyTo,
         merchantHeaders
       );
     } else {

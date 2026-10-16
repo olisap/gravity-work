@@ -395,7 +395,17 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
           if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+/.test(trimmed)) return 'https://' + trimmed;
           try {
             if (document.referrer) {
-              return new URL(trimmed, document.referrer).href;
+              let ref = document.referrer;
+              // If referrer has no trailing slash and does not end with a file extension, append '/'
+              // so that relative paths like './thank-you.html' stay inside the current page directory (e.g. /ear-cleaner/)
+              try {
+                const parsedRef = new URL(ref);
+                if (!parsedRef.pathname.endsWith('/') && !/\.[a-zA-Z0-9]+$/.test(parsedRef.pathname)) {
+                  parsedRef.pathname += '/';
+                  ref = parsedRef.href;
+                }
+              } catch (re) {}
+              return new URL(trimmed, ref).href;
             }
           } catch (e) {}
           return trimmed.startsWith('/') ? trimmed : '/' + trimmed;
