@@ -516,6 +516,7 @@ export default function SettingsPage({ onSettingsUpdated }) {
             <div className="space-y-2">
               {[
                 { key: 'whatsapp_order_confirmation', label: 'Order Confirmed: WhatsApp', desc: 'Send automated WhatsApp order confirmation receipt to customer on new form submission (OFF by default)' },
+                { key: 'include_confirmation_media',  label: 'Order Media: WhatsApp & Email', desc: 'Include product demo video or photo in buyer order confirmation receipts (when available on the product)' },
                 { key: 'reminder_whatsapp',           label: 'Draft Reminder: WhatsApp',  desc: 'Send automated cart recovery resume link to abandoned checkouts via WhatsApp (OFF by default)' },
                 { key: 'invoice_via_whatsapp',        label: 'Delivered Receipt: WhatsApp', desc: 'Send automated delivery receipt via WhatsApp when order is marked Delivered (OFF by default)' },
                 { key: 'reminder_email',              label: 'Draft Reminder: Email',     desc: 'Send resume link to abandoned form customers via email' },

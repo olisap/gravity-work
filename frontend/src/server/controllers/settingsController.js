@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS = {
   invoice_via_email: true,
   invoice_via_whatsapp: false,        // OFF by default
   whatsapp_order_confirmation: false, // OFF by default
+  include_confirmation_media: true,   // Include product photo/video in order confirmation receipts when available
 
   // Dispatch & Inventory Rules
   prevent_duplicate_orders: true,

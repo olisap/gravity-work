@@ -104,6 +104,15 @@ async function resolveStoreName(storeId) {
  */
 async function resolveConfirmationMedia(order, storeId = null) {
   try {
+    // 0. Check global store setting: if disabled in Settings, skip media entirely
+    if (storeId) {
+      const storeSettings = getStoreSettings(storeId);
+      if (storeSettings && storeSettings.include_confirmation_media === false) {
+        console.log(`ℹ️ [resolveConfirmationMedia] Store ${storeId} has disabled confirmation media in Settings.`);
+        return null;
+      }
+    }
+
     let productId = null;
     if (order.items && order.items.length > 0 && order.items[0].product_id) {
       productId = order.items[0].product_id;
@@ -140,28 +149,13 @@ async function resolveConfirmationMedia(order, storeId = null) {
     if (!error && prods && prods.length > 0) {
       const prod = prods[0];
       if (Array.isArray(prod.images) && prod.images.length > 0) {
-        // 1. Look for explicit confirmation media
+        // Look strictly for explicit confirmation media set by the merchant on this product
         const conf = prod.images.find(img => img && typeof img === 'object' && img.is_confirmation);
         if (conf && conf.url && typeof conf.url === 'string' && conf.url.trim().startsWith('http')) {
           const u = conf.url.trim();
           return {
             url: u,
             type: conf.type || (/\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image')
-          };
-        }
-        // 2. Check first image/video entry
-        const first = prod.images[0];
-        if (typeof first === 'string' && first.trim().startsWith('http')) {
-          const u = first.trim();
-          return {
-            url: u,
-            type: /\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image'
-          };
-        } else if (first && typeof first === 'object' && first.url && typeof first.url === 'string' && first.url.trim().startsWith('http')) {
-          const u = first.url.trim();
-          return {
-            url: u,
-            type: first.type || (/\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image')
           };
         }
       }
