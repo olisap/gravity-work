@@ -204,15 +204,21 @@ export async function createCategory(req, res) {
 
 export async function getStockMovements(req, res) {
   const storeId = req.storeId || req.user?.store_id;
+  const { product_id } = req.query;
 
   if (supabase) {
-    const { data: storeProducts, error: productError } = await supabase
-      .from('products')
-      .select('id')
-      .eq('store_id', storeId);
-    if (productError) return res.status(502).json({ error: 'Inventory could not be loaded', details: productError.message });
+    let productIds = [];
+    if (product_id) {
+      productIds = [product_id];
+    } else {
+      const { data: storeProducts, error: productError } = await supabase
+        .from('products')
+        .select('id')
+        .eq('store_id', storeId);
+      if (productError) return res.status(502).json({ error: 'Inventory could not be loaded', details: productError.message });
+      productIds = (storeProducts || []).map(product => product.id);
+    }
 
-    const productIds = (storeProducts || []).map(product => product.id);
     if (productIds.length === 0) return res.json([]);
 
     const query = supabase

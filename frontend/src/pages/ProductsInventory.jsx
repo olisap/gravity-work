@@ -3,7 +3,7 @@ import {
   Package, Plus, Search, MoreVertical, HelpCircle,
   Trash2, Edit, Copy, EyeOff, Tag, Globe, History,
   Settings, Check, X, FileText, AlertTriangle,
-  Video, Image as ImageIcon, Film, ExternalLink, Upload
+  Video, Image as ImageIcon, Film, ExternalLink, Upload, Loader2
 } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
@@ -61,6 +61,14 @@ export default function ProductsInventory({
   const [showStockHistoryModal, setShowStockHistoryModal] = useState(null);
   const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false);
 
+  // Stock History & Adjustment State
+  const [stockHistoryLoading, setStockHistoryLoading] = useState(false);
+  const [stockMovements, setStockMovements] = useState([]);
+  const [stockHistoryError, setStockHistoryError] = useState('');
+  const [adjustDelta, setAdjustDelta] = useState('');
+  const [adjustNote, setAdjustNote] = useState('');
+  const [adjustingStock, setAdjustingStock] = useState(false);
+
   // Add/Edit Product Form State
   const [formProdName, setFormProdName] = useState('');
   const [formCategory, setFormCategory] = useState('kitchen wares');
@@ -115,6 +123,85 @@ export default function ProductsInventory({
       setUploadCatalogError(err.message || 'Upload failed');
     } finally {
       setUploadingCatalogImg(false);
+    }
+  };
+
+  const openStockHistoryModal = async (product) => {
+    setShowStockHistoryModal(product);
+    setStockHistoryLoading(true);
+    setStockHistoryError('');
+    setAdjustDelta('');
+    setAdjustNote('');
+    try {
+      const token = localStorage.getItem('gravity_crm_token');
+      const res = await fetch(apiUrl(`/api/stock-movements?product_id=${encodeURIComponent(product.id)}`), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStockMovements(Array.isArray(data) ? data : []);
+      } else {
+        setStockMovements([]);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch stock movements:', e.message);
+      setStockMovements([]);
+    } finally {
+      setStockHistoryLoading(false);
+    }
+  };
+
+  const handleRecordStockAdjustment = async (e) => {
+    e.preventDefault();
+    if (!showStockHistoryModal || !adjustDelta || Number(adjustDelta) === 0) return;
+    setAdjustingStock(true);
+    setStockHistoryError('');
+    try {
+      const delta = Number(adjustDelta);
+      const token = localStorage.getItem('gravity_crm_token');
+      const res = await fetch(apiUrl('/api/stock-adjustments'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          product_id: showStockHistoryModal.id,
+          movement_type: delta > 0 ? 'restock' : 'manual_adjustment',
+          quantity_delta: delta,
+          note: adjustNote.trim() || (delta > 0 ? 'Stock Restock Batch' : 'Manual Stock Reduction')
+        })
+      });
+      if (res.ok) {
+        const updatedStock = Math.max(0, (showStockHistoryModal.available_stock || 0) + delta);
+        if (onProductUpdated) {
+          onProductUpdated({ ...showStockHistoryModal, available_stock: updatedStock });
+        }
+        setShowStockHistoryModal(prev => ({ ...prev, available_stock: updatedStock }));
+        setStockMovements(prev => [
+          {
+            id: `temp-${Date.now()}`,
+            product_id: showStockHistoryModal.id,
+            movement_type: delta > 0 ? 'restock' : 'manual_adjustment',
+            quantity_delta: delta,
+            note: adjustNote.trim() || (delta > 0 ? 'Stock Restock Batch' : 'Manual Stock Reduction'),
+            created_at: new Date().toISOString()
+          },
+          ...prev
+        ]);
+        setAdjustDelta('');
+        setAdjustNote('');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setStockHistoryError(err.error || 'Failed to record stock adjustment');
+      }
+    } catch (err) {
+      setStockHistoryError(err.message || 'Error saving stock adjustment');
+    } finally {
+      setAdjustingStock(false);
     }
   };
 
@@ -642,7 +729,7 @@ export default function ProductsInventory({
                             <Globe className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setShowStockHistoryModal(p)}
+                            onClick={() => openStockHistoryModal(p)}
                             className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400"
                             title="Stock History"
                           >
@@ -1571,21 +1658,111 @@ export default function ProductsInventory({
       {/* ── STOCK HISTORY MODAL ── */}
       {showStockHistoryModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass w-full max-w-lg p-6 rounded-2xl border-slate-700 space-y-4">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <History className="w-4 h-4 text-amber-400" /> Stock Audit History: {showStockHistoryModal.name}
-            </h3>
-            <div className="space-y-2 text-xs">
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between">
-                <span>Initial Restock</span>
-                <span className="text-emerald-400 font-mono font-bold">+150 units</span>
+          <div className="glass w-full max-w-lg p-6 rounded-2xl border-slate-700 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <History className="w-4 h-4 text-amber-400" /> Stock Audit History: {showStockHistoryModal.name}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Real recorded inventory movements and dispatch audits</p>
               </div>
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between">
-                <span>Order #OLI-10001 Dispatch</span>
-                <span className="text-rose-400 font-mono font-bold">-1 unit</span>
+              <div className="text-right shrink-0">
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Current Stock</span>
+                <span className={`text-sm font-bold font-mono ${(showStockHistoryModal.available_stock || 0) > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {showStockHistoryModal.available_stock || 0} units
+                </span>
               </div>
             </div>
-            <button onClick={() => setShowStockHistoryModal(null)} className="w-full btn-primary py-2 text-xs">
+
+            {stockHistoryError && (
+              <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
+                ⚠️ {stockHistoryError}
+              </div>
+            )}
+
+            {/* Audit Logs List */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                Logged Inventory Movements
+              </label>
+
+              {stockHistoryLoading ? (
+                <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                  <span>Loading recorded stock history...</span>
+                </div>
+              ) : stockMovements.length > 0 ? (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {stockMovements.map(m => {
+                    const isPositive = (m.quantity_delta || 0) > 0;
+                    return (
+                      <div key={m.id} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                        <div className="space-y-0.5">
+                          <p className="font-semibold text-slate-200">
+                            {m.note || (isPositive ? 'Restock / Stock Added' : 'Stock Dispatch / Reduction')}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {m.created_at ? new Date(m.created_at).toLocaleString() : 'Recent movement'}
+                          </p>
+                        </div>
+                        <span className={`font-mono font-bold text-xs ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {isPositive ? `+${m.quantity_delta}` : m.quantity_delta} units
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 text-center space-y-1">
+                  <p className="text-xs font-semibold text-slate-300">
+                    📦 Current Baseline Stock: <span className="font-mono text-emerald-400 font-bold">{showStockHistoryModal.available_stock || 0} units</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    No manual adjustments or order dispatch reductions have been logged yet for this product.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Adjustment Form */}
+            <form onSubmit={handleRecordStockAdjustment} className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-3">
+              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider block">
+                Quick Stock Restock / Adjustment
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Units (e.g. +50 to add, -5 to deduct)</label>
+                  <input
+                    type="number"
+                    value={adjustDelta}
+                    onChange={e => setAdjustDelta(e.target.value)}
+                    placeholder="+50 or -5"
+                    className="input text-xs py-1.5 font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Reason / Note (Optional)</label>
+                  <input
+                    type="text"
+                    value={adjustNote}
+                    onChange={e => setAdjustNote(e.target.value)}
+                    placeholder="e.g. New supplier batch"
+                    className="input text-xs py-1.5"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={adjustingStock || !adjustDelta}
+                className="w-full btn-primary py-2 text-xs flex items-center justify-center gap-1.5"
+              >
+                {adjustingStock ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                {adjustingStock ? 'Recording Adjustment...' : 'Record Stock Movement'}
+              </button>
+            </form>
+
+            <button onClick={() => setShowStockHistoryModal(null)} className="w-full btn-ghost py-2 text-xs text-slate-300">
               Close History
             </button>
           </div>

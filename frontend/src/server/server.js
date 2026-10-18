@@ -117,9 +117,18 @@ app.get('/api/notification-logs', requireAuth, requireStoreContext, async (req, 
 
 // WhatsApp Gateway Routes (Linked Device via Phone) - Strictly Scoped to Authenticated Store
 app.get('/api/whatsapp/status', requireAuth, requireStoreContext, async (req, res) => {
-  const status = whatsappService.getStatus(req.storeId);
+  let status = whatsappService.getStatus(req.storeId);
   if (!status.authExists && supabase) {
     status.authExists = await whatsappService.hasCloudAuth(req.storeId);
+  }
+  // Auto-resume if status is disconnected but saved auth exists (e.g. after server reboot/deploy)
+  if (status.status === 'disconnected' && status.authExists) {
+    console.log(`🔄 [WhatsAppStatus] Store ${req.storeId} has saved session; initiating background reconnection...`);
+    whatsappService.connect(req.storeId).catch(err => {
+      console.warn(`[WhatsAppStatus] Auto-connect on status check failed:`, err.message);
+    });
+    status = whatsappService.getStatus(req.storeId);
+    status.authExists = true;
   }
   res.json(status);
 });
@@ -189,18 +198,28 @@ app.post('/api/broadcast/cancel', requireAuth, requireStoreContext, (req, res) =
 if (!process.env.VERCEL) {
   AbandonmentWorker.startWorker(60000);
 
-  // Auto-reconnect WhatsApp for primary store if local or cloud credentials exist
-  const primaryStoreId = '00000000-0000-0000-0000-784723738041';
+  // Auto-reconnect WhatsApp for all stores with saved local or cloud credentials
   (async () => {
     try {
-      const hasLocal = whatsappService.hasLocalAuth(primaryStoreId);
-      const hasCloud = !hasLocal && (await whatsappService.hasCloudAuth(primaryStoreId));
-      if (hasLocal || hasCloud) {
-        console.log(`🔄 [WhatsAppService] Saved auth found for store ${primaryStoreId} (local: ${hasLocal}, cloud: ${hasCloud}); resuming connection...`);
-        await whatsappService.connect(primaryStoreId);
+      const storeIdsToScan = new Set(['00000000-0000-0000-0000-784723738041', '00000000-0000-0000-0000-784637855674']);
+      if (supabase) {
+        const { data: dbStores } = await supabase.from('stores').select('id');
+        if (dbStores) {
+          dbStores.forEach(s => storeIdsToScan.add(s.id));
+        }
+      }
+      for (const sid of storeIdsToScan) {
+        const hasLocal = whatsappService.hasLocalAuth(sid);
+        const hasCloud = !hasLocal && (await whatsappService.hasCloudAuth(sid));
+        if (hasLocal || hasCloud) {
+          console.log(`🔄 [WhatsAppService] Saved auth found for store ${sid} (local: ${hasLocal}, cloud: ${hasCloud}); resuming connection...`);
+          whatsappService.connect(sid).catch(err => {
+            console.warn(`[WhatsAppService] Startup auto-connect failed for store ${sid}:`, err.message);
+          });
+        }
       }
     } catch (err) {
-      console.error('Failed auto-reconnect WhatsApp:', err.message);
+      console.error('Failed auto-reconnect WhatsApp on startup:', err.message);
     }
   })();
 }

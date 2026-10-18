@@ -68,6 +68,15 @@ class WhatsAppService {
     return `stores/${sid}/session_bundle.json`;
   }
 
+  // Helper to verify if credentials object represents a valid authenticated pairing
+  isAuthValid(creds) {
+    if (!creds || typeof creds !== 'object') return false;
+    // A WhatsApp session is authenticated if either:
+    // 1. creds.me exists and has an id (QR code pairing standard)
+    // 2. creds.registered is explicitly true (pairing code standard)
+    return Boolean((creds.me && creds.me.id) || creds.registered === true);
+  }
+
   // Check if valid, registered local auth credentials exist for this store
   hasLocalAuth(storeId) {
     const authDir = this.getAuthDir(storeId);
@@ -75,7 +84,7 @@ class WhatsAppService {
     if (!fs.existsSync(credsPath)) return false;
     try {
       const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-      return !!(creds && creds.registered === true);
+      return this.isAuthValid(creds);
     } catch {
       return false;
     }
@@ -130,12 +139,12 @@ class WhatsAppService {
       const text = await data.text();
       const bundle = JSON.parse(text);
 
-      // Verify that the cloud bundle actually contains a registered session
+      // Verify that the cloud bundle actually contains an authenticated session
       if (bundle['creds.json']) {
         try {
           const creds = JSON.parse(bundle['creds.json']);
-          if (!creds || creds.registered !== true) {
-            console.log(`ℹ️ [WhatsAppService] Cloud session for store ${sid} is not registered yet. Ignoring.`);
+          if (!this.isAuthValid(creds)) {
+            console.log(`ℹ️ [WhatsAppService] Cloud session for store ${sid} is not authenticated yet. Ignoring.`);
             return false;
           }
         } catch {
@@ -173,10 +182,10 @@ class WhatsAppService {
       this.syncAuthToSupabase(sid).catch(err => {
         console.warn(`⚠️ [WhatsAppService] Cloud sync error for store ${sid}:`, err.message);
       });
-    }, 3000);
+    }, 2000);
   }
 
-  // Upload local auth directory bundle to Supabase Storage strictly when registered === true
+  // Upload local auth directory bundle to Supabase Storage strictly when authenticated
   async syncAuthToSupabase(storeId) {
     if (!supabase) return false;
     const sid = this.resolveStoreId(storeId);
@@ -184,14 +193,14 @@ class WhatsAppService {
 
     if (!fs.existsSync(authDir)) return false;
 
-    // Strict validation: never overwrite cloud storage with an unregistered or partial state
+    // Strict validation: never overwrite cloud storage with an unauthenticated or partial state
     const credsPath = path.join(authDir, 'creds.json');
     if (!fs.existsSync(credsPath)) return false;
 
     try {
       const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-      if (!creds || creds.registered !== true) {
-        console.log(`ℹ️ [WhatsAppService] Skipping cloud backup for store ${sid} because credentials are not yet registered.`);
+      if (!this.isAuthValid(creds)) {
+        console.log(`ℹ️ [WhatsAppService] Skipping cloud backup for store ${sid} because credentials are not yet authenticated.`);
         return false;
       }
 
@@ -301,11 +310,14 @@ class WhatsAppService {
         keepAliveIntervalMs: 25000,
       });
 
-      session.sock.ev.on('creds.update', () => {
-        saveCreds();
-        // If credentials just became registered, back up immediately
-        if (state.creds?.registered) {
-          this.scheduleCloudSync(sid);
+      session.sock.ev.on('creds.update', async () => {
+        try {
+          await saveCreds();
+          if (this.isAuthValid(state.creds)) {
+            this.scheduleCloudSync(sid);
+          }
+        } catch (e) {
+          console.warn(`⚠️ [WhatsAppService] Error updating creds for store ${sid}:`, e.message);
         }
       });
 
@@ -365,8 +377,14 @@ class WhatsAppService {
           };
 
           // Save registered credentials and back up to Supabase immediately
-          saveCreds();
-          this.syncAuthToSupabase(sid);
+          try {
+            await saveCreds();
+          } catch {}
+          setTimeout(() => {
+            this.syncAuthToSupabase(sid).catch(err => {
+              console.warn(`⚠️ [WhatsAppService] Initial cloud sync on connection open error for store ${sid}:`, err.message);
+            });
+          }, 1500);
         }
       });
 
