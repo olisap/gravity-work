@@ -104,6 +104,27 @@ async function resolveStoreName(storeId) {
  */
 async function resolveConfirmationMedia(order, storeId = null) {
   try {
+    if (!order) return null;
+    const rawItems = order.items || order.upsell_items || [];
+    let normalizedItems = [];
+    if (Array.isArray(rawItems)) {
+      normalizedItems = rawItems;
+    } else if (typeof rawItems === 'string') {
+      try { normalizedItems = JSON.parse(rawItems); } catch (e) {}
+    }
+    order.items = normalizedItems;
+
+    if (!order.form_embed_key && order.confirmation_call_notes) {
+      try {
+        const meta = typeof order.confirmation_call_notes === 'string'
+          ? JSON.parse(order.confirmation_call_notes)
+          : order.confirmation_call_notes;
+        if (meta?.form_embed_key) {
+          order.form_embed_key = meta.form_embed_key;
+        }
+      } catch (e) {}
+    }
+
     // 0. Check global store setting: if disabled in Settings, skip media entirely
     if (storeId) {
       const storeSettings = getStoreSettings(storeId);
@@ -149,13 +170,23 @@ async function resolveConfirmationMedia(order, storeId = null) {
     if (!error && prods && prods.length > 0) {
       const prod = prods[0];
       if (Array.isArray(prod.images) && prod.images.length > 0) {
-        // Look strictly for explicit confirmation media set by the merchant on this product
+        // 1. Look for explicit confirmation media set by the merchant on this product
         const conf = prod.images.find(img => img && typeof img === 'object' && img.is_confirmation);
         if (conf && conf.url && typeof conf.url === 'string' && conf.url.trim().startsWith('http')) {
           const u = conf.url.trim();
           return {
             url: u,
             type: conf.type || (/\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image')
+          };
+        }
+        // 2. Fallback to first available catalog visual if no explicit confirmation media is tagged
+        const firstImg = prod.images[0];
+        const fallbackUrl = typeof firstImg === 'string' ? firstImg : firstImg?.url;
+        if (fallbackUrl && typeof fallbackUrl === 'string' && fallbackUrl.trim().startsWith('http')) {
+          const u = fallbackUrl.trim();
+          return {
+            url: u,
+            type: /\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image'
           };
         }
       }

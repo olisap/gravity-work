@@ -56,8 +56,34 @@ export class AbandonmentWorker {
     return process.env.SENDER_NAME || 'Our Store';
   }
 
+  static normalizeDraft(draft) {
+    if (!draft) return draft;
+    const rawItems = draft.items || draft.upsell_items || [];
+    let normalizedItems = [];
+    if (Array.isArray(rawItems)) {
+      normalizedItems = rawItems;
+    } else if (typeof rawItems === 'string') {
+      try { normalizedItems = JSON.parse(rawItems); } catch (e) {}
+    }
+    draft.items = normalizedItems;
+
+    if (!draft.form_embed_key && draft.confirmation_call_notes) {
+      try {
+        const meta = typeof draft.confirmation_call_notes === 'string'
+          ? JSON.parse(draft.confirmation_call_notes)
+          : draft.confirmation_call_notes;
+        if (meta?.form_embed_key) {
+          draft.form_embed_key = meta.form_embed_key;
+        }
+      } catch (e) {}
+    }
+    return draft;
+  }
+
   static async resolveConfirmationMedia(draft, storeId = null) {
     try {
+      this.normalizeDraft(draft);
+
       if (storeId) {
         const storeSettings = getStoreSettings(storeId);
         if (storeSettings && storeSettings.include_confirmation_media === false) {
@@ -102,12 +128,23 @@ export class AbandonmentWorker {
       if (!error && prods && prods.length > 0) {
         const prod = prods[0];
         if (Array.isArray(prod.images) && prod.images.length > 0) {
+          // 1. Look for explicit confirmation media set by the merchant on this product
           const conf = prod.images.find(img => img && typeof img === 'object' && img.is_confirmation);
           if (conf && conf.url && typeof conf.url === 'string' && conf.url.trim().startsWith('http')) {
             const u = conf.url.trim();
             return {
               url: u,
               type: conf.type || (/\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image')
+            };
+          }
+          // 2. Fallback to first available catalog visual if no explicit confirmation media is tagged
+          const firstImg = prod.images[0];
+          const fallbackUrl = typeof firstImg === 'string' ? firstImg : firstImg?.url;
+          if (fallbackUrl && typeof fallbackUrl === 'string' && fallbackUrl.trim().startsWith('http')) {
+            const u = fallbackUrl.trim();
+            return {
+              url: u,
+              type: /\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image'
             };
           }
         }
@@ -128,6 +165,8 @@ export class AbandonmentWorker {
    */
   static async sendDraftReminder(draft, storeName = null) {
     if (!draft) return { success: false, error: 'No draft provided' };
+    this.normalizeDraft(draft);
+
     if (!draft.customer_phone && !draft.customer_email) {
       return { success: false, error: 'Neither customer phone nor email available' };
     }
@@ -150,7 +189,9 @@ export class AbandonmentWorker {
     }
 
     const resumeLink = `${baseUrl.replace(/\/+$/, '')}/checkout?resume=${encodeURIComponent(draft.resume_token || draft.id)}${formParam}`;
-    const productName = (draft.items && draft.items[0]?.name) || 'your selected item';
+    const rawProductName = (draft.items && draft.items[0]?.name) || '';
+    const cleanProductName = rawProductName.includes('—') ? rawProductName.split('—')[0].trim() : rawProductName.trim();
+    const productName = cleanProductName || 'your selected item';
     const customerName = draft.customer_name || 'Valued Customer';
     const totalFormatted = (draft.total_amount || 0).toLocaleString();
 
