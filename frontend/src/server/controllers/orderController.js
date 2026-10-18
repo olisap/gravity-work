@@ -97,6 +97,81 @@ async function resolveStoreName(storeId) {
   return process.env.SENDER_NAME || 'Our Store';
 }
 
+/**
+ * Resolve confirmation media (Image or Video) configured for the ordered product.
+ * Returns { url: string, type: 'image' | 'video' } or null.
+ * Strictly adheres to zero-assumption principle: if no media exists, returns null.
+ */
+async function resolveConfirmationMedia(order, storeId = null) {
+  try {
+    let productId = null;
+    if (order.items && order.items.length > 0 && order.items[0].product_id) {
+      productId = order.items[0].product_id;
+    }
+
+    if (!productId && order.form_embed_key && supabase) {
+      const { data: form } = await supabase
+        .from('forms')
+        .select('linked_product_id')
+        .eq('embed_key', order.form_embed_key)
+        .maybeSingle();
+      if (form?.linked_product_id) {
+        productId = form.linked_product_id;
+      }
+    }
+
+    if (!supabase) return null;
+
+    let query = supabase.from('products').select('id, name, images');
+    if (productId && isValidUUID(productId)) {
+      query = query.eq('id', productId);
+    } else if (order.items && order.items[0] && order.items[0].name) {
+      const rawName = order.items[0].name.split('—')[0].trim();
+      query = query.ilike('name', `%${rawName}%`);
+    } else {
+      return null;
+    }
+
+    if (storeId && isValidUUID(storeId)) {
+      query = query.eq('store_id', storeId);
+    }
+
+    const { data: prods, error } = await query.limit(1);
+    if (!error && prods && prods.length > 0) {
+      const prod = prods[0];
+      if (Array.isArray(prod.images) && prod.images.length > 0) {
+        // 1. Look for explicit confirmation media
+        const conf = prod.images.find(img => img && typeof img === 'object' && img.is_confirmation);
+        if (conf && conf.url && typeof conf.url === 'string' && conf.url.trim().startsWith('http')) {
+          const u = conf.url.trim();
+          return {
+            url: u,
+            type: conf.type || (/\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image')
+          };
+        }
+        // 2. Check first image/video entry
+        const first = prod.images[0];
+        if (typeof first === 'string' && first.trim().startsWith('http')) {
+          const u = first.trim();
+          return {
+            url: u,
+            type: /\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image'
+          };
+        } else if (first && typeof first === 'object' && first.url && typeof first.url === 'string' && first.url.trim().startsWith('http')) {
+          const u = first.url.trim();
+          return {
+            url: u,
+            type: first.type || (/\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image')
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ [resolveConfirmationMedia] Could not resolve media:', err.message);
+  }
+  return null;
+}
+
 const KNOWN_ORDER_COLUMNS = [
   'id', 'order_number', 'customer_name', 'customer_phone', 'customer_email',
   'delivery_address', 'country', 'state', 'subtotal', 'delivery_fee',
@@ -558,19 +633,20 @@ export async function createOrUpdateDraftOrder(req, res) {
 
   // Trigger Notifications on Final Order Submit
   if (is_final_submit) {
-    const [targetNotificationEmail, storeName] = await Promise.all([
+    const [targetNotificationEmail, storeName, confirmationMedia] = await Promise.all([
       resolveMerchantNotificationEmail({ explicitEmail: notification_email, storeId: store_id }),
-      resolveStoreName(store_id)
+      resolveStoreName(store_id),
+      resolveConfirmationMedia(finalOrder, store_id)
     ]);
 
-    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Store: ${storeName}, Merchant: ${targetNotificationEmail || 'NONE'}, Customer: ${finalOrder.customer_email || 'None'})`);
+    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Store: ${storeName}, Merchant: ${targetNotificationEmail || 'NONE'}, Customer: ${finalOrder.customer_email || 'None'}, Media: ${confirmationMedia ? confirmationMedia.type : 'NONE'})`);
     if (targetNotificationEmail) {
-      NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail, storeName).catch(err => {
+      NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail, storeName, confirmationMedia).catch(err => {
         console.error('Failed to send order finalized notifications:', err);
       });
     } else {
       console.warn(`⚠️ No merchant notification email resolved for store ${store_id}. Sending customer receipt only.`);
-      NotificationService.sendOrderFinalizedNotifications(finalOrder, null, storeName).catch(err => {
+      NotificationService.sendOrderFinalizedNotifications(finalOrder, null, storeName, confirmationMedia).catch(err => {
         console.error('Failed to send order finalized notifications:', err);
       });
     }
@@ -578,7 +654,7 @@ export async function createOrUpdateDraftOrder(req, res) {
     // Automated WhatsApp order confirmation (opt-in in store settings, OFF by default)
     const storeSettings = getStoreSettings(store_id);
     if (storeSettings?.whatsapp_order_confirmation) {
-      whatsappService.sendOrderConfirmation(finalOrder, storeName, store_id).catch(err => {
+      whatsappService.sendOrderConfirmation(finalOrder, storeName, store_id, confirmationMedia).catch(err => {
         console.error('Failed to send WhatsApp order confirmation:', err);
       });
     } else {

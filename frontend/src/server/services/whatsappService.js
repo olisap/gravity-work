@@ -403,8 +403,8 @@ class WhatsAppService {
     return { success: true, message: `WhatsApp disconnected and cloud session cleared for store ${sid}.` };
   }
 
-  // Direct send message scoped to a specific store
-  async sendMessage(phone, messageText, storeId = null) {
+  // Direct send message scoped to a specific store (supports optional media: image or video with caption)
+  async sendMessage(phone, messageText, storeId = null, mediaOptions = null) {
     const sid = this.resolveStoreId(storeId);
     const session = this.getSession(sid);
 
@@ -417,6 +417,42 @@ class WhatsAppService {
       return { success: false, error: `Invalid phone number format: "${phone}"` };
     }
 
+    // 1. If media (Image or Video) is provided, attempt media dispatch with caption
+    if (mediaOptions && mediaOptions.url && typeof mediaOptions.url === 'string' && mediaOptions.url.trim().startsWith('http')) {
+      const mediaUrl = mediaOptions.url.trim();
+      const isVideo = mediaOptions.type === 'video' || /\.(mp4|mov|webm)(\?.*)?$/i.test(mediaUrl);
+
+      try {
+        if (isVideo) {
+          console.log(`🎬 [WhatsAppService] Dispatching video confirmation to ${jid}...`);
+          await session.sock.sendMessage(jid, {
+            video: { url: mediaUrl },
+            caption: messageText,
+            mimetype: mediaOptions.mimetype || 'video/mp4'
+          });
+          return { success: true, jid, phone, storeId: sid, mediaSent: 'video' };
+        } else {
+          console.log(`🖼️ [WhatsAppService] Dispatching image confirmation to ${jid}...`);
+          await session.sock.sendMessage(jid, {
+            image: { url: mediaUrl },
+            caption: messageText
+          });
+          return { success: true, jid, phone, storeId: sid, mediaSent: 'image' };
+        }
+      } catch (mediaErr) {
+        console.warn(`⚠️ [WhatsAppService] Media dispatch failed (${mediaErr.message}); falling back to text confirmation...`);
+        // Graceful fallback to plain text so customer order confirmation is never lost
+        try {
+          await session.sock.sendMessage(jid, { text: messageText });
+          return { success: true, jid, phone, storeId: sid, mediaSent: false, fallback: true };
+        } catch (textErr) {
+          console.error(`❌ [WhatsAppService] Text fallback also failed for ${jid}:`, textErr);
+          return { success: false, error: textErr.message };
+        }
+      }
+    }
+
+    // 2. Default: standard text message
     try {
       await session.sock.sendMessage(jid, { text: messageText });
       return { success: true, jid, phone, storeId: sid };
@@ -426,8 +462,8 @@ class WhatsAppService {
     }
   }
 
-  // Send Order Confirmation automatically scoped to the order's store
-  async sendOrderConfirmation(order, storeName = 'iSmartyShop', storeId = null) {
+  // Send Order Confirmation automatically scoped to the order's store (with optional product image/video media)
+  async sendOrderConfirmation(order, storeName = 'iSmartyShop', storeId = null, mediaOptions = null) {
     if (!order || !order.customer_phone) {
       return { success: false, skipped: true, error: 'No customer phone provided' };
     }
@@ -463,7 +499,7 @@ Thank you for placing your order with us! We have received your details:
 
 👉 *Please reply "CONFIRM" to this message if you are available to receive your order!*`;
 
-    const result = await this.sendMessage(order.customer_phone, messageText, sid);
+    const result = await this.sendMessage(order.customer_phone, messageText, sid, mediaOptions);
 
     if (result.success && supabase) {
       try {
@@ -472,7 +508,13 @@ Thank you for placing your order with us! We have received your details:
           recipient: `${order.customer_name} (${order.customer_phone})`,
           channel: 'whatsapp',
           status: 'sent',
-          payload: { order_id: order.id, order_number: order.order_number, total: totalFormatted, store_id: sid },
+          payload: { 
+            order_id: order.id, 
+            order_number: order.order_number, 
+            total: totalFormatted, 
+            store_id: sid,
+            media_sent: result.mediaSent || false
+          },
           created_at: new Date().toISOString()
         }]);
       } catch (logErr) {

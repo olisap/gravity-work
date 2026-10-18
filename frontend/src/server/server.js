@@ -17,6 +17,7 @@ import { AbandonmentWorker } from './services/abandonmentWorker.js';
 import { BroadcastWorker } from './services/broadcastWorker.js';
 import { NotificationService } from './services/notificationService.js';
 import { whatsappService } from './services/whatsappService.js';
+import { uploadMedia } from './controllers/uploadController.js';
 import { supabase } from './config/supabase.js';
 
 dotenv.config();
@@ -25,8 +26,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({ origin: '*' }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -64,6 +65,7 @@ app.get('/api/categories', requireAuth, requireStoreContext, getCategories);
 app.post('/api/categories', requireAuth, requireStoreContext, requireRole(['owner', 'admin']), createCategory);
 app.get('/api/stock-movements', requireAuth, requireStoreContext, getStockMovements);
 app.post('/api/stock-movements', requireAuth, requireStoreContext, requireRole(['owner', 'admin', 'logistics']), recordStockAdjustment);
+app.post('/api/upload', requireAuth, requireStoreContext, uploadMedia);
 
 // Suppliers & Wholesale Partners Routes
 app.get('/api/suppliers', requireAuth, requireStoreContext, getSuppliers);

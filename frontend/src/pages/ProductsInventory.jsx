@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Package, Plus, Search, MoreVertical, HelpCircle,
   Trash2, Edit, Copy, EyeOff, Tag, Globe, History,
-  Settings, Check, X, FileText, AlertTriangle
+  Settings, Check, X, FileText, AlertTriangle,
+  Video, Image as ImageIcon, Film, ExternalLink, Upload
 } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/apiUrl';
+import { uploadMediaFile } from '../utils/mediaUploader';
 
 export default function ProductsInventory({
   products = [],
@@ -69,7 +71,52 @@ export default function ProductsInventory({
   const [formStock, setFormStock] = useState('50');
   const [formDescription, setFormDescription] = useState('');
   const [formImage, setFormImage] = useState('');
+  const [formConfirmationMediaUrl, setFormConfirmationMediaUrl] = useState('');
+  const [formConfirmationMediaType, setFormConfirmationMediaType] = useState('image');
   const [customFields, setCustomFields] = useState([]);
+
+  // Direct Upload States & Refs
+  const [uploadingConfMedia, setUploadingConfMedia] = useState(false);
+  const [uploadConfError, setUploadConfError] = useState('');
+  const [uploadingCatalogImg, setUploadingCatalogImg] = useState(false);
+  const [uploadCatalogError, setUploadCatalogError] = useState('');
+  const addConfFileInputRef = useRef(null);
+  const editConfFileInputRef = useRef(null);
+  const addCatalogFileInputRef = useRef(null);
+  const editCatalogFileInputRef = useRef(null);
+
+  const handleUploadConfirmationMedia = async (file) => {
+    if (!file) return;
+    setUploadingConfMedia(true);
+    setUploadConfError('');
+    try {
+      const res = await uploadMediaFile(file, 'confirmation');
+      if (res?.url) {
+        setFormConfirmationMediaUrl(res.url);
+        setFormConfirmationMediaType(res.type || (/\.(mp4|mov|webm)/i.test(res.url) ? 'video' : 'image'));
+      }
+    } catch (err) {
+      setUploadConfError(err.message || 'Upload failed');
+    } finally {
+      setUploadingConfMedia(false);
+    }
+  };
+
+  const handleUploadCatalogImage = async (file) => {
+    if (!file) return;
+    setUploadingCatalogImg(true);
+    setUploadCatalogError('');
+    try {
+      const res = await uploadMediaFile(file, 'products');
+      if (res?.url) {
+        setFormImage(res.url);
+      }
+    } catch (err) {
+      setUploadCatalogError(err.message || 'Upload failed');
+    } finally {
+      setUploadingCatalogImg(false);
+    }
+  };
 
   // Bundles State (Multiple Selling Price Tiers)
   const [bundles, setBundles] = useState([
@@ -117,6 +164,8 @@ export default function ProductsInventory({
     setFormStock('50');
     setFormDescription('');
     setFormImage('');
+    setFormConfirmationMediaUrl('');
+    setFormConfirmationMediaType('image');
     setCustomFields([]);
     setBundles([
       { qty: 1, label: '1 Item + Free Delivery', price: '18500' },
@@ -136,7 +185,29 @@ export default function ProductsInventory({
     setFormSku(p.sku || '');
     setFormStock(p.available_stock !== undefined ? p.available_stock : '0');
     setFormDescription(p.description || '');
-    setFormImage((p.images && p.images[0]) ? p.images[0] : '');
+
+    let catalogImg = '';
+    let confMediaUrl = '';
+    let confMediaType = 'image';
+
+    if (Array.isArray(p.images)) {
+      for (const item of p.images) {
+        if (typeof item === 'string') {
+          if (!catalogImg) catalogImg = item;
+        } else if (item && typeof item === 'object') {
+          if (item.is_confirmation) {
+            confMediaUrl = item.url || '';
+            confMediaType = item.type || (/\.(mp4|mov|webm)/i.test(item.url) ? 'video' : 'image');
+          } else if (!catalogImg && item.url) {
+            catalogImg = item.url;
+          }
+        }
+      }
+    }
+    setFormImage(catalogImg);
+    setFormConfirmationMediaUrl(confMediaUrl);
+    setFormConfirmationMediaType(confMediaType);
+
     setCustomFields(Array.isArray(p.custom_fields) ? p.custom_fields : []);
     setBundles(Array.isArray(p.price_bundles) && p.price_bundles.length > 0 ? p.price_bundles : [
       { qty: 1, label: `1 ${p.name} + Free Delivery`, price: p.base_price }
@@ -162,6 +233,22 @@ export default function ProductsInventory({
     setCustomFields(prev => prev.filter((_, i) => i !== idx));
   };
 
+  // Build combined images array (catalog image + confirmation media)
+  const buildImagesPayload = () => {
+    const list = [];
+    if (formImage && typeof formImage === 'string' && formImage.trim()) {
+      list.push(formImage.trim());
+    }
+    if (formConfirmationMediaUrl && typeof formConfirmationMediaUrl === 'string' && formConfirmationMediaUrl.trim()) {
+      list.push({
+        url: formConfirmationMediaUrl.trim(),
+        type: formConfirmationMediaType || (/\.(mp4|mov|webm)(\?.*)?$/i.test(formConfirmationMediaUrl.trim()) ? 'video' : 'image'),
+        is_confirmation: true
+      });
+    }
+    return list;
+  };
+
   // Submit Create Product
   const handleCreateProduct = async (e) => {
     e.preventDefault();
@@ -177,7 +264,7 @@ export default function ProductsInventory({
       base_price: Number(formBasePrice) || 0,
       sku: formSku || `${formProdName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8)}-${Date.now().toString().slice(-4)}`,
       initial_stock: Number(formStock) || 0,
-      images: formImage ? [formImage] : [],
+      images: buildImagesPayload(),
       custom_fields: customFields.filter(f => f.key.trim() !== ''),
       price_bundles: bundles.map(b => ({
         qty: Number(b.qty),
@@ -219,7 +306,7 @@ export default function ProductsInventory({
       base_price: Number(formBasePrice) || 0,
       sku: formSku,
       available_stock: Number(formStock),
-      images: formImage ? [formImage] : [],
+      images: buildImagesPayload(),
       custom_fields: customFields.filter(f => f.key.trim() !== ''),
       price_bundles: bundles
     };
@@ -469,9 +556,26 @@ export default function ProductsInventory({
                       {/* Product Name / Category / Country */}
                       <td className="px-4 py-3.5">
                         <div className="space-y-0.5">
-                          <p className="font-extrabold text-slate-100 text-xs tracking-wide uppercase">
-                            {p.name}
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-extrabold text-slate-100 text-xs tracking-wide uppercase">
+                              {p.name}
+                            </p>
+                            {(() => {
+                              const conf = Array.isArray(p.images) && p.images.find(img => img && typeof img === 'object' && img.is_confirmation);
+                              if (conf && conf.url) {
+                                return conf.type === 'video' || /\.(mp4|mov|webm)/i.test(conf.url) ? (
+                                  <span title="Video confirmation active for this product" className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/25">
+                                    <Film className="w-2.5 h-2.5" /> Video
+                                  </span>
+                                ) : (
+                                  <span title="Image confirmation active for this product" className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                                    <ImageIcon className="w-2.5 h-2.5" /> Photo
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                           <p className="text-[11px] text-slate-400">
                             /{p.category_name || 'general'} ({p.country || selectedCountry})
                           </p>
@@ -688,15 +792,183 @@ export default function ProductsInventory({
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Image URL</label>
-                <input
-                  type="text"
-                  placeholder="https://images.unsplash.com/..."
-                  value={formImage}
-                  onChange={e => setFormImage(e.target.value)}
-                  className="input text-xs font-mono"
-                />
+              {/* Media Section: Catalog Image + Order Confirmation Visuals (Image/Video) */}
+              <div className="space-y-3 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-indigo-400" />
+                    Order Confirmation Visuals (WhatsApp & Email)
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 font-medium border border-indigo-500/20">
+                    Optional
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Set a media file (Image or Video demo) dispatched to buyers via WhatsApp and Email upon submitting their order so they see visual proof of what they ordered. Leave empty if this product has no media.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Confirmation Media (File or URL)</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Paste link or upload from device →"
+                        value={formConfirmationMediaUrl}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormConfirmationMediaUrl(val);
+                          if (/\.(mp4|mov|webm)(\?.*)?$/i.test(val)) {
+                            setFormConfirmationMediaType('video');
+                          } else if (/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(val)) {
+                            setFormConfirmationMediaType('image');
+                          }
+                        }}
+                        className="input text-xs font-mono flex-1 min-w-0 py-2"
+                      />
+                      <input
+                        type="file"
+                        ref={addConfFileInputRef}
+                        onChange={e => {
+                          if (e.target.files?.[0]) handleUploadConfirmationMedia(e.target.files[0]);
+                        }}
+                        accept="image/*,video/mp4,video/quicktime,video/webm"
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        disabled={uploadingConfMedia}
+                        onClick={() => addConfFileInputRef.current?.click()}
+                        className="px-2.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shrink-0 transition-colors shadow-sm disabled:opacity-50"
+                        title="Upload Video or Photo directly from your device"
+                      >
+                        {uploadingConfMedia ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span className="text-[11px]">Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Upload</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {uploadConfError && (
+                      <p className="text-[10px] text-rose-400 mt-1">⚠️ {uploadConfError}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Media Type</label>
+                    <select
+                      value={formConfirmationMediaType}
+                      onChange={e => setFormConfirmationMediaType(e.target.value)}
+                      className="select text-xs py-2 w-full"
+                    >
+                      <option value="image">Image (JPG/PNG)</option>
+                      <option value="video">Video (MP4/WebM)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Live Media Preview if URL is entered */}
+                {formConfirmationMediaUrl && formConfirmationMediaUrl.trim().startsWith('http') && (
+                  <div className="mt-2 p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-center">
+                    <div className="flex items-center justify-between mb-1.5 px-1">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        {formConfirmationMediaType === 'video' ? <Film className="w-3 h-3 text-rose-400" /> : <ImageIcon className="w-3 h-3 text-emerald-400" />}
+                        Live Preview: {formConfirmationMediaType.toUpperCase()}
+                      </span>
+                      <a
+                        href={formConfirmationMediaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-0.5"
+                      >
+                        Open Link <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+
+                    {formConfirmationMediaType === 'video' ? (
+                      <div className="relative max-w-sm mx-auto rounded-lg overflow-hidden border border-slate-700 bg-black">
+                        <video
+                          src={formConfirmationMediaUrl}
+                          controls
+                          className="w-full max-h-44 object-contain"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const el = e.target.nextSibling;
+                            if (el) el.style.display = 'block';
+                          }}
+                        />
+                        <div style={{ display: 'none' }} className="p-3 text-xs text-amber-400 bg-amber-500/10">
+                          ⚠️ Video cannot be directly embedded here, but the link will be sent to customers on WhatsApp & Email.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="max-w-sm mx-auto rounded-lg overflow-hidden border border-slate-700 bg-black/40 p-1">
+                        <img
+                          src={formConfirmationMediaUrl}
+                          alt="Preview"
+                          className="w-full max-h-40 object-contain mx-auto rounded"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const el = e.target.nextSibling;
+                            if (el) el.style.display = 'block';
+                          }}
+                        />
+                        <div style={{ display: 'none' }} className="p-3 text-xs text-rose-400">
+                          ⚠️ Image URL failed to load. Please verify the link.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-800/80">
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Catalog Display Image (Optional)</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Paste image link or upload from device →"
+                      value={formImage}
+                      onChange={e => setFormImage(e.target.value)}
+                      className="input text-xs font-mono flex-1 min-w-0 py-2"
+                    />
+                    <input
+                      type="file"
+                      ref={addCatalogFileInputRef}
+                      onChange={e => {
+                        if (e.target.files?.[0]) handleUploadCatalogImage(e.target.files[0]);
+                      }}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={uploadingCatalogImg}
+                      onClick={() => addCatalogFileInputRef.current?.click()}
+                      className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 shrink-0 transition-colors disabled:opacity-50"
+                      title="Upload product image from device"
+                    >
+                      {uploadingCatalogImg ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-slate-400/30 border-t-white rounded-full animate-spin" />
+                          <span className="text-[11px]">Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span className="text-[11px]">Upload</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {uploadCatalogError && (
+                    <p className="text-[10px] text-rose-400 mt-1">⚠️ {uploadCatalogError}</p>
+                  )}
+                </div>
               </div>
 
               {/* Selling Price Variations / Quantity Bundles */}
@@ -932,14 +1204,183 @@ export default function ProductsInventory({
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Image URL</label>
-                <input
-                  type="text"
-                  value={formImage}
-                  onChange={e => setFormImage(e.target.value)}
-                  className="input text-xs font-mono"
-                />
+              {/* Media Section: Catalog Image + Order Confirmation Visuals (Image/Video) */}
+              <div className="space-y-3 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-indigo-400" />
+                    Order Confirmation Visuals (WhatsApp & Email)
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 font-medium border border-indigo-500/20">
+                    Optional
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Set a media file (Image or Video demo) dispatched to buyers via WhatsApp and Email upon submitting their order so they see visual proof of what they ordered. Leave empty if this product has no media.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Confirmation Media (File or URL)</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Paste link or upload from device →"
+                        value={formConfirmationMediaUrl}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormConfirmationMediaUrl(val);
+                          if (/\.(mp4|mov|webm)(\?.*)?$/i.test(val)) {
+                            setFormConfirmationMediaType('video');
+                          } else if (/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(val)) {
+                            setFormConfirmationMediaType('image');
+                          }
+                        }}
+                        className="input text-xs font-mono flex-1 min-w-0 py-2"
+                      />
+                      <input
+                        type="file"
+                        ref={editConfFileInputRef}
+                        onChange={e => {
+                          if (e.target.files?.[0]) handleUploadConfirmationMedia(e.target.files[0]);
+                        }}
+                        accept="image/*,video/mp4,video/quicktime,video/webm"
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        disabled={uploadingConfMedia}
+                        onClick={() => editConfFileInputRef.current?.click()}
+                        className="px-2.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shrink-0 transition-colors shadow-sm disabled:opacity-50"
+                        title="Upload Video or Photo directly from your device"
+                      >
+                        {uploadingConfMedia ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span className="text-[11px]">Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Upload</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {uploadConfError && (
+                      <p className="text-[10px] text-rose-400 mt-1">⚠️ {uploadConfError}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Media Type</label>
+                    <select
+                      value={formConfirmationMediaType}
+                      onChange={e => setFormConfirmationMediaType(e.target.value)}
+                      className="select text-xs py-2 w-full"
+                    >
+                      <option value="image">Image (JPG/PNG)</option>
+                      <option value="video">Video (MP4/WebM)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Live Media Preview if URL is entered */}
+                {formConfirmationMediaUrl && formConfirmationMediaUrl.trim().startsWith('http') && (
+                  <div className="mt-2 p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-center">
+                    <div className="flex items-center justify-between mb-1.5 px-1">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        {formConfirmationMediaType === 'video' ? <Film className="w-3 h-3 text-rose-400" /> : <ImageIcon className="w-3 h-3 text-emerald-400" />}
+                        Live Preview: {formConfirmationMediaType.toUpperCase()}
+                      </span>
+                      <a
+                        href={formConfirmationMediaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-0.5"
+                      >
+                        Open Link <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+
+                    {formConfirmationMediaType === 'video' ? (
+                      <div className="relative max-w-sm mx-auto rounded-lg overflow-hidden border border-slate-700 bg-black">
+                        <video
+                          src={formConfirmationMediaUrl}
+                          controls
+                          className="w-full max-h-44 object-contain"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const el = e.target.nextSibling;
+                            if (el) el.style.display = 'block';
+                          }}
+                        />
+                        <div style={{ display: 'none' }} className="p-3 text-xs text-amber-400 bg-amber-500/10">
+                          ⚠️ Video cannot be directly embedded here, but the link will be sent to customers on WhatsApp & Email.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="max-w-sm mx-auto rounded-lg overflow-hidden border border-slate-700 bg-black/40 p-1">
+                        <img
+                          src={formConfirmationMediaUrl}
+                          alt="Preview"
+                          className="w-full max-h-40 object-contain mx-auto rounded"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const el = e.target.nextSibling;
+                            if (el) el.style.display = 'block';
+                          }}
+                        />
+                        <div style={{ display: 'none' }} className="p-3 text-xs text-rose-400">
+                          ⚠️ Image URL failed to load. Please verify the link.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-800/80">
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Catalog Display Image (Optional)</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Paste image link or upload from device →"
+                      value={formImage}
+                      onChange={e => setFormImage(e.target.value)}
+                      className="input text-xs font-mono flex-1 min-w-0 py-2"
+                    />
+                    <input
+                      type="file"
+                      ref={editCatalogFileInputRef}
+                      onChange={e => {
+                        if (e.target.files?.[0]) handleUploadCatalogImage(e.target.files[0]);
+                      }}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={uploadingCatalogImg}
+                      onClick={() => editCatalogFileInputRef.current?.click()}
+                      className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 shrink-0 transition-colors disabled:opacity-50"
+                      title="Upload product image from device"
+                    >
+                      {uploadingCatalogImg ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-slate-400/30 border-t-white rounded-full animate-spin" />
+                          <span className="text-[11px]">Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span className="text-[11px]">Upload</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {uploadCatalogError && (
+                    <p className="text-[10px] text-rose-400 mt-1">⚠️ {uploadCatalogError}</p>
+                  )}
+                </div>
               </div>
 
               {/* Selling Price Variations / Quantity Bundles */}

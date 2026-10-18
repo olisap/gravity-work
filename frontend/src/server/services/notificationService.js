@@ -333,10 +333,10 @@ export class NotificationService {
   /**
    * Send all three notifications when an order is completed/finalized:
    * 1. Merchant Notification Email (form notification_email / store owner)
-   * 2. Customer Receipt Email (if customer_email provided)
+   * 2. Customer Receipt Email (if customer_email provided, with optional product image/video confirmation)
    * 3. Customer Order Confirmation SMS (to customer_phone)
    */
-  static async sendOrderFinalizedNotifications(order, merchantEmail = null, storeName = null) {
+  static async sendOrderFinalizedNotifications(order, merchantEmail = null, storeName = null, confirmationMedia = null) {
     if (!order) return;
 
     // Resolve store display name for email branding
@@ -345,6 +345,47 @@ export class NotificationService {
     const mainProductName = (order.items && order.items[0]) ? order.items[0].name : 'Product Order';
     const totalFormatted = (order.total_amount || 0).toLocaleString();
     const itemsList = order.items || [];
+
+    // Optional confirmation media (image or video) html block
+    let mediaMerchantHtml = '';
+    let mediaCustomerHtml = '';
+    if (confirmationMedia && confirmationMedia.url && typeof confirmationMedia.url === 'string' && confirmationMedia.url.trim().startsWith('http')) {
+      const mediaUrl = confirmationMedia.url.trim();
+      const isVideo = confirmationMedia.type === 'video' || /\.(mp4|mov|webm)(\?.*)?$/i.test(mediaUrl);
+
+      if (isVideo) {
+        mediaMerchantHtml = `
+          <div style="background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 20px; text-align: center;">
+            <div style="font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">🎥 Product Demonstration Video</div>
+            <a href="${mediaUrl}" target="_blank" style="display: inline-block; background-color: #ef4444; color: #ffffff; text-decoration: none; padding: 9px 18px; border-radius: 6px; font-weight: bold; font-size: 13px;">
+              ▶ View Product Video
+            </a>
+          </div>
+        `;
+        mediaCustomerHtml = `
+          <div style="background-color: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 20px 14px; margin: 20px 0; text-align: center;">
+            <div style="font-size: 12px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">🎥 Your Ordered Product Video</div>
+            <a href="${mediaUrl}" target="_blank" style="display: inline-block; background-color: #ef4444; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);">
+              ▶ Watch Video Demonstration
+            </a>
+            <p style="margin: 8px 0 0 0; font-size: 11px; color: #94a3b8;">Click above to watch the video demonstration of what you ordered.</p>
+          </div>
+        `;
+      } else {
+        mediaMerchantHtml = `
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: center;">
+            <div style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">📸 Ordered Product Visual</div>
+            <img src="${mediaUrl}" alt="${mainProductName}" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px; border: 1px solid #cbd5e1; display: inline-block;" />
+          </div>
+        `;
+        mediaCustomerHtml = `
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
+            <div style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">📸 Your Ordered Product</div>
+            <img src="${mediaUrl}" alt="${mainProductName}" style="max-width: 100%; max-height: 260px; object-fit: contain; border-radius: 6px; border: 1px solid #cbd5e1; display: inline-block;" />
+          </div>
+        `;
+      }
+    }
 
     // ── 1. Merchant Order Alert Email (Date-Threaded for Gmail / Mailbox grouping) ──
     const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || 'smirhty@gmail.com';
@@ -377,6 +418,8 @@ export class NotificationService {
           <h2 style="color: #ffffff; margin: 0; font-size: 20px;">🛒 New Order #${order.order_number} Received!</h2>
           <p style="color: #e0e7ff; margin: 6px 0 0 0; font-size: 13px;">${mainProductName} • ₦${totalFormatted} • ${order.customer_name}</p>
         </div>
+
+        ${mediaMerchantHtml}
 
         <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Customer Information</h3>
         <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
@@ -441,6 +484,8 @@ export class NotificationService {
 
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">Dear <strong>${order.customer_name}</strong>,</p>
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">We have successfully received your order from <strong>${displayStoreName}</strong>. Below is a summary of your order:</p>
+
+          ${mediaCustomerHtml}
 
           <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Order Details</h3>
           <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">

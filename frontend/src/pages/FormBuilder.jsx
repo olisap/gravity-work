@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   FileText, Code, Eye, Copy, Check, Sparkles, Plus, Trash2, Edit,
   Settings, CreditCard, ShieldCheck, HelpCircle, Palette, ToggleLeft, ToggleRight,
   ArrowUp, ArrowDown, Layers, Smartphone, Monitor, RotateCcw, Image as ImageIcon,
-  Type, Zap, Sliders, CheckCircle2, ChevronRight, Layout, ExternalLink
+  Type, Zap, Sliders, CheckCircle2, ChevronRight, Layout, ExternalLink, Upload
 } from 'lucide-react';
 import EmbedFormWidget from '../components/EmbedFormWidget';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/apiUrl';
+import { uploadMediaFile } from '../utils/mediaUploader';
 
 const DEFAULT_SECTIONS = [
   { id: 'banner', label: '🖼 Banner Header Image' },
@@ -58,6 +59,25 @@ export default function FormBuilder({
   const [headerText, setHeaderText] = useState('Please Fill The Form Below To Place Your Order');
   const [subHeaderText, setSubHeaderText] = useState('Only Serious Buyers Should Fill The Form Below');
   const [bannerImageUrl, setBannerImageUrl] = useState('');
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadBannerError, setUploadBannerError] = useState('');
+  const bannerFileInputRef = useRef(null);
+
+  const handleUploadBanner = async (file) => {
+    if (!file) return;
+    setUploadingBanner(true);
+    setUploadBannerError('');
+    try {
+      const res = await uploadMediaFile(file, 'banners');
+      if (res?.url) {
+        setBannerImageUrl(res.url);
+      }
+    } catch (err) {
+      setUploadBannerError(err.message || 'Upload failed');
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
 
   // Section Ordering State
   const [sectionOrder, setSectionOrder] = useState([
@@ -916,16 +936,58 @@ export default function FormBuilder({
 
                 {/* Banner Header Image Control */}
                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4" /> Form Top Banner Header Image (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Paste image URL (https://... png or jpg)"
-                    value={bannerImageUrl}
-                    onChange={e => setBannerImageUrl(e.target.value)}
-                    className="input text-xs font-mono"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-indigo-300 flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4" /> Form Top Banner Header Image (Optional)
+                    </label>
+                    <span className="text-[10px] text-slate-400">Desktop & Mobile</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Paste image URL (https://...) or upload from device →"
+                      value={bannerImageUrl}
+                      onChange={e => setBannerImageUrl(e.target.value)}
+                      className="input text-xs font-mono flex-1 min-w-0 py-2"
+                    />
+                    <input
+                      type="file"
+                      ref={bannerFileInputRef}
+                      onChange={e => {
+                        if (e.target.files?.[0]) handleUploadBanner(e.target.files[0]);
+                      }}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={uploadingBanner}
+                      onClick={() => bannerFileInputRef.current?.click()}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors shadow-sm disabled:opacity-50"
+                      title="Upload banner photo directly from device"
+                    >
+                      {uploadingBanner ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span className="text-[11px]">Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span className="text-[11px]">Upload Photo</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {uploadBannerError && (
+                    <p className="text-[11px] text-rose-400 mt-0.5">⚠️ {uploadBannerError}</p>
+                  )}
+                  {bannerImageUrl && (
+                    <div className="rounded-lg overflow-hidden border border-slate-800 max-h-36 bg-black/50 p-1 text-center">
+                      <img src={bannerImageUrl} alt="Banner Preview" className="max-h-32 mx-auto rounded object-contain" />
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2 pt-1">
                     <span className="text-[10px] text-slate-400 self-center">Presets:</span>
                     {SAMPLE_BANNERS.map((b, idx) => (
