@@ -6,7 +6,7 @@ export class NotificationService {
   /**
    * Send notification via SMS or Email or WhatsApp
    */
-  static async send({ templateName, recipient, channel = 'sms', variables = {}, storeId = null }) {
+  static async send({ templateName, recipient, channel = 'sms', variables = {}, storeId = null, mediaOptions = null }) {
     console.log(`💬 [NotificationService] Queued ${channel.toUpperCase()} to ${recipient} (Template: ${templateName})`);
 
     // Compile template string
@@ -27,7 +27,7 @@ export class NotificationService {
     }
 
     if (channel === 'whatsapp') {
-      return await whatsappService.sendMessage(recipient, messageBody, storeId);
+      return await whatsappService.sendMessage(recipient, messageBody, storeId, mediaOptions);
     } else if (channel === 'sms') {
       return await this.sendSMS(recipient, messageBody);
     } else {
@@ -40,7 +40,8 @@ export class NotificationService {
    */
   static compileTemplate(templateName, variables) {
     const defaultTemplates = {
-      draft_reminder: 'Hi {{customer_name}}, you left your order for {{product_name}} incomplete! Complete your delivery order here: {{resume_link}}',
+      draft_reminder: 'Hi {{customer_name}}, your order for {{product_name}} was saved! Unit reserved with Pay-On-Delivery. Tap here to confirm delivery: {{resume_link}}',
+      draft_reminder_whatsapp: 'Hi {{customer_name}}, we noticed network may have interrupted your order for {{product_name}}! 📦\n\nWe have temporarily reserved your package with Pay On Delivery (no risk).\n\n👉 Tap here to confirm your delivery address: {{resume_link}}\n\n(Need help or have questions? Simply reply to this chat and our team will assist you right away!)',
       order_confirmed_receipt: 'Hi {{customer_name}}, your order {{order_number}} for {{product_name}} has been confirmed for delivery. Total: ₦{{total_amount}} COD.',
       order_delivered_receipt: 'Thank you {{customer_name}}! Order {{order_number}} has been delivered. Amount paid: ₦{{total_amount}}. Enjoy your purchase!',
       post_delivery_upsell: 'Hi {{customer_name}}, how are you enjoying your product? Get 20% off {{offer_product_name}} today! Order here: {{offer_link}}'

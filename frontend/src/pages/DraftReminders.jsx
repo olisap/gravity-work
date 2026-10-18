@@ -26,7 +26,7 @@ export default function DraftReminders({ orders = [], selectedCountry }) {
       });
       const data = await res.json();
       if (res.ok) {
-        const channels = [data.emailSent && 'Email', data.smsSent && 'SMS'].filter(Boolean).join(' & ') || 'reminder';
+        const channels = [data.emailSent && 'Email', data.smsSent && 'SMS', data.whatsappSent && 'WhatsApp'].filter(Boolean).join(' & ') || 'reminder';
         setToastMap(prev => ({ ...prev, [draft.id]: { type: 'success', msg: `${channels} sent!` } }));
       } else {
         setToastMap(prev => ({ ...prev, [draft.id]: { type: 'error', msg: data.error || 'Failed to send' } }));
@@ -47,7 +47,7 @@ export default function DraftReminders({ orders = [], selectedCountry }) {
             <Clock className="w-5 h-5 text-amber-400" /> Abandoned Form Drafts &amp; Reminders
           </h2>
           <p className="section-subtitle">
-            Tracks form drop-offs after 15 minutes. Triggers <strong>Brevo Email</strong> and/or SMS recovery automatically.
+            Tracks form drop-offs after 15 minutes. Triggers <strong>Email</strong>, <strong>SMS</strong>, and <strong>WhatsApp</strong> recovery with product visual demonstration automatically.
           </p>
         </div>
 
