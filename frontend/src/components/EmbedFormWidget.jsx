@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ShoppingBag, CheckCircle, ArrowRight, ShieldCheck, Zap, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 import { AFRICAN_LOCATIONS } from '../data/africanLocations';
 import { apiUrl } from '../utils/apiUrl';
@@ -323,8 +323,15 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     return errs;
   };
 
+  // Debounce timer ref to prevent network spam on rapid blurs/selections
+  const draftTimerRef = useRef(null);
+
   // Persist draft to backend
   const saveDraft = async (isFinal = false) => {
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
     if (!customerPhone && !isFinal) return;
     setIsSubmitting(isFinal);
     try {
@@ -439,8 +446,24 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
     }
   };
 
+  // Debounced wrapper to avoid sending multiple requests while user is tabbing through fields
+  const triggerDraftSave = (isFinal = false) => {
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+
+    if (isFinal) {
+      saveDraft(true);
+    } else {
+      draftTimerRef.current = setTimeout(() => {
+        saveDraft(false);
+      }, 1200);
+    }
+  };
+
   const handleFieldBlur = () => {
-    saveDraft(false);
+    triggerDraftSave(false);
   };
 
   const handleFormSubmit = (e) => {
@@ -533,7 +556,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
                     const prod = products.find(p => p.id === e.target.value);
                     setSelectedProduct(prod);
                     setSelectedBundleIndex(0);
-                    if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                    if (customerPhone) triggerDraftSave(false);
                   }}
                   className={theme.select}
                 >
@@ -553,7 +576,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
                 onChange={(e) => {
                   const idx = Number(e.target.value);
                   setSelectedBundleIndex(idx);
-                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                  if (customerPhone) triggerDraftSave(false);
                 }}
                 className={theme.select + " font-bold text-xs py-3.5"}
               >
@@ -711,7 +734,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
                   value={selectedState}
                   onChange={(e) => {
                     setSelectedState(e.target.value);
-                    if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                    if (customerPhone) triggerDraftSave(false);
                   }}
                   className={theme.select}
                 >
@@ -788,7 +811,7 @@ export default function EmbedFormWidget({ products = [], allProducts = [], formC
                 checked={addUpsellBump}
                 onChange={(e) => {
                   setAddUpsellBump(e.target.checked);
-                  if (customerPhone) setTimeout(() => saveDraft(false), 100);
+                  if (customerPhone) triggerDraftSave(false);
                 }}
                 className="mt-1 accent-emerald-600 w-5 h-5 rounded cursor-pointer"
               />

@@ -1,6 +1,85 @@
 import { supabase } from '../config/supabase.js';
 
-let mockForms = [];
+export let mockForms = [
+  {
+    id: '33000000-0000-0000-0000-000000000001',
+    store_id: '00000000-0000-0000-0000-784637855674',
+    name: 'POT KNOB Order Form',
+    linked_product_id: '22000000-0000-0000-0000-784714673902',
+    embed_key: 'EMBED-POTKNOBORD-5463',
+    header_text: 'Please Fill The Form Below To Place Your Order',
+    subheader_text: 'Only Serious Buyers Should Fill The Form Below',
+    button_text: 'ORDER NOW',
+    button_bg_color: '#4f46e5',
+    button_text_color: '#ffffff',
+    form_bg_color: '#0f172a',
+    show_country_code: 'Yes',
+    payment_cod_enabled: true,
+    payment_paystack_enabled: false,
+    payment_flutterwave_enabled: false,
+    payment_bank_enabled: false,
+    notification_email: 'olisapaul1@gmail.com',
+    thank_you_url: '',
+    upsell_enabled: true,
+    upsell_product_id: '22000000-0000-0000-0000-000000000004',
+    upsell_title: 'Special 1-Click Offer!',
+    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra (Normal Price: ₦9,500)!',
+    upsell_price: 7000,
+    is_active: true
+  },
+  {
+    id: '33000000-0000-0000-0000-000000000003',
+    store_id: '00000000-0000-0000-0000-784637855674',
+    name: 'Lunchbox Landing Page Form',
+    linked_product_id: '22000000-0000-0000-0000-784714673902',
+    embed_key: 'EMBED-LUNCHBOX-2026',
+    header_text: 'Please Fill The Form Below To Place Your Order',
+    subheader_text: 'Only Serious Buyers Should Fill The Form Below',
+    button_text: 'ORDER NOW',
+    button_bg_color: '#4f46e5',
+    button_text_color: '#ffffff',
+    form_bg_color: '#0f172a',
+    show_country_code: 'Yes',
+    payment_cod_enabled: true,
+    payment_paystack_enabled: false,
+    payment_flutterwave_enabled: false,
+    payment_bank_enabled: false,
+    notification_email: 'olisapaul1@gmail.com',
+    thank_you_url: '',
+    upsell_enabled: true,
+    upsell_product_id: '22000000-0000-0000-0000-000000000004',
+    upsell_title: 'Special 1-Click Offer!',
+    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra (Normal Price: ₦9,500)!',
+    upsell_price: 7000,
+    is_active: true
+  },
+  {
+    id: '33000000-0000-0000-0000-000000000002',
+    store_id: '00000000-0000-0000-0000-784637855674',
+    name: 'Spin Mop Promo Form',
+    linked_product_id: '22000000-0000-0000-0000-000000000002',
+    embed_key: 'EMBED-SPINMOP-2026',
+    header_text: 'Order Your Rechargeable Spin Mop Today',
+    subheader_text: 'Free Delivery & Pay On Delivery Nationwide',
+    button_text: 'COMPLETE MY ORDER NOW',
+    button_bg_color: '#10b981',
+    button_text_color: '#ffffff',
+    form_bg_color: '#0f172a',
+    show_country_code: 'Yes',
+    payment_cod_enabled: true,
+    payment_paystack_enabled: false,
+    payment_flutterwave_enabled: false,
+    payment_bank_enabled: false,
+    notification_email: 'olisapaul1@gmail.com',
+    thank_you_url: '',
+    upsell_enabled: true,
+    upsell_product_id: '22000000-0000-0000-0000-000000000004',
+    upsell_title: 'Special 1-Click Offer!',
+    upsell_description: 'Add a Portable USB Juicer Cup for only ₦7,000 extra!',
+    upsell_price: 7000,
+    is_active: true
+  }
+];
 
 function sanitizeUuid(val) {
   if (!val || typeof val !== 'string' || val.trim() === '') return null;
@@ -91,6 +170,9 @@ export async function getForms(req, res) {
 export async function getFormByEmbedKey(req, res) {
   const { embedKey } = req.params;
   if (!embedKey) return res.status(400).json({ error: 'Embed key required' });
+
+  // Cache public embed configurations at the edge and browser to drastically reduce server egress
+  res.set('Cache-Control', 'public, max-age=180, s-maxage=600, stale-while-revalidate=300');
 
   if (supabase) {
     try {

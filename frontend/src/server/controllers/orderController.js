@@ -95,11 +95,12 @@ async function resolveStoreName(storeId) {
 }
 
 function prepareOrderPayloadForSupabase(order) {
-  const { items, thank_you_url, notification_email, custom_field_responses, customer_whatsapp, ...rest } = order;
+  const { items, thank_you_url, notification_email, custom_field_responses, customer_whatsapp, comments, ...rest } = order;
   return {
     ...rest,
     id: isValidUUID(rest.id) ? rest.id : crypto.randomUUID(),
-    upsell_items: items || []
+    upsell_items: items || [],
+    confirmation_call_notes: rest.confirmation_call_notes || comments || null
   };
 }
 
@@ -388,6 +389,16 @@ export async function createOrUpdateDraftOrder(req, res) {
         console.error('Failed to send order finalized notifications:', err);
       });
     }
+  }
+
+  // For intermediate draft auto-saves, return minimal payload to drastically conserve outbound bandwidth
+  if (!is_final_submit) {
+    return res.status(orderIndex >= 0 ? 200 : 201).json({
+      id: finalOrder.id,
+      order_number: finalOrder.order_number,
+      resume_token: finalOrder.resume_token,
+      status: 'Draft'
+    });
   }
 
   res.status(orderIndex >= 0 ? 200 : 201).json(finalOrder);

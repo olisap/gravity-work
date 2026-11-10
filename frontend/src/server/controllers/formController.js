@@ -166,6 +166,9 @@ export async function getFormByEmbedKey(req, res) {
   const { embedKey } = req.params;
   if (!embedKey) return res.status(400).json({ error: 'Embed key required' });
 
+  // Cache public embed configurations at the edge and browser to drastically reduce server egress
+  res.set('Cache-Control', 'public, max-age=180, s-maxage=600, stale-while-revalidate=300');
+
   if (supabase) {
     try {
       let query = supabase.from('forms').select('*');
