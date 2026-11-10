@@ -3,6 +3,9 @@ import { supabase } from '../config/supabase.js';
 import { InventoryService } from '../services/inventoryService.js';
 import { NotificationService } from '../services/notificationService.js';
 import { AbandonmentWorker } from '../services/abandonmentWorker.js';
+import { recordAuditEvent, getStoreSettings } from './settingsController.js';
+import { whatsappService } from '../services/whatsappService.js';
+import { formatForm } from './formController.js';
 
 function isValidUUID(str) {
   if (!str) return false;
@@ -94,14 +97,148 @@ async function resolveStoreName(storeId) {
   return process.env.SENDER_NAME || 'Our Store';
 }
 
+/**
+ * Resolve confirmation media (Image or Video) configured for the ordered product.
+ * Returns { url: string, type: 'image' | 'video' } or null.
+ * Strictly adheres to zero-assumption principle: if no media exists, returns null.
+ */
+async function resolveConfirmationMedia(order, storeId = null) {
+  try {
+    if (!order) return null;
+    const rawItems = order.items || order.upsell_items || [];
+    let normalizedItems = [];
+    if (Array.isArray(rawItems)) {
+      normalizedItems = rawItems;
+    } else if (typeof rawItems === 'string') {
+      try { normalizedItems = JSON.parse(rawItems); } catch (e) {}
+    }
+    order.items = normalizedItems;
+
+    if (!order.form_embed_key && order.confirmation_call_notes) {
+      try {
+        const meta = typeof order.confirmation_call_notes === 'string'
+          ? JSON.parse(order.confirmation_call_notes)
+          : order.confirmation_call_notes;
+        if (meta?.form_embed_key) {
+          order.form_embed_key = meta.form_embed_key;
+        }
+      } catch (e) {}
+    }
+
+    // 0. Check global store setting: if disabled in Settings, skip media entirely
+    if (storeId) {
+      const storeSettings = getStoreSettings(storeId);
+      if (storeSettings && storeSettings.include_confirmation_media === false) {
+        console.log(`ℹ️ [resolveConfirmationMedia] Store ${storeId} has disabled confirmation media in Settings.`);
+        return null;
+      }
+    }
+
+    let productId = null;
+    if (order.items && order.items.length > 0 && order.items[0].product_id) {
+      productId = order.items[0].product_id;
+    }
+
+    if (!productId && order.form_embed_key && supabase) {
+      const { data: form } = await supabase
+        .from('forms')
+        .select('linked_product_id')
+        .eq('embed_key', order.form_embed_key)
+        .maybeSingle();
+      if (form?.linked_product_id) {
+        productId = form.linked_product_id;
+      }
+    }
+
+    if (!supabase) return null;
+
+    let query = supabase.from('products').select('id, name, images');
+    if (productId && isValidUUID(productId)) {
+      query = query.eq('id', productId);
+    } else if (order.items && order.items[0] && order.items[0].name) {
+      const rawName = order.items[0].name.split('—')[0].trim();
+      query = query.ilike('name', `%${rawName}%`);
+    } else {
+      return null;
+    }
+
+    if (storeId && isValidUUID(storeId)) {
+      query = query.eq('store_id', storeId);
+    }
+
+    const { data: prods, error } = await query.limit(1);
+    if (!error && prods && prods.length > 0) {
+      const prod = prods[0];
+      if (Array.isArray(prod.images) && prod.images.length > 0) {
+        // 1. Look for explicit confirmation media set by the merchant on this product
+        const conf = prod.images.find(img => img && typeof img === 'object' && img.is_confirmation);
+        if (conf && conf.url && typeof conf.url === 'string' && conf.url.trim().startsWith('http')) {
+          const u = conf.url.trim();
+          return {
+            url: u,
+            type: conf.type || (/\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image')
+          };
+        }
+        // 2. Fallback to first available catalog visual if no explicit confirmation media is tagged
+        const firstImg = prod.images[0];
+        const fallbackUrl = typeof firstImg === 'string' ? firstImg : firstImg?.url;
+        if (fallbackUrl && typeof fallbackUrl === 'string' && fallbackUrl.trim().startsWith('http')) {
+          const u = fallbackUrl.trim();
+          return {
+            url: u,
+            type: /\.(mp4|mov|webm)(\?.*)?$/i.test(u) ? 'video' : 'image'
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ [resolveConfirmationMedia] Could not resolve media:', err.message);
+  }
+  return null;
+}
+
+const KNOWN_ORDER_COLUMNS = [
+  'id', 'order_number', 'customer_name', 'customer_phone', 'customer_email',
+  'delivery_address', 'country', 'state', 'subtotal', 'delivery_fee',
+  'total_amount', 'status', 'payment_method', 'payment_status', 'source',
+  'assigned_staff_id', 'confirmation_call_notes', 'resume_token', 'last_activity_at',
+  'form_step_reached', 'upsell_items', 'upsell_source', 'reminder_sent_at',
+  'post_delivery_nudge_sent_at', 'is_duplicate_flagged', 'duplicate_reason',
+  'created_at', 'updated_at', 'delivered_at', 'store_id', 'scheduled_delivery_date',
+  'scheduled_delivery_time', 'reminder_notes'
+];
+
 function prepareOrderPayloadForSupabase(order) {
-  const { items, thank_you_url, notification_email, custom_field_responses, customer_whatsapp, comments, ...rest } = order;
-  return {
-    ...rest,
-    id: isValidUUID(rest.id) ? rest.id : crypto.randomUUID(),
-    upsell_items: items || [],
-    confirmation_call_notes: rest.confirmation_call_notes || comments || null
-  };
+  const payload = {};
+  const orderId = isValidUUID(order.id) ? order.id : crypto.randomUUID();
+
+  // Merge any existing confirmation_call_notes with custom metadata
+  let meta = {};
+  if (order.confirmation_call_notes && typeof order.confirmation_call_notes === 'string' && order.confirmation_call_notes.startsWith('{')) {
+    try { meta = JSON.parse(order.confirmation_call_notes); } catch (e) {}
+  }
+  if (order.comments) meta.comments = order.comments;
+  if (order.custom_field_responses) meta.custom_field_responses = order.custom_field_responses;
+  if (order.customer_whatsapp) meta.customer_whatsapp = order.customer_whatsapp;
+  if (order.form_embed_key) meta.form_embed_key = order.form_embed_key;
+
+  for (const col of KNOWN_ORDER_COLUMNS) {
+    if (order[col] !== undefined) {
+      if (['store_id', 'assigned_staff_id'].includes(col)) {
+        payload[col] = isValidUUID(order[col]) ? order[col] : null;
+      } else {
+        payload[col] = order[col];
+      }
+    }
+  }
+
+  payload.id = orderId;
+  payload.upsell_items = order.items || order.upsell_items || [];
+  if (Object.keys(meta).length > 0) {
+    payload.confirmation_call_notes = JSON.stringify(meta);
+  }
+
+  return payload;
 }
 
 function formatOrderFromSupabase(order) {
@@ -115,6 +252,9 @@ function formatOrderFromSupabase(order) {
   return {
     ...order,
     items: order.items || order.upsell_items || [],
+    customer_whatsapp: order.customer_whatsapp || meta.customer_whatsapp || null,
+    form_embed_key: order.form_embed_key || meta.form_embed_key || null,
+    custom_field_responses: order.custom_field_responses || meta.custom_field_responses || {},
     delivery_agent_id: order.delivery_agent_id || meta.delivery_agent_id || null,
     delivery_agent_name: order.delivery_agent_name || meta.delivery_agent_name || null,
     amount_remitted: order.amount_remitted ?? meta.amount_remitted ?? (order.payment_status === 'Paid' ? (order.total_amount || 0) : 0),
@@ -301,7 +441,8 @@ export async function createOrUpdateDraftOrder(req, res) {
     delivery_fee,
     notification_email,
     thank_you_url,
-    store_id
+    store_id,
+    form_embed_key
   } = req.body;
 
   const normalizedPhone = normalizePhone(customer_phone);
@@ -352,12 +493,35 @@ export async function createOrUpdateDraftOrder(req, res) {
   }
 
   let orderIndex = mockOrders.findIndex(o => o.id === id || (resume_token && o.resume_token === resume_token));
+  let existingFromDb = null;
+  if (orderIndex < 0 && supabase && (id || resume_token)) {
+    try {
+      let q = supabase.from('orders').select('*');
+      if (isValidUUID(id)) {
+        q = q.eq('id', id);
+      } else if (resume_token) {
+        q = q.eq('resume_token', resume_token);
+      } else {
+        q = null;
+      }
+      if (q) {
+        const { data: dbRows } = await q.limit(1);
+        if (dbRows && dbRows.length > 0) {
+          existingFromDb = formatOrderFromSupabase(dbRows[0]);
+        }
+      }
+    } catch (e) {
+      console.error('Error finding existing draft in Supabase:', e);
+    }
+  }
+
+  const existing = orderIndex >= 0 ? mockOrders[orderIndex] : existingFromDb;
   const subtotal = items ? items.reduce((acc, i) => acc + (i.unit_price_at_time_of_order * i.quantity), 0) : 0;
   const fee = delivery_fee !== undefined ? Number(delivery_fee) : 0;
 
   let finalOrder = null;
 
-  if (orderIndex >= 0) {
+  if (existing) {
     const customResponses = req.body.custom_field_responses || {};
     const customerWhatsapp = req.body.customer_whatsapp || customResponses.whatsapp_number || customResponses.whatsapp || null;
     let formattedCustomNotes = '';
@@ -369,10 +533,10 @@ export async function createOrUpdateDraftOrder(req, res) {
     }
 
     // Update existing draft
-    const existing = mockOrders[orderIndex];
     finalOrder = {
       ...existing,
       store_id: store_id || existing.store_id || null,
+      form_embed_key: form_embed_key || existing.form_embed_key || null,
       customer_name: customer_name || existing.customer_name,
       customer_phone: normalizedPhone || existing.customer_phone,
       customer_whatsapp: customerWhatsapp || existing.customer_whatsapp || null,
@@ -398,7 +562,11 @@ export async function createOrUpdateDraftOrder(req, res) {
       finalOrder.resume_token = null; // Clear resume token on final submit
     }
 
-    mockOrders[orderIndex] = finalOrder;
+    if (orderIndex >= 0) {
+      mockOrders[orderIndex] = finalOrder;
+    } else {
+      mockOrders.unshift(finalOrder);
+    }
   } else {
     // Create new Order / Draft
     const tsBase = Date.now().toString().slice(-6);  // last 6 digits of ms timestamp
@@ -490,21 +658,32 @@ export async function createOrUpdateDraftOrder(req, res) {
 
   // Trigger Notifications on Final Order Submit
   if (is_final_submit) {
-    const [targetNotificationEmail, storeName] = await Promise.all([
+    const [targetNotificationEmail, storeName, confirmationMedia] = await Promise.all([
       resolveMerchantNotificationEmail({ explicitEmail: notification_email, storeId: store_id }),
-      resolveStoreName(store_id)
+      resolveStoreName(store_id),
+      resolveConfirmationMedia(finalOrder, store_id)
     ]);
 
-    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Store: ${storeName}, Merchant: ${targetNotificationEmail || 'NONE'}, Customer: ${finalOrder.customer_email || 'None'})`);
+    console.log(`📧 Dispatching final order #${finalOrder.order_number} notifications (Store: ${storeName}, Merchant: ${targetNotificationEmail || 'NONE'}, Customer: ${finalOrder.customer_email || 'None'}, Media: ${confirmationMedia ? confirmationMedia.type : 'NONE'})`);
     if (targetNotificationEmail) {
-      NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail, storeName).catch(err => {
+      NotificationService.sendOrderFinalizedNotifications(finalOrder, targetNotificationEmail, storeName, confirmationMedia).catch(err => {
         console.error('Failed to send order finalized notifications:', err);
       });
     } else {
       console.warn(`⚠️ No merchant notification email resolved for store ${store_id}. Sending customer receipt only.`);
-      NotificationService.sendOrderFinalizedNotifications(finalOrder, null, storeName).catch(err => {
+      NotificationService.sendOrderFinalizedNotifications(finalOrder, null, storeName, confirmationMedia).catch(err => {
         console.error('Failed to send order finalized notifications:', err);
       });
+    }
+
+    // Automated WhatsApp order confirmation (opt-in in store settings, OFF by default)
+    const storeSettings = getStoreSettings(store_id);
+    if (storeSettings?.whatsapp_order_confirmation) {
+      whatsappService.sendOrderConfirmation(finalOrder, storeName, store_id, confirmationMedia).catch(err => {
+        console.error('Failed to send WhatsApp order confirmation:', err);
+      });
+    } else {
+      console.log(`ℹ️ [WhatsApp] Automated order confirmation is OFF in store settings (Store: ${store_id || 'default'}).`);
     }
   }
 
@@ -601,6 +780,23 @@ export async function updateOrderStatus(req, res) {
         else mockOrders.unshift(formatted);
 
         console.log(`✅ Order #${formatted.order_number} status updated to "${status || formatted.status}" in Supabase`);
+
+        if (status === 'Delivered') {
+          const storeSettings = getStoreSettings(req.storeId);
+          if (storeSettings?.invoice_via_whatsapp && dbData[0].customer_phone) {
+            NotificationService.send({
+              templateName: 'order_delivered_receipt',
+              recipient: dbData[0].customer_phone,
+              channel: 'whatsapp',
+              variables: {
+                customer_name: dbData[0].customer_name,
+                order_number: dbData[0].order_number,
+                total_amount: Number(dbData[0].total_amount || 0).toLocaleString()
+              }
+            }).catch(err => console.error('Failed to send WhatsApp delivered receipt:', err));
+          }
+        }
+
         return res.json(formatted);
       }
     } catch (dbErr) {
@@ -662,6 +858,16 @@ export async function updateOrderStatus(req, res) {
   // Stock Ledger Handling (Deduct on Scheduled, restore on Cancel)
   if (status) {
     await InventoryService.handleOrderStatusChange(order, previousStatus, status);
+
+    recordAuditEvent({
+      store_id: order.store_id || req.storeId,
+      action: status === 'Deleted' ? 'ORDER_DELETED' : `STATUS_${status.toUpperCase().replace(/\s+/g, '_')}`,
+      order_number: order.order_number,
+      customer_name: order.customer_name,
+      amount: order.total_amount,
+      performed_by: `${req.user?.full_name || 'Staff'} (${req.user?.role || 'staff'})`,
+      details: confirmation_notes || `Order status updated from ${previousStatus || 'Pending'} to ${status}`
+    });
   }
 
   res.json(formatOrderFromSupabase(order));
@@ -669,8 +875,60 @@ export async function updateOrderStatus(req, res) {
 
 export async function addUpsellToOrder(req, res) {
   const { id } = req.params;
-  const { upsell_item, upsell_source } = req.body; // { product_id, name, unit_price_at_time_of_order, quantity }
+  const storeId = req.storeId;
+  const { upsell_item, upsell_source } = req.body;
 
+  if (!upsell_item || !upsell_item.name) {
+    return res.status(400).json({ error: 'Valid upsell item is required' });
+  }
+
+  // 1. Try Supabase order update
+  if (supabase) {
+    try {
+      let query = supabase.from('orders').select('*').eq('id', id);
+      if (storeId) query = query.eq('store_id', storeId);
+      const { data: dbOrder, error } = await query.maybeSingle();
+
+      if (!error && dbOrder) {
+        const currentItems = Array.isArray(dbOrder.items) ? [...dbOrder.items] : [];
+        const newItem = {
+          product_id: upsell_item.product_id || null,
+          name: upsell_item.name,
+          unit_price_at_time_of_order: Number(upsell_item.unit_price_at_time_of_order) || 0,
+          quantity: Number(upsell_item.quantity) || 1,
+          is_upsell: true
+        };
+        currentItems.push(newItem);
+
+        const newSubtotal = currentItems.reduce((sum, item) => sum + (Number(item.unit_price_at_time_of_order || 0) * Number(item.quantity || 1)), 0);
+        const deliveryFee = Number(dbOrder.delivery_fee) || 0;
+        const newTotal = newSubtotal + deliveryFee;
+
+        const updatePayload = {
+          items: currentItems,
+          subtotal: newSubtotal,
+          total_amount: newTotal,
+          upsell_source: upsell_source || 'confirmation_call',
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: updatedOrder, error: updateErr } = await supabase
+          .from('orders')
+          .update(updatePayload)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (!updateErr && updatedOrder) {
+          return res.json(formatOrderFromSupabase(updatedOrder));
+        }
+      }
+    } catch (e) {
+      console.error('Error adding upsell to Supabase order:', e);
+    }
+  }
+
+  // 2. Fallback to demo mock orders if in demo mode
   let order = mockOrders.find(o => o.id === id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
@@ -725,3 +983,159 @@ export async function sendManualDraftReminder(req, res) {
     order: draft
   });
 }
+
+export async function getDraftByResumeToken(req, res) {
+  const { token } = req.params;
+  if (!token) {
+    return res.status(400).json({ error: 'Resume token is required' });
+  }
+
+  let draft = null;
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('resume_token', token)
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        draft = formatOrderFromSupabase(data[0]);
+      } else if (isValidUUID(token)) {
+        const { data: byId } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', token)
+          .limit(1);
+        if (byId && byId.length > 0) {
+          draft = formatOrderFromSupabase(byId[0]);
+        }
+      }
+    } catch (e) {
+      console.error('getDraftByResumeToken Supabase query exception:', e);
+    }
+  }
+
+  if (!draft) {
+    const found = mockOrders.find(o => o.resume_token === token || o.id === token);
+    if (found) draft = { ...found };
+  }
+
+  if (!draft) {
+    return res.status(404).json({ error: 'Draft order not found or invalid link' });
+  }
+
+  if (draft.status !== 'Draft') {
+    return res.json({
+      success: false,
+      already_completed: true,
+      order_number: draft.order_number,
+      message: 'This order has already been finalized and placed.'
+    });
+  }
+
+  // Resolve form and product
+  let form = null;
+  let formEmbedKey = draft.form_embed_key || null;
+  const productId = (draft.items && draft.items[0]?.product_id) || null;
+
+  if (supabase) {
+    try {
+      if (formEmbedKey) {
+        const { data: f } = await supabase.from('forms').select('*').eq('embed_key', formEmbedKey).maybeSingle();
+        if (f) form = f;
+      }
+      if (!form && productId) {
+        let q = supabase.from('forms').select('*').eq('linked_product_id', productId).eq('is_active', true);
+        if (draft.store_id) q = q.eq('store_id', draft.store_id);
+        const { data: forms } = await q.order('updated_at', { ascending: false }).limit(1);
+        if (forms && forms.length > 0) {
+          form = forms[0];
+          formEmbedKey = form.embed_key;
+        }
+      }
+      if (!form && draft.store_id) {
+        const { data: forms } = await supabase
+          .from('forms')
+          .select('*')
+          .eq('store_id', draft.store_id)
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        if (forms && forms.length > 0) {
+          form = forms[0];
+          formEmbedKey = form.embed_key;
+        }
+      }
+    } catch (e) {
+      console.error('Error resolving form in getDraftByResumeToken:', e);
+    }
+  }
+
+  // Resolve product and store products
+  let product = null;
+  let allProducts = [];
+
+  if (supabase) {
+    try {
+      const targetProdId = form?.linked_product_id || productId;
+      if (targetProdId) {
+        const { data: prodData } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', targetProdId)
+          .maybeSingle();
+        if (prodData) product = prodData;
+      }
+
+      const storeId = form?.store_id || draft.store_id;
+      if (storeId) {
+        const { data: prodsList } = await supabase
+          .from('products')
+          .select('*')
+          .eq('store_id', storeId)
+          .eq('is_active', true);
+        if (prodsList && prodsList.length > 0) {
+          allProducts = prodsList;
+        }
+      }
+
+      if (product && !allProducts.find(p => p.id === product.id)) {
+        allProducts.unshift(product);
+      }
+    } catch (e) {
+      console.error('Error resolving product in getDraftByResumeToken:', e);
+    }
+  }
+
+  const formattedForm = form ? formatForm(form) : null;
+
+  return res.json({
+    success: true,
+    draft: {
+      id: draft.id,
+      order_number: draft.order_number,
+      customer_name: draft.customer_name,
+      customer_phone: draft.customer_phone,
+      customer_whatsapp: draft.customer_whatsapp,
+      customer_email: draft.customer_email,
+      delivery_address: draft.delivery_address,
+      country: draft.country,
+      state: draft.state,
+      items: draft.items,
+      subtotal: draft.subtotal,
+      delivery_fee: draft.delivery_fee,
+      total_amount: draft.total_amount,
+      resume_token: draft.resume_token,
+      form_step_reached: draft.form_step_reached,
+      custom_field_responses: draft.custom_field_responses,
+      store_id: draft.store_id,
+      form_embed_key: formEmbedKey
+    },
+    form: formattedForm,
+    product: product || (allProducts.length > 0 ? allProducts[0] : null),
+    allProducts,
+    form_embed_key: formEmbedKey
+  });
+}
+

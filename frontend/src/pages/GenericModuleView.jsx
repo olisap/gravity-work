@@ -1,59 +1,81 @@
-import React from 'react';
-import { ShieldCheck, Link, Users, Layers, Truck, HelpCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Link, Users, Layers, Truck, HelpCircle, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiUrl';
 
 export default function GenericModuleView({ moduleKey }) {
   const { user } = useAuth();
+  const [copiedKey, setCopiedKey] = useState(null);
+  const [teamList, setTeamList] = useState([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
 
-  const userList = [
-    { name: user?.full_name || 'Merchant Owner', role: user?.role === 'owner' ? 'Owner / Admin' : user?.role || 'Owner', email: user?.email || 'owner@merchant.ng', status: 'Active' },
-    { name: 'Chidi Okafor', role: 'Confirmation Staff', email: 'chidi@merchant.ng', status: 'Active' },
-    { name: 'Babajide Adeleke', role: 'Logistics Manager', email: 'logistics@merchant.ng', status: 'Active' }
-  ];
+  useEffect(() => {
+    if (moduleKey === 'users') {
+      setLoadingTeam(true);
+      const token = localStorage.getItem('gravity_crm_token');
+      const storeId = user?.store_id || user?.id || '';
+      fetch(apiUrl(`/api/team?store_id=${encodeURIComponent(storeId)}`), {
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+      })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) {
+            setTeamList(data.map(m => ({
+              name: m.full_name,
+              role: m.role?.replace('_', ' ')?.toUpperCase(),
+              email: m.email,
+              status: m.is_active !== false ? 'Active' : 'Disabled'
+            })));
+          } else {
+            setTeamList([
+              { name: user?.full_name || 'Store Owner', role: 'Owner / Admin', email: user?.email || 'owner@store.ng', status: 'Active' }
+            ]);
+          }
+        })
+        .catch(() => {
+          setTeamList([
+            { name: user?.full_name || 'Store Owner', role: 'Owner / Admin', email: user?.email || 'owner@store.ng', status: 'Active' }
+          ]);
+        })
+        .finally(() => setLoadingTeam(false));
+    }
+  }, [moduleKey, user]);
+
+  const handleCopy = (text, key) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
+
+  const webhookBase = typeof window !== 'undefined' ? window.location.origin : 'https://gravity-crm.ng';
 
   const configs = {
     users: {
       title: 'Users & CRM Staff Management',
       subtitle: 'Control roles, confirmation agent permissions, and owner access',
       icon: Users,
-      items: userList
+      items: teamList.length > 0 ? teamList : [
+        { name: user?.full_name || 'Store Owner', role: 'Owner / Admin', email: user?.email || 'owner@store.ng', status: 'Active' }
+      ]
     },
     webhooks: {
-      title: 'Webhooks & API Integration (NEW)',
-      subtitle: 'Receive real-time order submission HTTP POST payloads for WooCommerce/Shopify',
+      title: 'Webhooks & External API Integrations',
+      subtitle: 'POST real-time order submission payloads from WooCommerce, Shopify, Elementor, or custom forms',
       icon: Link,
       items: [
-        { name: 'Facebook Lead Ads Integration', role: 'Webhook Active', email: '/api/orders/draft', status: 'Active' },
-        { name: 'WooCommerce Order Sync', role: 'Webhook Active', email: '/api/orders', status: 'Active' }
-      ]
-    },
-    suppliers: {
-      title: 'Suppliers & Manufacturing Partners',
-      subtitle: 'Manage wholesale suppliers, import shipments, and cost invoices',
-      icon: Layers,
-      items: [
-        { name: 'Guangzhou Kitchenware Ltd', role: 'Wholesale Supplier', email: 'contact@guangzhouware.com', status: 'Active' },
-        { name: 'Shenzhen Tech Electronics', role: 'Gadgets Manufacturer', email: 'sales@sztech.cn', status: 'Active' }
-      ]
-    },
-    agents: {
-      title: 'Delivery Fleet & Courier Agents',
-      subtitle: 'Assign dispatch riders, Speedaf, GIG Logistics, or internal drivers',
-      icon: Truck,
-      items: [
-        { name: 'Speedaf Logistics Courier', role: 'Nationwide Courier', email: 'dispatch@speedaf.com', status: 'Active' },
-        { name: 'GIG Logistics (GIGL)', role: 'Pan-African Logistics', email: 'express@gigl.com', status: 'Active' },
-        { name: 'Inland Bikers Fleet', role: 'Last-mile Rider Fleet', email: 'riders@delivery.ng', status: 'Active' }
+        { name: 'Standard Order Submission Webhook', role: 'POST (JSON)', email: `${webhookBase}/api/orders`, status: 'Live & Active' },
+        { name: 'Draft / Abandoned Cart Ingestion', role: 'POST (JSON)', email: `${webhookBase}/api/orders/draft`, status: 'Live & Active' },
+        { name: 'Public Form Embed & Catalog Endpoint', role: 'GET (JSON)', email: `${webhookBase}/api/forms/embed/:key`, status: 'Active' }
       ]
     },
     'payment-gateways': {
-      title: 'Payment Gateways & Paystack / Flutterwave',
+      title: 'Payment Settlement Methods',
       subtitle: 'Configure online prepayment options and Cash-on-Delivery (COD) reconciliation',
       icon: ShieldCheck,
       items: [
-        { name: 'Cash On Delivery (COD)', role: 'Primary Settlement', email: 'Default active method for 90% African sales', status: 'Active' },
-        { name: 'Paystack Payment Gateway', role: 'Online Cards / USSD', email: 'pk_live_xxxxxx', status: 'Configured' },
-        { name: 'Flutterwave Integration', role: 'Mobile Money / Bank Transfer', email: 'FLWSECK_TEST_xxxxxx', status: 'Configured' }
+        { name: 'Cash On Delivery (COD)', role: 'Primary Settlement', email: 'Default active method for Nigerian deliveries', status: 'Active' },
+        { name: 'Paystack Payment Gateway', role: 'Online Cards / USSD / Bank Transfer', email: 'Configurable in Store Settings', status: 'Available' },
+        { name: 'Flutterwave Integration', role: 'Mobile Money / Bank Transfer / Barter', email: 'Configurable in Store Settings', status: 'Available' }
       ]
     }
   };
@@ -90,7 +112,20 @@ export default function GenericModuleView({ moduleKey }) {
               <tr key={idx}>
                 <td className="font-semibold text-slate-200">{item.name}</td>
                 <td className="text-slate-400">{item.role}</td>
-                <td className="font-mono text-xs text-indigo-300">{item.email}</td>
+                <td className="font-mono text-xs text-indigo-300">
+                  <div className="flex items-center gap-2">
+                    <span>{item.email}</span>
+                    {moduleKey === 'webhooks' && (
+                      <button
+                        onClick={() => handleCopy(item.email, idx)}
+                        className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                        title="Copy Webhook URL"
+                      >
+                        {copiedKey === idx ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                  </div>
+                </td>
                 <td><span className="badge badge-delivered">{item.status}</span></td>
               </tr>
             ))}

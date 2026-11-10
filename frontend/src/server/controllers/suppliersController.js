@@ -3,7 +3,7 @@ import { supabase } from '../config/supabase.js';
 let mockSuppliers = [];
 
 export async function getSuppliers(req, res) {
-  const storeId = req.user?.store_id || req.query.store_id;
+  const storeId = req.storeId;
 
   if (supabase) {
     let query = supabase.from('suppliers').select('*').order('created_at', { ascending: false });
@@ -23,7 +23,7 @@ export async function getSuppliers(req, res) {
 }
 
 export async function createSupplier(req, res) {
-  const storeId = req.user?.store_id || req.body.store_id;
+  const storeId = req.storeId;
   const newSupplier = {
     id: `sup-${Date.now()}`,
     store_id: storeId,
@@ -54,7 +54,7 @@ export async function updateSupplier(req, res) {
   const updates = req.body;
 
   if (supabase) {
-    const { data, error } = await supabase.from('suppliers').update(updates).eq('id', id).select();
+    const { data, error } = await supabase.from('suppliers').update(updates).eq('id', id).eq('store_id', req.storeId).select();
     if (!error && data && data.length > 0) {
       const idx = mockSuppliers.findIndex(s => s.id === id);
       if (idx !== -1) mockSuppliers[idx] = { ...mockSuppliers[idx], ...data[0] };
@@ -73,7 +73,8 @@ export async function updateSupplier(req, res) {
 export async function deleteSupplier(req, res) {
   const { id } = req.params;
   if (supabase) {
-    await supabase.from('suppliers').delete().eq('id', id);
+    const { error } = await supabase.from('suppliers').delete().eq('id', id).eq('store_id', req.storeId);
+    if (error) return res.status(502).json({ error: 'Supplier could not be deleted from Supabase', details: error.message });
   }
   mockSuppliers = mockSuppliers.filter(s => s.id !== id);
   res.json({ success: true, message: 'Supplier deleted' });

@@ -1,11 +1,12 @@
 import { supabase } from '../config/supabase.js';
 import nodemailer from 'nodemailer';
+import { whatsappService } from './whatsappService.js';
 
 export class NotificationService {
   /**
-   * Send notification via SMS or Email
+   * Send notification via SMS or Email or WhatsApp
    */
-  static async send({ templateName, recipient, channel = 'sms', variables = {} }) {
+  static async send({ templateName, recipient, channel = 'sms', variables = {}, storeId = null, mediaOptions = null }) {
     console.log(`💬 [NotificationService] Queued ${channel.toUpperCase()} to ${recipient} (Template: ${templateName})`);
 
     // Compile template string
@@ -17,7 +18,7 @@ export class NotificationService {
       recipient,
       channel,
       status: 'sent',
-      payload: { variables, body: messageBody },
+      payload: { variables, body: messageBody, store_id: storeId },
       created_at: new Date().toISOString()
     };
 
@@ -25,7 +26,9 @@ export class NotificationService {
       await supabase.from('notification_logs').insert([logEntry]);
     }
 
-    if (channel === 'sms') {
+    if (channel === 'whatsapp') {
+      return await whatsappService.sendMessage(recipient, messageBody, storeId, mediaOptions);
+    } else if (channel === 'sms') {
       return await this.sendSMS(recipient, messageBody);
     } else {
       return await this.sendEmail(recipient, variables.subject || 'Order Update', messageBody);
@@ -37,7 +40,8 @@ export class NotificationService {
    */
   static compileTemplate(templateName, variables) {
     const defaultTemplates = {
-      draft_reminder: 'Hi {{customer_name}}, you left your order for {{product_name}} incomplete! Complete your delivery order here: {{resume_link}}',
+      draft_reminder: 'Hi {{customer_name}}, your order for {{product_name}} was saved! Unit reserved with Pay-On-Delivery. Tap here to confirm delivery: {{resume_link}}',
+      draft_reminder_whatsapp: 'Hi {{customer_name}}, we noticed network may have interrupted your order for {{product_name}}! 📦\n\nWe have temporarily reserved your package with Pay On Delivery (no risk).\n\n👉 Tap here to confirm your delivery address: {{resume_link}}\n\n(Need help or have questions? Simply reply to this chat and our team will assist you right away!)',
       order_confirmed_receipt: 'Hi {{customer_name}}, your order {{order_number}} for {{product_name}} has been confirmed for delivery. Total: ₦{{total_amount}} COD.',
       order_delivered_receipt: 'Thank you {{customer_name}}! Order {{order_number}} has been delivered. Amount paid: ₦{{total_amount}}. Enjoy your purchase!',
       post_delivery_upsell: 'Hi {{customer_name}}, how are you enjoying your product? Get 20% off {{offer_product_name}} today! Order here: {{offer_link}}'
@@ -51,34 +55,55 @@ export class NotificationService {
   }
 
   /**
-   * Termii SMS Adapter with sandbox fallback
+   * Termii SMS Adapter with automatic Nigerian phone normalization and DND bypass
    */
   static async sendSMS(phone, text) {
     const apiKey = process.env.TERMII_API_KEY;
-    const cleanPhone = phone ? phone.replace(/\s+/g, '').replace('+', '') : '';
-    if (apiKey && apiKey !== 'your-termii-api-key') {
+    if (!phone) return { success: false, error: 'Phone number is required' };
+
+    // Normalize Nigerian phone numbers to international standard (234...)
+    let cleanPhone = String(phone).replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '234' + cleanPhone.slice(1);
+    } else if (cleanPhone.length === 10) {
+      cleanPhone = '234' + cleanPhone;
+    }
+
+    if (apiKey && apiKey !== 'your-termii-api-key' && apiKey.trim() !== '') {
       try {
+        // Use 'dnd' route by default to bypass MTN/Airtel Do-Not-Disturb blocks
+        const channel = process.env.TERMII_CHANNEL || 'dnd';
+        const senderId = process.env.TERMII_SENDER_ID || 'N-ALERT';
+
         const response = await fetch('https://api.ng.termii.com/api/sms/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             to: cleanPhone,
-            from: process.env.TERMII_SENDER_ID || 'N-ALERT',
+            from: senderId,
             sms: text,
             type: 'plain',
-            channel: 'generic',
+            channel: channel,
             api_key: apiKey
           })
         });
         const resData = await response.json();
-        console.log(`📱 Termii SMS API Response (${cleanPhone}):`, resData);
-        return { success: true, provider: 'Termii', response: resData };
+        console.log(`📱 [Termii SMS] Dispatched to ${cleanPhone} via ${channel} route:`, resData);
+        const isOk = resData.code === 'ok' || resData.message === 'Successfully Sent' || resData.status === 'success';
+        return { 
+          success: isOk, 
+          provider: 'Termii', 
+          channel, 
+          response: resData, 
+          error: isOk ? null : (resData.message || resData.error || 'Termii dispatch error') 
+        };
       } catch (err) {
-        console.error(`Failed to send SMS to ${phone} via Termii:`, err);
+        console.error(`❌ [Termii SMS] Failed to send SMS to ${cleanPhone}:`, err.message);
+        return { success: false, provider: 'Termii', error: err.message };
       }
     }
 
-    console.log(`📱 [SMS Sandbox Mode] To: ${phone} | Text: "${text}"`);
+    console.log(`📱 [SMS Sandbox Mode] To: ${cleanPhone} | Text: "${text}"`);
     return { success: true, provider: 'Sandbox', mockSent: true };
   }
 
@@ -86,7 +111,7 @@ export class NotificationService {
    * Universal Email Adapter supporting Standard SMTP (Gmail, SendGrid, Mailgun),
    * Resend API, Brevo API / SMTP, and sandbox fallback.
    */
-  static async sendEmail(email, subject, text, htmlBody = null, storeName = null) {
+  static async sendEmail(email, subject, text, htmlBody = null, storeName = null, replyTo = null, extraHeaders = {}) {
     const smtpHost = process.env.SMTP_HOST;
     const smtpPort = process.env.SMTP_PORT || 587;
     const smtpUser = process.env.SMTP_USER;
@@ -98,6 +123,11 @@ export class NotificationService {
     const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER;
     // Use dynamic store name if provided, otherwise fall back to env config
     const senderName = storeName || process.env.SENDER_NAME || 'Order Notifications';
+
+    // Ensure business owner email is always used as Reply-To
+    const effectiveReplyTo = (replyTo && replyTo.includes('@'))
+      ? replyTo.trim()
+      : (process.env.SENDER_EMAIL || 'smirhty@gmail.com');
 
     if (!senderEmail) {
       console.error('❌ No SENDER_EMAIL configured. Set SENDER_EMAIL (and SENDER_NAME) in your environment before sending live emails.');
@@ -136,9 +166,11 @@ export class NotificationService {
         const info = await transporter.sendMail({
           from: `"${senderName}" <${senderEmail}>`,
           to: email,
+          ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
           subject,
           html: finalHtml,
-          text
+          text,
+          ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
         });
         console.log(`📧 [Custom SMTP Email Sent] To: ${email} | Host: ${smtpHost} | MessageId:`, info.messageId);
         await logNotification(`SMTP (${smtpHost})`, 'sent', { messageId: info.messageId });
@@ -161,8 +193,10 @@ export class NotificationService {
           body: JSON.stringify({
             from: process.env.RESEND_FROM_EMAIL || `"${senderName}" <onboarding@resend.dev>`,
             to: [email],
+            ...(effectiveReplyTo ? { reply_to: effectiveReplyTo } : {}),
             subject,
-            html: finalHtml
+            html: finalHtml,
+            ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
           })
         });
         const resData = await response.json();
@@ -191,8 +225,10 @@ export class NotificationService {
           body: JSON.stringify({
             sender: { name: senderName, email: senderEmail },
             to: [{ email }],
+            ...(effectiveReplyTo ? { replyTo: { email: effectiveReplyTo } } : {}),
             subject,
-            htmlContent: finalHtml
+            htmlContent: finalHtml,
+            ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
           })
         });
         const resData = await response.json();
@@ -225,8 +261,11 @@ export class NotificationService {
         const info = await transporter.sendMail({
           from: `"${senderName}" <${senderEmail}>`,
           to: email,
+          ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
           subject,
-          html: finalHtml
+          html: finalHtml,
+          text,
+          ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
         });
         console.log(`📧 [Brevo SMTP Email Sent] To: ${email} | MessageId:`, info.messageId);
         await logNotification('Brevo SMTP', 'sent', { messageId: info.messageId });
@@ -253,7 +292,7 @@ export class NotificationService {
 
     const firstName = (user.full_name || 'there').split(' ')[0];
     const storeName = user.store_name || 'your store';
-    const appUrl = process.env.APP_URL || 'https://app.olistores.com.ng';
+    const appUrl = process.env.APP_URL || 'https://crm.olistores.com.ng';
 
     const subject = `Welcome to ${process.env.SENDER_APP_NAME || 'the CRM'}, ${firstName}! 🎉`;
     const html = `
@@ -295,10 +334,10 @@ export class NotificationService {
   /**
    * Send all three notifications when an order is completed/finalized:
    * 1. Merchant Notification Email (form notification_email / store owner)
-   * 2. Customer Receipt Email (if customer_email provided)
+   * 2. Customer Receipt Email (if customer_email provided, with optional product image/video confirmation)
    * 3. Customer Order Confirmation SMS (to customer_phone)
    */
-  static async sendOrderFinalizedNotifications(order, merchantEmail = null, storeName = null) {
+  static async sendOrderFinalizedNotifications(order, merchantEmail = null, storeName = null, confirmationMedia = null) {
     if (!order) return;
 
     // Resolve store display name for email branding
@@ -308,15 +347,80 @@ export class NotificationService {
     const totalFormatted = (order.total_amount || 0).toLocaleString();
     const itemsList = order.items || [];
 
-    // ── 1. Merchant Order Alert Email ──
-    const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || null;
-    const merchantSubject = mainProductName;
+    // Optional confirmation media (image or video) html block
+    let mediaMerchantHtml = '';
+    let mediaCustomerHtml = '';
+    if (confirmationMedia && confirmationMedia.url && typeof confirmationMedia.url === 'string' && confirmationMedia.url.trim().startsWith('http')) {
+      const mediaUrl = confirmationMedia.url.trim();
+      const isVideo = confirmationMedia.type === 'video' || /\.(mp4|mov|webm)(\?.*)?$/i.test(mediaUrl);
+
+      if (isVideo) {
+        mediaMerchantHtml = `
+          <div style="background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-bottom: 20px; text-align: center;">
+            <div style="font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">🎥 Product Demonstration Video</div>
+            <a href="${mediaUrl}" target="_blank" style="display: inline-block; background-color: #ef4444; color: #ffffff; text-decoration: none; padding: 9px 18px; border-radius: 6px; font-weight: bold; font-size: 13px;">
+              ▶ View Product Video
+            </a>
+          </div>
+        `;
+        mediaCustomerHtml = `
+          <div style="background-color: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 20px 14px; margin: 20px 0; text-align: center;">
+            <div style="font-size: 12px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">🎥 Your Ordered Product Video</div>
+            <a href="${mediaUrl}" target="_blank" style="display: inline-block; background-color: #ef4444; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);">
+              ▶ Watch Video Demonstration
+            </a>
+            <p style="margin: 8px 0 0 0; font-size: 11px; color: #94a3b8;">Click above to watch the video demonstration of what you ordered.</p>
+          </div>
+        `;
+      } else {
+        mediaMerchantHtml = `
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: center;">
+            <div style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">📸 Ordered Product Visual</div>
+            <img src="${mediaUrl}" alt="${mainProductName}" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px; border: 1px solid #cbd5e1; display: inline-block;" />
+          </div>
+        `;
+        mediaCustomerHtml = `
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
+            <div style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">📸 Your Ordered Product</div>
+            <img src="${mediaUrl}" alt="${mainProductName}" style="max-width: 100%; max-height: 260px; object-fit: contain; border-radius: 6px; border: 1px solid #cbd5e1; display: inline-block;" />
+          </div>
+        `;
+      }
+    }
+
+    // ── 1. Merchant Order Alert Email (Date-Threaded for Gmail / Mailbox grouping) ──
+    const targetMerchantEmail = merchantEmail || process.env.SENDER_EMAIL || 'smirhty@gmail.com';
+    const businessOwnerReplyTo = targetMerchantEmail;
+
+    const orderDate = new Date();
+    const dateFormatted = orderDate.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    }); // e.g. "Fri, 16 Oct 2026"
+    const dateSlug = orderDate.toISOString().slice(0, 10); // e.g. "2026-10-16"
+    const cleanStoreTag = (displayStoreName || 'Orders').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'store';
+
+    // Consistent daily subject: Gmail groups identical subjects for the day into 1 thread
+    const merchantSubject = `📦 [${displayStoreName} Orders] — ${dateFormatted}`;
+
+    // RFC-2822 threading headers ensure mailbox conversation grouping
+    const threadMessageId = `<daily-orders-${dateSlug}-${cleanStoreTag}@crm.olistores.com.ng>`;
+    const merchantHeaders = {
+      'In-Reply-To': threadMessageId,
+      'References': threadMessageId,
+      'Thread-Topic': `${displayStoreName} Orders - ${dateFormatted}`
+    };
+
     const merchantHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
         <div style="background-color: #4f46e5; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #ffffff; margin: 0; font-size: 20px;">🛒 New Order Received!</h2>
-          <p style="color: #e0e7ff; margin: 6px 0 0 0; font-size: 13px;">Order Ref: <strong>#${order.order_number}</strong></p>
+          <h2 style="color: #ffffff; margin: 0; font-size: 20px;">🛒 New Order #${order.order_number} Received!</h2>
+          <p style="color: #e0e7ff; margin: 6px 0 0 0; font-size: 13px;">${mainProductName} • ₦${totalFormatted} • ${order.customer_name}</p>
         </div>
+
+        ${mediaMerchantHtml}
 
         <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Customer Information</h3>
         <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
@@ -359,9 +463,11 @@ export class NotificationService {
       await this.sendEmail(
         targetMerchantEmail,
         merchantSubject,
-        `New order #${order.order_number} from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
+        `New order #${order.order_number} for ${mainProductName} (₦${totalFormatted}) from ${order.customer_name} (${order.customer_phone}). Total: ₦${totalFormatted}`,
         merchantHtml,
-        displayStoreName
+        displayStoreName,
+        businessOwnerReplyTo,
+        merchantHeaders
       );
     } else {
       console.warn(`⚠️ Skipped merchant order alert for #${order.order_number}: no merchant notification email available.`);
@@ -369,7 +475,7 @@ export class NotificationService {
 
     // ── 2. Customer Receipt Email ──
     if (order.customer_email && order.customer_email.trim().includes('@')) {
-      const customerSubject = mainProductName;
+      const customerSubject = `Order Confirmed: ${mainProductName} (Ref: #${order.order_number})`;
       const customerHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;">
           <div style="background-color: #10b981; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
@@ -379,6 +485,8 @@ export class NotificationService {
 
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">Dear <strong>${order.customer_name}</strong>,</p>
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">We have successfully received your order from <strong>${displayStoreName}</strong>. Below is a summary of your order:</p>
+
+          ${mediaCustomerHtml}
 
           <h3 style="font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">Order Details</h3>
           <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
@@ -422,8 +530,11 @@ export class NotificationService {
         customerSubject,
         `Thank you ${order.customer_name}! Your order #${order.order_number} for ₦${totalFormatted} (Pay on Delivery) from ${displayStoreName} has been confirmed.`,
         customerHtml,
-        displayStoreName
+        displayStoreName,
+        targetMerchantEmail
       );
+    } else {
+      console.log(`ℹ️ [NotificationService] Customer email not provided for #${order.order_number}; skipped customer receipt.`);
     }
 
     // ── 3. Customer Order Confirmation SMS ──
@@ -431,5 +542,21 @@ export class NotificationService {
       const smsMessage = `Hi ${order.customer_name}, your order #${order.order_number} for ${mainProductName} is confirmed! Total: ₦${totalFormatted} (Pay on Delivery). Our rep will call you shortly to confirm delivery.`;
       await this.sendSMS(order.customer_phone, smsMessage);
     }
+  }
+
+  static async getLogs(limit = 50) {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('notification_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        if (!error && data) return data;
+      } catch (e) {
+        console.error('Error fetching notification logs:', e);
+      }
+    }
+    return [];
   }
 }

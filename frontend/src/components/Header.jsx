@@ -25,19 +25,20 @@ export default function Header({
   };
 
   return (
-    <header className="sticky top-0 z-20 bg-slate-900/75 backdrop-blur-xl border-b border-slate-800/80 px-5 py-3 flex items-center justify-between gap-4 shrink-0">
+    <header className="sticky top-0 z-20 bg-slate-900/85 backdrop-blur-xl border-b border-slate-800/80 px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 shrink-0">
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Mobile Menu Toggle */}
         <button
           onClick={onToggleSidebar}
-          className="md:hidden p-1.5 -ml-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          aria-label="Toggle navigation menu"
+          className="md:hidden p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
         >
           <Menu className="w-5 h-5" />
         </button>
 
         {/* Search Bar */}
-        <div className="relative w-48 md:w-64 shrink-0 hidden sm:block">
+        <div className="relative w-40 md:w-64 shrink-0 hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
           <input
             type="text"
@@ -48,15 +49,15 @@ export default function Header({
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-2 flex-wrap justify-end">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
 
         {/* Country Selector */}
-        <div className="flex items-center gap-1.5 glass px-3 py-1.5 rounded-xl text-xs">
+        <div className="flex items-center gap-1 glass px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs">
           <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
           <select
             value={selectedCountry}
             onChange={e => { setSelectedCountry(e.target.value); setSelectedState('All Regions'); }}
-            className="bg-transparent text-slate-200 focus:outline-none cursor-pointer font-medium text-xs"
+            className="bg-transparent text-slate-200 focus:outline-none cursor-pointer font-medium text-[11px] sm:text-xs max-w-[85px] sm:max-w-none truncate"
           >
             {AFRICAN_LOCATIONS.map(loc => (
               <option key={loc.code} value={loc.country} className="bg-slate-900">
@@ -67,12 +68,12 @@ export default function Header({
         </div>
 
         {/* State/Region */}
-        <div className="flex items-center gap-1.5 glass px-3 py-1.5 rounded-xl text-xs">
-          <span className="text-slate-500 font-medium shrink-0">Region</span>
+        <div className="flex items-center gap-1 glass px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs">
+          <span className="text-slate-500 font-medium shrink-0 text-[11px] sm:text-xs hidden xs:inline">Region</span>
           <select
             value={selectedState}
             onChange={e => setSelectedState(e.target.value)}
-            className="bg-transparent text-slate-200 focus:outline-none cursor-pointer font-medium text-xs max-w-[120px]"
+            className="bg-transparent text-slate-200 focus:outline-none cursor-pointer font-medium text-[11px] sm:text-xs max-w-[75px] sm:max-w-[120px] truncate"
           >
             <option value="All Regions" className="bg-slate-900">All Regions</option>
             {currentCountry.states.map(st => (
@@ -86,15 +87,16 @@ export default function Header({
           <button
             onClick={onOpenTeamModal}
             title="Manage Staff Accounts"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass text-indigo-300 hover:text-white hover:bg-indigo-600/30 text-xs font-bold transition-all border border-indigo-500/20"
+            className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl glass text-indigo-300 hover:text-white hover:bg-indigo-600/30 text-xs font-bold transition-all border border-indigo-500/20"
           >
-            <Users className="w-3.5 h-3.5 text-indigo-400" /> Team Accounts
+            <Users className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden md:inline">Team Accounts</span>
           </button>
         )}
 
         {/* Role Switcher (Owner only) */}
         {user?.role === 'owner' && (
-          <div className="flex items-center gap-1.5 glass px-3 py-1.5 rounded-xl text-xs">
+          <div className="hidden lg:flex items-center gap-1.5 glass px-3 py-1.5 rounded-xl text-xs">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <select
               value={activeRole}

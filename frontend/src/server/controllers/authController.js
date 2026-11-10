@@ -199,18 +199,24 @@ export async function signup(req, res) {
           console.error('Failed to send welcome email:', err);
         });
         return res.status(201).json({
-          token: `jwt_token_${createdUser.id}`,
+          token: generateJwtToken(createdUser),
           user: createdUser
         });
       } else if (userError) {
         console.error('⚠️ Supabase user insert error:', userError);
+        return res.status(502).json({ error: 'Account could not be saved to Supabase', details: userError.message });
       }
     } catch (err) {
       console.error('Supabase signup exception:', err);
+      return res.status(502).json({ error: 'Account could not be saved to Supabase', details: err.message });
     }
   }
 
-  // 2. Fallback to mockUsers array
+  if (supabase) {
+    return res.status(502).json({ error: 'Account could not be saved to Supabase' });
+  }
+
+  // 2. Fallback to mockUsers array for offline development only
   const newUser = {
     id: userId,
     full_name: full_name || 'Merchant Owner',
@@ -265,11 +271,11 @@ export async function getMe(req, res) {
 }
 
 export async function getTeamMembers(req, res) {
-  const { store_id } = req.query;
+  const store_id = req.storeId;
 
   if (supabase) {
     try {
-      let query = supabase.from('users').select('id, full_name, email, role, phone, store_name, created_at');
+      let query = supabase.from('users').select('id, full_name, email, role, phone, store_name, is_active, created_at');
       if (store_id) query = query.eq('store_id', store_id);
       const { data, error } = await query;
       if (!error && data) return res.json(data);
@@ -293,7 +299,7 @@ function normalizeRole(role) {
 }
 
 export async function createTeamMember(req, res) {
-  const { full_name, email, password, role, phone, store_id, store_name } = req.body;
+  const { full_name, email, password, role, phone, store_name } = req.body;
 
   if (!email || !password || !full_name) {
     return res.status(400).json({ error: 'Full name, email, and password are required' });
@@ -305,13 +311,14 @@ export async function createTeamMember(req, res) {
 
   const userPayload = {
     id: userId,
-    store_id: store_id || null,
+    store_id: req.storeId,
     full_name,
     email: cleanEmail,
     password_hash: password,
     phone: phone || '+2348000000000',
     role: validRole,
     store_name: store_name || 'My E-Commerce Store',
+    is_active: true,
     created_at: new Date().toISOString()
   };
 
@@ -321,15 +328,53 @@ export async function createTeamMember(req, res) {
       if (!error && data && data[0]) {
         mockUsers.unshift(userPayload);
         console.log(`✅ Staff Member "${full_name}" (${validRole}) created in Supabase!`);
+        NotificationService.sendStaffInvitationEmail({
+          full_name,
+          email: cleanEmail,
+          password,
+          role: validRole,
+          store_name: userPayload.store_name
+        }).catch(err => console.error('Failed to send staff invitation email:', err));
         return res.status(201).json(data[0]);
       } else if (error) {
         console.error('⚠️ Supabase staff creation error:', error);
+        return res.status(502).json({ error: 'Staff account could not be saved to Supabase', details: error.message });
       }
     } catch (err) {
       console.error('Supabase staff creation error:', err);
+      return res.status(502).json({ error: 'Staff account could not be saved to Supabase', details: err.message });
     }
   }
 
   mockUsers.unshift(userPayload);
   res.status(201).json(userPayload);
+}
+
+export async function updateTeamMemberStatus(req, res) {
+  const { id } = req.params;
+  const { is_active } = req.body;
+
+  if (typeof is_active !== 'boolean') {
+    return res.status(400).json({ error: 'is_active must be a boolean' });
+  }
+  if (id === req.user.id) {
+    return res.status(400).json({ error: 'You cannot deactivate your own account' });
+  }
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ is_active })
+      .eq('id', id)
+      .eq('store_id', req.storeId)
+      .select('id, full_name, email, role, phone, store_name, is_active, created_at');
+    if (error) return res.status(502).json({ error: 'Staff status could not be updated', details: error.message });
+    if (data && data[0]) return res.json(data[0]);
+    return res.status(404).json({ error: 'Staff member not found in your store' });
+  }
+
+  const member = mockUsers.find(user => user.id === id && user.store_id === req.storeId);
+  if (!member) return res.status(404).json({ error: 'Staff member not found in your store' });
+  member.is_active = is_active;
+  return res.json(member);
 }

@@ -209,7 +209,7 @@ export async function createProduct(req, res) {
     price_bundles: price_bundles || [
       { qty: 1, label: `1 ${name} + Free Delivery`, price: Number(base_price) || 0 }
     ],
-    images: Array.isArray(req.body.images) && req.body.images.length > 0 ? req.body.images : ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=500&auto=format&fit=crop'],
+    images: Array.isArray(req.body.images) ? req.body.images : [],
     custom_fields: req.body.custom_fields || [],
     has_variants: false,
     is_active: true,
@@ -322,15 +322,21 @@ export async function createCategory(req, res) {
 
 export async function getStockMovements(req, res) {
   const storeId = req.storeId || req.user?.store_id;
+  const { product_id } = req.query;
 
   if (supabase) {
-    const { data: storeProducts, error: productError } = await supabase
-      .from('products')
-      .select('id')
-      .eq('store_id', storeId);
-    if (productError) return res.status(502).json({ error: 'Inventory could not be loaded', details: productError.message });
+    let productIds = [];
+    if (product_id) {
+      productIds = [product_id];
+    } else {
+      const { data: storeProducts, error: productError } = await supabase
+        .from('products')
+        .select('id')
+        .eq('store_id', storeId);
+      if (productError) return res.status(502).json({ error: 'Inventory could not be loaded', details: productError.message });
+      productIds = (storeProducts || []).map(product => product.id);
+    }
 
-    const productIds = (storeProducts || []).map(product => product.id);
     if (productIds.length === 0) return res.json([]);
 
     const query = supabase

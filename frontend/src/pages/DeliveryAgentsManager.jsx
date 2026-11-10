@@ -67,11 +67,11 @@ export default function DeliveryAgentsManager({ products = [], selectedCountry }
     const del = Number(a.delivered_orders_count) || 0;
     const fail = Number(a.failed_orders_count) || 0;
     const total = del + fail;
-    const rate = total > 0 ? ((del / total) * 100).toFixed(1) : '95.0';
-    return { ...a, success_rate_num: parseFloat(rate), success_rate_str: `${rate}%` };
+    const rate = total > 0 ? ((del / total) * 100).toFixed(1) : '0.0';
+    return { ...a, success_rate_num: parseFloat(rate), success_rate_str: total > 0 ? `${rate}%` : 'New Rider' };
   }).sort((a, b) => b.success_rate_num - a.success_rate_num);
 
-  const topAgent = rankedAgents[0] || null;
+  const topAgent = (rankedAgents.length > 0 && (Number(rankedAgents[0].delivered_orders_count) > 0 || Number(rankedAgents[0].failed_orders_count) > 0)) ? rankedAgents[0] : (rankedAgents[0] || null);
 
   const totalCodCollected = agents.reduce((sum, a) => sum + (Number(a.total_cod_collected) || 0), 0);
   const totalDeliveredPayouts = agents.reduce((sum, a) => sum + ((Number(a.delivered_orders_count) || 0) * (Number(a.successful_delivery_fee) || 2000)), 0);

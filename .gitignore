@@ -46,3 +46,9 @@ Thumbs.db
 scratch/
 tmp/
 .cache/
+
+# WhatsApp Auth Sessions
+.wa_auth/
+backend/.wa_auth/
+frontend/src/server/.wa_auth/
+

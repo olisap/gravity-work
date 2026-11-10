@@ -43,7 +43,7 @@ export async function getUpsellOffers(req, res) {
       return sum + Number(upsellItem ? upsellItem.unit_price_at_time_of_order : offerPrice);
     }, 0);
 
-    const attachRate = formOrders.length > 0 ? ((upsellOrders.length / formOrders.length) * 100).toFixed(1) + '%' : '28.5%';
+    const attachRate = formOrders.length > 0 ? ((upsellOrders.length / formOrders.length) * 100).toFixed(1) + '%' : '0.0%';
 
     return {
       id: f.id,
@@ -52,7 +52,7 @@ export async function getUpsellOffers(req, res) {
       offer: offerProd ? offerProd.name : 'Addon Item',
       offer_price: offerPrice,
       attach_rate: attachRate,
-      incremental_revenue: addedRevenue > 0 ? addedRevenue : offerPrice * 3
+      incremental_revenue: addedRevenue
     };
   });
 
@@ -61,10 +61,30 @@ export async function getUpsellOffers(req, res) {
     ? (campaigns.reduce((sum, c) => sum + parseFloat(c.attach_rate || 0), 0) / campaigns.length).toFixed(1) + '%'
     : '0%';
 
+  const allUpsellOrders = orders.filter(o => (o.items || []).some(i => i.is_upsell));
+  const phoneUpsells = allUpsellOrders.filter(o => o.upsell_source === 'confirmation_call').length;
+  const formUpsells = allUpsellOrders.filter(o => o.upsell_source === 'form_bump' || o.upsell_source === 'form' || !o.upsell_source).length;
+
+  let bestChannel = 'None yet';
+  let bestChannelSubtitle = 'Awaiting first upsell conversion';
+
+  if (allUpsellOrders.length > 0) {
+    if (phoneUpsells >= formUpsells) {
+      const pct = ((phoneUpsells / allUpsellOrders.length) * 100).toFixed(1);
+      bestChannel = 'Confirmation Call';
+      bestChannelSubtitle = `${pct}% of upsells closed via phone script`;
+    } else {
+      const pct = ((formUpsells / allUpsellOrders.length) * 100).toFixed(1);
+      bestChannel = 'Form Bump';
+      bestChannelSubtitle = `${pct}% of upsells accepted on checkout form`;
+    }
+  }
+
   res.json({
     total_upsell_revenue: totalRevenue,
     average_attach_rate: avgAttachRate,
-    best_channel: 'Confirmation Call',
+    best_channel: bestChannel,
+    best_channel_subtitle: bestChannelSubtitle,
     campaigns
   });
 }

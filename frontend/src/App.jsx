@@ -238,7 +238,7 @@ function CrmAppContent() {
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
 
-        <main className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-none">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 scrollbar-none">
           {activeTab === 'dashboard' && (
             <Dashboard
               selectedCountry={selectedCountry}
@@ -317,7 +317,7 @@ function CrmAppContent() {
           )}
 
           {activeTab === 'marketing' && (
-            <MarketingHub selectedCountry={selectedCountry} />
+            <MarketingHub selectedCountry={selectedCountry} orders={orders} products={products} />
           )}
 
           {activeTab === 'products-inventory' && (
@@ -349,6 +349,7 @@ function CrmAppContent() {
       {activeModalOrder && (
         <ConfirmationCallModal
           order={activeModalOrder}
+          products={products}
           onClose={() => setActiveModalOrder(null)}
           onUpdateStatus={handleUpdateStatus}
           onAddUpsell={handleAddUpsell}

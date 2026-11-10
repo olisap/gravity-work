@@ -78,7 +78,23 @@ export async function assignStockToAgent(req, res) {
   const { id } = req.params;
   const { product_id, product_name, quantity } = req.body;
 
-  const agent = mockAgents.find(a => a.id === id);
+  let agent = null;
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('delivery_agents').select('*').eq('id', id).eq('store_id', req.storeId).maybeSingle();
+      if (!error && data) {
+        agent = data;
+      }
+    } catch (e) {
+      console.error('Error fetching agent for stock assignment:', e);
+    }
+  }
+
+  if (!agent) {
+    agent = mockAgents.find(a => a.id === id);
+  }
+
   if (!agent) return res.status(404).json({ error: 'Agent not found' });
 
   const stockList = Array.isArray(agent.assigned_stock) ? [...agent.assigned_stock] : [];
@@ -93,7 +109,21 @@ export async function assignStockToAgent(req, res) {
   agent.assigned_stock = stockList;
 
   if (supabase) {
-    await supabase.from('delivery_agents').update({ assigned_stock: stockList }).eq('id', id).eq('store_id', req.storeId);
+    try {
+      const { data: updated, error } = await supabase
+        .from('delivery_agents')
+        .update({ assigned_stock: stockList })
+        .eq('id', id)
+        .eq('store_id', req.storeId)
+        .select()
+        .maybeSingle();
+
+      if (!error && updated) {
+        return res.json(updated);
+      }
+    } catch (e) {
+      console.error('Error updating assigned stock in Supabase:', e);
+    }
   }
 
   res.json(agent);

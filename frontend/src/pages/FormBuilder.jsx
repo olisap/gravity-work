@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   FileText, Code, Eye, Copy, Check, Sparkles, Plus, Trash2, Edit,
   Settings, CreditCard, ShieldCheck, HelpCircle, Palette, ToggleLeft, ToggleRight,
   ArrowUp, ArrowDown, Layers, Smartphone, Monitor, RotateCcw, Image as ImageIcon,
-  Type, Zap, Sliders, CheckCircle2, ChevronRight, Layout
+  Type, Zap, Sliders, CheckCircle2, ChevronRight, Layout, ExternalLink, Upload
 } from 'lucide-react';
 import EmbedFormWidget from '../components/EmbedFormWidget';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/apiUrl';
+import { uploadMediaFile } from '../utils/mediaUploader';
 
 const DEFAULT_SECTIONS = [
   { id: 'banner', label: '🖼 Banner Header Image' },
@@ -58,6 +59,25 @@ export default function FormBuilder({
   const [headerText, setHeaderText] = useState('Please Fill The Form Below To Place Your Order');
   const [subHeaderText, setSubHeaderText] = useState('Only Serious Buyers Should Fill The Form Below');
   const [bannerImageUrl, setBannerImageUrl] = useState('');
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadBannerError, setUploadBannerError] = useState('');
+  const bannerFileInputRef = useRef(null);
+
+  const handleUploadBanner = async (file) => {
+    if (!file) return;
+    setUploadingBanner(true);
+    setUploadBannerError('');
+    try {
+      const res = await uploadMediaFile(file, 'banners');
+      if (res?.url) {
+        setBannerImageUrl(res.url);
+      }
+    } catch (err) {
+      setUploadBannerError(err.message || 'Upload failed');
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
 
   // Section Ordering State
   const [sectionOrder, setSectionOrder] = useState([
@@ -335,7 +355,7 @@ export default function FormBuilder({
     setPayFlutterwave(f.payment_flutterwave_enabled || false);
     setPayBank(f.payment_bank_enabled || false);
 
-    setNotificationEmail(f.notification_email || '');
+    setNotificationEmail(f.notification_email || cfg.notification_email || user?.email || '');
     setThankYouUrl(f.thank_you_url || cfg.thank_you_url || '');
     setUpsellEnabled(f.upsell_enabled !== false);
     setUpsellProductId(f.upsell_product_id || products[0]?.id || '');
@@ -393,6 +413,7 @@ export default function FormBuilder({
     setLabelColor('#f8fafc');
     setCustomFont('Inter');
 
+    setNotificationEmail(user?.email || '');
     setThankYouUrl('');
     setUpsellEnabled(true);
     setUpsellProductId(products[0]?.id || '');
@@ -612,10 +633,10 @@ export default function FormBuilder({
   };
 
   const embedThankYouQuery = selectedFormForEmbed.thank_you_url ? `&thank_you_url=${encodeURIComponent(selectedFormForEmbed.thank_you_url)}` : '';
-  const scriptCode = `<script src="https://olinwa.vercel.app/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
+  const scriptCode = `<script src="https://crm.olistores.com.ng/embed.js" data-form-key="${selectedFormForEmbed.embed_key}"></script>`;
   const iframeId = `olinwa-iframe-${selectedFormForEmbed.embed_key}`;
   const iframeCode = `<div class="olinwa-iframe-wrapper">
-  <iframe id="${iframeId}" src="https://olinwa.vercel.app/checkout?form=${selectedFormForEmbed.embed_key}${embedThankYouQuery}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;" allow="top-navigation top-navigation-by-user-activation"></iframe>
+  <iframe id="${iframeId}" src="https://crm.olistores.com.ng/checkout?form=${selectedFormForEmbed.embed_key}" width="100%" height="600" frameborder="0" scrolling="no" style="border:none;overflow:hidden;width:100%;" allow="top-navigation top-navigation-by-user-activation"></iframe>
   <script>
     window.addEventListener('message', function(e) {
       if (!e.data) return;
@@ -915,16 +936,58 @@ export default function FormBuilder({
 
                 {/* Banner Header Image Control */}
                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4" /> Form Top Banner Header Image (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Paste image URL (https://... png or jpg)"
-                    value={bannerImageUrl}
-                    onChange={e => setBannerImageUrl(e.target.value)}
-                    className="input text-xs font-mono"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-indigo-300 flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4" /> Form Top Banner Header Image (Optional)
+                    </label>
+                    <span className="text-[10px] text-slate-400">Desktop & Mobile</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Paste image URL (https://...) or upload from device →"
+                      value={bannerImageUrl}
+                      onChange={e => setBannerImageUrl(e.target.value)}
+                      className="input text-xs font-mono flex-1 min-w-0 py-2"
+                    />
+                    <input
+                      type="file"
+                      ref={bannerFileInputRef}
+                      onChange={e => {
+                        if (e.target.files?.[0]) handleUploadBanner(e.target.files[0]);
+                      }}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={uploadingBanner}
+                      onClick={() => bannerFileInputRef.current?.click()}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors shadow-sm disabled:opacity-50"
+                      title="Upload banner photo directly from device"
+                    >
+                      {uploadingBanner ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span className="text-[11px]">Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span className="text-[11px]">Upload Photo</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {uploadBannerError && (
+                    <p className="text-[11px] text-rose-400 mt-0.5">⚠️ {uploadBannerError}</p>
+                  )}
+                  {bannerImageUrl && (
+                    <div className="rounded-lg overflow-hidden border border-slate-800 max-h-36 bg-black/50 p-1 text-center">
+                      <img src={bannerImageUrl} alt="Banner Preview" className="max-h-32 mx-auto rounded object-contain" />
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2 pt-1">
                     <span className="text-[10px] text-slate-400 self-center">Presets:</span>
                     {SAMPLE_BANNERS.map((b, idx) => (
@@ -946,6 +1009,59 @@ export default function FormBuilder({
                         Remove Banner
                       </button>
                     )}
+                  </div>
+                </div>
+
+                {/* Thank You Page URL & Notification Email */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
+                  <div className="border-b border-slate-800 pb-2">
+                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                      <ExternalLink className="w-3.5 h-3.5 text-emerald-400" /> Funnel Redirect & Order Notifications
+                    </h4>
+                    <p className="text-[10px] text-slate-400">Configure where clients are redirected after placing orders, and where merchant alerts are sent</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        THANK YOU PAGE URL (AFTER ORDER)
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://yourwebsite.com/thank-you"
+                        value={thankYouUrl}
+                        onChange={e => setThankYouUrl(e.target.value)}
+                        className="input text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">Leave blank to show the built-in instant confirmation card</p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        EMAIL TO RECEIVE ORDER NOTIFICATIONS
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="you@store.com"
+                        value={notificationEmail}
+                        onChange={e => setNotificationEmail(e.target.value)}
+                        className="input text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">New order alert emails will be sent here instantly</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">
+                      TERMS & CONDITIONS / SERIOUS BUYERS WARNING (ABOVE SUBMIT BUTTON)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={textBeforeSubmit}
+                      onChange={e => setTextBeforeSubmit(e.target.value)}
+                      placeholder="e.g. DO NOT CLICK THE ORDER BUTTON IF YOU ARE NOT READY TO RECEIVE THE PRODUCT IN 2-4 DAYS"
+                      className="input text-xs leading-relaxed"
+                    />
                   </div>
                 </div>
               </div>
